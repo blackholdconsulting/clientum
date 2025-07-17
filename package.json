@@ -36,8 +36,8 @@
     "xml-crypto": "^6.1.2",
     "xmlbuilder2": "^3.1.1",
     "globalize": "^1.7.0",
-    "cldr-data": "^42.0.0",
-    "cldrjs": "^0.5.0"
+    "cldr-data": "^44.0.1",
+    "cldrjs": "^0.5.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
