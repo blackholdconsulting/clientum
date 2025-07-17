@@ -35,7 +35,7 @@
     "strong-soap": "^4.1.14",
     "xml-crypto": "^6.1.2",
     "xmlbuilder2": "^3.1.1",
-    "globalize": "^1.7.2",
+    "globalize": "^2.1.0",
     "cldrjs": "^0.5.0"
   },
   "devDependencies": {
