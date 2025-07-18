@@ -1,15 +1,20 @@
+// next.config.js
+const { withExpo } = require('@expo/next-adapter'); // si lo usas
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  webpack: (config) => {
+  webpack(config) {
     config.resolve.fallback = {
       ...config.resolve.fallback,
-      cldr: require.resolve('cldrjs'),
-      'cldr/event': require.resolve('cldrjs'),
-      globalize: require.resolve('globalize'),
-      'globalize/dist/globalize/event': require.resolve('globalize/dist/globalize/event'),
+      fs: false,
+      path: false,
+      os: false,
+      http: false,
+      https: false,
+      stream: false,
+      crypto: false
     };
     return config;
-  },
+  }
 };
 
-module.exports = nextConfig;
+module.exports = withExpo(nextConfig); // o simplemente module.exports = nextConfig;
