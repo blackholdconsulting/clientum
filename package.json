@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint"
   },
-  "dependencies": {
+   "dependencies": {
     "@next-auth/supabase-adapter": "^0.2.1",
     "@react-pdf/renderer": "^4.3.0",
     "@sendgrid/mail": "^8.1.5",
@@ -36,8 +36,8 @@
     "xml-crypto": "^6.1.2",
     "xmlbuilder2": "^3.1.1",
     "globalize": "^1.7.0",
-    "cldr-data": "^44.0.1",
-    "cldrjs": "^0.5.1"
+    "cldr-data": "^44.0.3",
+    "cldrjs": "^0.5.8"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -46,7 +46,7 @@
     "autoprefixer": "^10.4.2",
     "postcss": "^8.4.6",
     "tailwindcss": "^3.1.8",
-    "typescript": "^5.1.6",
-    "@tailwindcss/forms": "^0.5.5"
+    "@tailwindcss/forms": "^0.5.5",
+    "typescript": "^5.1.6"
   }
 }
