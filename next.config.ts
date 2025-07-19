@@ -1,34 +1,15 @@
-// next.config.ts
-import path from "path";
-import { NextConfig } from "next";
+// next.config.js
 
-const nextConfig: NextConfig = {
-  reactStrictMode: true,
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   webpack(config) {
-    // 1) Alias para resolver cldr/* desde cldrjs/dist/cldr
+    // Asegura que cualquier import de 'xmljs' vaya a 'xml-js' (pure JS)
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
-      // cualquier import "cldr/..." va a cldrjs/dist/cldr/...
-      cldr: path.resolve(__dirname, "node_modules", "cldrjs", "dist", "cldr"),
-      "cldr/": path.resolve(__dirname, "node_modules", "cldrjs", "dist", "cldr") + path.sep,
-      // para require("cldr")
-      "cldr$": path.resolve(
-        __dirname,
-        "node_modules",
-        "cldrjs",
-        "dist",
-        "cldr",
-        "cldr.js"
-      ),
+      xmljs: require.resolve('xml-js'),
     };
-    // 2) Silenciar warning de strong-soap/strong-globalize
-    config.ignoreWarnings = [
-      {
-        message: /Critical dependency: the request of a dependency is an expression/,
-      },
-    ];
     return config;
   },
-};
+}
 
-export default nextConfig;
+module.exports = nextConfig;
