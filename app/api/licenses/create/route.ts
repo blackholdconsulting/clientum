@@ -1,45 +1,41 @@
 // app/api/licenses/create/route.ts
-import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { getServerSession } from '@supabase/auth-helpers-nextjs'
-import { v4 as uuidv4 } from 'uuid'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { NextResponse } from "next/server";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
+import { v4 as uuidv4 } from "uuid";
 
 export async function POST(request: Request) {
-  // 1) Autenticamos al usuario (debe ser Admin o el propio user)
-  const { data: { session } } = await getServerSession()
-  if (!session) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
-  const userId = session.user.id
+  // Inicializa el cliente para Route Handlers
+  const supabase = createRouteHandlerClient({ cookies });
 
-  // 2) Generamos la clave y la expiración (por ejemplo, 1 año)
-  const key = uuidv4()
-  const valid_until = new Date()
-  valid_until.setFullYear(valid_until.getFullYear() + 1)
-
-  // 3) Insertamos en la tabla
-  const { data, error } = await supabase
-    .from('licenses')
-    .insert({
-      user_id: userId,
-      key,
-      valid_until: valid_until.toISOString().slice(0,10)
-    })
-    .single()
-
-  if (error) {
-    console.error('Error creando licencia:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  // Comprueba sesión de usuario
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError || !session) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
 
-  // 4) Devolvemos la clave y la fecha de expiración
-  return NextResponse.json({
-    key: data.key,
-    valid_until: data.valid_until
-  })
+  try {
+    // Extrae payload (por ejemplo { active: boolean })
+    const { active } = await request.json();
+
+    // Genera clave única
+    const newKey = uuidv4().toUpperCase();
+
+    // Inserta en la tabla "licenses"
+    const { data, error } = await supabase
+      .from("licenses")
+      .insert([{ key: newKey, active }]);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Devuelve la licencia creada
+    return NextResponse.json({ license: data[0] });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
 }
