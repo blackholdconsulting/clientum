@@ -13,7 +13,7 @@ export default function LicensesPage() {
   const [loading, setLoading] = useState(false);
   const [licenses, setLicenses] = useState<License[]>([]);
 
-  // Carga inicial de licencias
+  // Carga inicial
   useEffect(() => {
     loadLicenses();
   }, []);
@@ -35,13 +35,13 @@ export default function LicensesPage() {
     setLoading(true);
     const newKey = crypto.randomUUID().toUpperCase();
 
+    // Aquí ya NO usamos .from<...>()
     const { data, error } = await supabase
       .from("licenses")
       .insert([{ key: newKey, active: false }]);
     if (error) {
       console.error("Error creando licencia:", error);
     } else if (data) {
-      // data viene tipado como any[], así que lo casteamos
       setLicenses(prev => [...prev, ...(data as License[])]);
     }
     setLoading(false);
@@ -57,7 +57,7 @@ export default function LicensesPage() {
         {loading ? "Creando…" : "Crear nueva licencia"}
       </button>
       <ul className="list-disc pl-5">
-        {licenses.map((lic) => (
+        {licenses.map(lic => (
           <li key={lic.key}>
             {lic.key} — {lic.active ? "Activa" : "Inactiva"}
           </li>
