@@ -4,17 +4,29 @@ import { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
-  webpack: (config) => {
-    // conserva cualquier alias existente
+  webpack(config) {
+    // 1) Alias para resolver cldr/* desde cldrjs/dist/cldr
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
-      // Aquí le decimos a Webpack:
-      //   importar "cldr/..." debe buscar en cldrjs/dist/cldr/...
+      // cualquier import "cldr/..." va a cldrjs/dist/cldr/...
       cldr: path.resolve(__dirname, "node_modules", "cldrjs", "dist", "cldr"),
-      // por si algún require hace exactamente "cldr" sin path
-      "cldr$": path.resolve(__dirname, "node_modules", "cldrjs", "dist", "cldr", "cldr.js"),
+      "cldr/": path.resolve(__dirname, "node_modules", "cldrjs", "dist", "cldr") + path.sep,
+      // para require("cldr")
+      "cldr$": path.resolve(
+        __dirname,
+        "node_modules",
+        "cldrjs",
+        "dist",
+        "cldr",
+        "cldr.js"
+      ),
     };
+    // 2) Silenciar warning de strong-soap/strong-globalize
+    config.ignoreWarnings = [
+      {
+        message: /Critical dependency: the request of a dependency is an expression/,
+      },
+    ];
     return config;
   },
 };
