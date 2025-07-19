@@ -1,13 +1,11 @@
 // app/layout.tsx
-// -------------------
-// ¡NO incluyas NINGUNA línea "use client" aquí!
+// -----------------
+// Aquí marcamos todo el layout como cliente,
+// porque tus componentes hijos probablemente usan hooks.
+// Ya no exportamos metadata en este archivo.
+"use client";
 
 import ClientWrapper from "../components/ClientWrapper";
-
-export const metadata = {
-  title: "Clientum",
-  description: "Gestión de clientes y facturas",
-};
 
 export default function RootLayout({
   children,
