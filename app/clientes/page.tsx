@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useSupabaseClient } from "@supabase/auth-helpers-nextjs";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter } from "next/navigation";
 
 interface Cliente {
@@ -21,7 +21,7 @@ interface Cliente {
 }
 
 export default function ClientesPage() {
-  const supabase = useSupabaseClient();  // Sin genérico
+  const supabase = createClientComponentClient();  // aquí
   const router = useRouter();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,7 +29,7 @@ export default function ClientesPage() {
   useEffect(() => {
     async function load() {
       const { data, error } = await supabase
-        .from("clientes")       // Sin genéricos
+        .from("clientes")
         .select("*");
       if (error) {
         console.error("Error cargando clientes:", error);
