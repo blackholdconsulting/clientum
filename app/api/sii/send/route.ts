@@ -5,10 +5,8 @@ import { cookies } from "next/headers";
 import { sendToSii } from "@/lib/siiClient";
 
 export async function POST(request: Request) {
-  // Inicializa el cliente de Supabase para Route Handlers
   const supabase = createRouteHandlerClient({ cookies });
 
-  // Obtén la sesión actual
   const {
     data: { session },
     error: sessionError,
@@ -18,13 +16,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    // Extrae el payload desde el request
     const { facturaId } = (await request.json()) as { facturaId: string };
 
-    // Lógica para enviar al SII
-    const result = await sendToSii(facturaId, session.user.id);
+    // Llamamos sendToSii con un solo argumento (facturaId)
+    const result = await sendToSii(facturaId);
 
-    // Devuelve el resultado
     return NextResponse.json({ success: true, result });
   } catch (e: any) {
     return NextResponse.json(
