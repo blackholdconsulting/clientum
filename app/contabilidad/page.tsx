@@ -21,20 +21,32 @@ export default function ContabilidadPage() {
   useEffect(() => {
     async function loadFacturas() {
       setLoading(true);
+
+      // 1) Obtenemos primero el usuario logueado
       const {
-        data: facturaData,
-        error,
-      } = await supabase
-        .from("facturas")              // Sin genérico aquí
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error("No autenticado", userError);
+        setLoading(false);
+        return;
+      }
+
+      // 2) Hacemos la consulta con el user.id
+      const { data: facturaData, error: factError } = await supabase
+        .from("facturas")
         .select("fecha_emisor, total, iva_total, estado")
-        .eq("user_id", supabase.auth.getUser().data.user?.id);
-      if (error) {
-        console.error("Error cargando facturas:", error);
+        .eq("user_id", user.id);
+
+      if (factError) {
+        console.error("Error cargando facturas:", factError);
       } else if (facturaData) {
         setFacturas(facturaData as Factura[]);
       }
       setLoading(false);
     }
+
     loadFacturas();
   }, [supabase]);
 
@@ -47,8 +59,8 @@ export default function ContabilidadPage() {
         <thead>
           <tr>
             <th>Fecha</th>
-            <th>Total</th>
-            <th>IVA</th>
+            <th>Total (€)</th>
+            <th>IVA (€)</th>
             <th>Estado</th>
           </tr>
         </thead>
@@ -56,8 +68,8 @@ export default function ContabilidadPage() {
           {facturas.map((f, i) => (
             <tr key={i} className="border-t">
               <td>{new Date(f.fecha_emisor).toLocaleDateString()}</td>
-              <td>{f.total.toFixed(2)} €</td>
-              <td>{f.iva_total.toFixed(2)} €</td>
+              <td>{f.total.toFixed(2)}</td>
+              <td>{f.iva_total.toFixed(2)}</td>
               <td>{f.estado}</td>
             </tr>
           ))}
