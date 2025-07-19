@@ -1,287 +1,99 @@
-'use client'
+// app/gastos/page.tsx
+'use client';
 
-import React, { useState, useEffect, FormEvent } from 'react'
-import { supabase } from '../../lib/supabaseClient'
+import React, { useState, useEffect } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useRouter } from 'next/navigation';
 
 interface Gasto {
-  id: string
-  user_id: string
-  fecha: string
-  categoria: string
-  descripcion: string
-  importe: number
+  id: string;
+  descripcion: string;
+  monto: number;
+  fecha: string;
+  categoria: string;
 }
 
+const PAGE_SIZE = 10;
+
 export default function GastosPage() {
-  const [gastos, setGastos] = useState<Gasto[]>([])
-  const [loading, setLoading] = useState(false)
-  const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-
-  // filtros
-  const [filDesde, setFilDesde] = useState('')
-  const [filHasta, setFilHasta] = useState('')
-  const [filCategoria, setFilCategoria] = useState('')
-
-  // nuevo gasto
-  const [nuevaFecha, setNuevaFecha] = useState('')
-  const [nuevaCategoria, setNuevaCategoria] = useState('')
-  const [nuevaDescripcion, setNuevaDescripcion] = useState('')
-  const [nuevoImporte, setNuevoImporte] = useState(0)
-
-  // editar
-  const [editandoId, setEditandoId] = useState<string | null>(null)
-
-  const PAGE_SIZE = 10
-
-  async function loadGastos() {
-    setLoading(true)
-    let q = supabase
-      .from<Gasto>('gastos')
-      .select('*', { count: 'exact' })
-      .order('fecha', { ascending: false })
-      .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
-
-    if (filDesde) q = q.gte('fecha', filDesde)
-    if (filHasta) q = q.lte('fecha', filHasta)
-    if (filCategoria) q = q.eq('categoria', filCategoria)
-
-    const { data, error, count } = await q
-    if (error) console.error(error)
-    else {
-      setGastos(data || [])
-      setTotalPages(count ? Math.ceil(count / PAGE_SIZE) : 1)
-    }
-    setLoading(false)
-  }
+  const supabase = createClientComponentClient();
+  const router = useRouter();
+  const [gastos, setGastos] = useState<Gasto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
-    loadGastos()
-  }, [page])
+    fetchGastos();
+  }, [page]);
 
-  async function handleFiltrar(e: FormEvent) {
-    e.preventDefault()
-    setPage(1)
-    await loadGastos()
-  }
+  async function fetchGastos() {
+    setLoading(true);
+    const { data, count, error } = await supabase
+      .from('gastos') // quitamos el genérico aquí
+      .select('*', { count: 'exact' })
+      .order('fecha', { ascending: false })
+      .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
-  async function handleNueva(e: FormEvent) {
-    e.preventDefault()
-    const { error } = await supabase
-      .from('gastos')
-      .insert([
-        {
-          fecha: nuevaFecha,
-          categoria: nuevaCategoria,
-          descripcion: nuevaDescripcion,
-          importe: nuevoImporte,
-        },
-      ])
-    if (error) console.error(error)
-    else {
-      // limpiar form
-      setNuevaFecha('')
-      setNuevaCategoria('')
-      setNuevaDescripcion('')
-      setNuevoImporte(0)
-      setPage(1)
-      await loadGastos()
+    if (error) {
+      console.error('Error cargando gastos:', error);
+    } else if (data) {
+      setGastos(data as Gasto[]);
+      setTotalCount(count || 0);
     }
-  }
-
-  async function onEdit(g: Gasto) {
-    setEditandoId(g.id)
-    setNuevaFecha(g.fecha)
-    setNuevaCategoria(g.categoria)
-    setNuevaDescripcion(g.descripcion)
-    setNuevoImporte(g.importe)
-  }
-
-  async function handleUpdate(e: FormEvent) {
-    e.preventDefault()
-    if (!editandoId) return
-    const { error } = await supabase
-      .from('gastos')
-      .update({
-        fecha: nuevaFecha,
-        categoria: nuevaCategoria,
-        descripcion: nuevaDescripcion,
-        importe: nuevoImporte,
-      })
-      .eq('id', editandoId)
-    if (error) console.error(error)
-    else {
-      setEditandoId(null)
-      // limpiar form
-      setNuevaFecha('')
-      setNuevaCategoria('')
-      setNuevaDescripcion('')
-      setNuevoImporte(0)
-      await loadGastos()
-    }
-  }
-
-  async function delGasto(id: string) {
-    if (!confirm('¿Borrar este gasto?')) return
-    const { error } = await supabase.from('gastos').delete().eq('id', id)
-    if (error) console.error(error)
-    else await loadGastos()
-  }
-
-  function exportCSV() {
-    const header = ['fecha', 'categoria', 'descripcion', 'importe']
-    const rows = gastos.map(g => [
-      g.fecha,
-      g.categoria,
-      g.descripcion,
-      g.importe.toString(),
-    ])
-    const csv = [header, ...rows].map(r => r.join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'gastos.csv'
-    a.click()
-    URL.revokeObjectURL(url)
+    setLoading(false);
   }
 
   return (
-    <div className="p-6">
+    <main className="p-6">
       <h1 className="text-2xl font-bold mb-4">Gastos</h1>
+      {loading ? (
+        <p>Cargando gastos…</p>
+      ) : (
+        <>
+          <ul className="space-y-2">
+            {gastos.map((g) => (
+              <li key={g.id}>
+                <span className="font-medium">
+                  {new Date(g.fecha).toLocaleDateString()}:
+                </span>{' '}
+                {g.descripcion} — {g.monto.toFixed(2)} €
+              </li>
+            ))}
+          </ul>
 
-      <form onSubmit={handleFiltrar} className="flex gap-2 mb-4">
-        <input
-          type="date"
-          value={filDesde}
-          onChange={e => setFilDesde(e.target.value)}
-        />
-        <input
-          type="date"
-          value={filHasta}
-          onChange={e => setFilHasta(e.target.value)}
-        />
-        <input
-          type="text"
-          placeholder="Categoría"
-          value={filCategoria}
-          onChange={e => setFilCategoria(e.target.value)}
-        />
-        <button type="submit" className="btn">
-          Aplicar
-        </button>
-        <button type="button" onClick={exportCSV} className="btn">
-          Exportar CSV
-        </button>
-      </form>
+          <div className="mt-4 flex items-center space-x-2">
+            <button
+              onClick={() => setPage(Math.max(1, page - 1))}
+              disabled={page === 1}
+              className="px-3 py-1 border rounded"
+            >
+              Anterior
+            </button>
+            <span>
+              Página {page} de {Math.ceil(totalCount / PAGE_SIZE)}
+            </span>
+            <button
+              onClick={() =>
+                setPage((p) =>
+                  p * PAGE_SIZE < totalCount ? p + 1 : p
+                )
+              }
+              disabled={page * PAGE_SIZE >= totalCount}
+              className="px-3 py-1 border rounded"
+            >
+              Siguiente
+            </button>
+          </div>
 
-      <form
-        onSubmit={editandoId ? handleUpdate : handleNueva}
-        className="flex gap-2 mb-4"
-      >
-        <input
-          type="date"
-          required
-          value={nuevaFecha}
-          onChange={e => setNuevaFecha(e.target.value)}
-        />
-        <input
-          type="text"
-          required
-          placeholder="Categoría"
-          value={nuevaCategoria}
-          onChange={e => setNuevaCategoria(e.target.value)}
-        />
-        <input
-          type="text"
-          required
-          placeholder="Descripción"
-          value={nuevaDescripcion}
-          onChange={e => setNuevaDescripcion(e.target.value)}
-        />
-        <input
-          type="number"
-          required
-          placeholder="Importe"
-          value={nuevoImporte}
-          onChange={e => setNuevoImporte(Number(e.target.value))}
-        />
-        <button type="submit" className="btn">
-          {editandoId ? 'Guardar' : 'Nuevo gasto'}
-        </button>
-        {editandoId && (
           <button
-            type="button"
-            onClick={() => setEditandoId(null)}
-            className="btn btn-secondary"
+            onClick={() => router.push('/gastos/nuevo')}
+            className="mt-6 px-4 py-2 bg-blue-600 text-white rounded"
           >
-            Cancelar
+            Nuevo Gasto
           </button>
-        )}
-      </form>
-
-      <table className="w-full border-collapse">
-        <thead>
-          <tr>
-            <th className="border px-2 py-1">Fecha</th>
-            <th className="border px-2 py-1">Categoría</th>
-            <th className="border px-2 py-1">Descripción</th>
-            <th className="border px-2 py-1">Importe (€)</th>
-            <th className="border px-2 py-1">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {gastos.map(g => (
-            <tr key={g.id}>
-              <td className="border px-2 py-1">{g.fecha}</td>
-              <td className="border px-2 py-1">{g.categoria}</td>
-              <td className="border px-2 py-1">{g.descripcion}</td>
-              <td className="border px-2 py-1">{g.importe.toFixed(2)}</td>
-              <td className="border px-2 py-1 space-x-2">
-                <button
-                  onClick={() => onEdit(g)}
-                  className="px-2 py-1 bg-blue-500 text-white rounded"
-                >
-                  Editar
-                </button>
-                <button
-                  onClick={() => delGasto(g.id)}
-                  className="px-2 py-1 bg-red-600 text-white rounded"
-                >
-                  🗑️
-                </button>
-              </td>
-            </tr>
-          ))}
-          {gastos.length === 0 && !loading && (
-            <tr>
-              <td colSpan={5} className="text-center py-4">
-                No hay gastos.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-
-      <div className="flex justify-between items-center mt-4">
-        <button
-          onClick={() => setPage(p => Math.max(p - 1, 1))}
-          disabled={page === 1}
-          className="btn"
-        >
-          Anterior
-        </button>
-        <span>
-          Página {page} de {totalPages}
-        </span>
-        <button
-          onClick={() => setPage(p => Math.min(p + 1, totalPages))}
-          disabled={page === totalPages}
-          className="btn"
-        >
-          Siguiente
-        </button>
-      </div>
-    </div>
-)
+        </>
+      )}
+    </main>
+  );
 }
