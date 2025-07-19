@@ -5,10 +5,10 @@ import { cookies } from "next/headers";
 import { v4 as uuidv4 } from "uuid";
 
 export async function POST(request: Request) {
-  // Inicializa el cliente para Route Handlers
+  // Inicializa el cliente de Supabase para Route Handlers
   const supabase = createRouteHandlerClient({ cookies });
 
-  // Comprueba sesión de usuario
+  // Obtén la sesión actual
   const {
     data: { session },
     error: sessionError,
@@ -18,13 +18,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    // Extrae payload (por ejemplo { active: boolean })
+    // Lee el parámetro `active` del body
     const { active } = await request.json();
 
-    // Genera clave única
+    // Genera una clave única
     const newKey = uuidv4().toUpperCase();
 
-    // Inserta en la tabla "licenses"
+    // Inserta la nueva licencia
     const { data, error } = await supabase
       .from("licenses")
       .insert([{ key: newKey, active }]);
@@ -34,8 +34,8 @@ export async function POST(request: Request) {
     }
 
     // Devuelve la licencia creada
-    return NextResponse.json({ license: data[0] });
+    return NextResponse.json({ license: data![0] });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: e.message || "Error interno" }, { status: 500 });
   }
 }
