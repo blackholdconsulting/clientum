@@ -26,12 +26,9 @@ interface SiiLog {
   enviado_at: string;
 }
 
-export default async function Page({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const facturaId = params.id;
+// Firmamos Page de forma genérica para evitar el choque con PageProps intern
+export default async function Page(props: any) {
+  const facturaId = props.params.id;
   const supabase = createServerComponentClient({ cookies });
 
   // Cargo la factura
