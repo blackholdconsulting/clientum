@@ -2,10 +2,10 @@
 import React from "react";
 import ClientePage from "./ClientePage";
 
-interface PageProps {
+export default function Page({
+  params,
+}: {
   params: { id: string };
-}
-
-export default function Page({ params }: PageProps) {
+}) {
   return <ClientePage id={params.id} />;
 }
