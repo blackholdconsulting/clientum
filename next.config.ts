@@ -1,18 +1,17 @@
 // next.config.js
-const path = require('path');
-
-/**
- * @type {import('next').NextConfig}
- **/
-module.exports = {
-  reactStrictMode: true,
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   webpack(config) {
-    config.resolve = config.resolve || {};
+    // Cuando strong-soap/globalize requiera "cldr", "cldr/event" o "cldr/supplemental"
+    // los aliasarán a cldrjs, que sí estará instalado.
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
-      // el alias "xmljs" apunta al paquete "xml-js"
-      xmljs: require.resolve('xml-js'),
+      cldr: require.resolve('cldrjs'),
+      'cldr/event': require.resolve('cldrjs/dist/cldr/event'),
+      'cldr/supplemental': require.resolve('cldrjs/dist/cldr/supplemental'),
     };
     return config;
   },
 };
+
+export default nextConfig;
