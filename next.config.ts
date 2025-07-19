@@ -1,17 +1,18 @@
 // next.config.js
 /** @type {import('next').NextConfig} */
+const path = require('path')
+
 const nextConfig = {
   webpack(config) {
-    // Cuando strong-soap/globalize requiera "cldr", "cldr/event" o "cldr/supplemental"
-    // los aliasarán a cldrjs, que sí estará instalado.
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
+      // Alias de cldr que globalize/strong-soap esperan
       cldr: require.resolve('cldrjs'),
-      'cldr/event': require.resolve('cldrjs/dist/cldr/event'),
-      'cldr/supplemental': require.resolve('cldrjs/dist/cldr/supplemental'),
-    };
-    return config;
+      'cldr/event': require.resolve('cldrjs/dist/cldr/event.js'),
+      'cldr/supplemental': require.resolve('cldrjs/dist/cldr/supplemental.js'),
+    }
+    return config
   },
-};
+}
 
-export default nextConfig;
+module.exports = nextConfig
