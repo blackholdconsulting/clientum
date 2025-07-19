@@ -1,80 +1,76 @@
 // app/facturas/nueva/page.tsx
-'use client'
+'use client';
 
-import { useState, useEffect, FormEvent } from 'react'
-import { useSupabaseClient } from '@supabase/auth-helpers-react'
-import { useRouter } from 'next/navigation'
-import type { Database } from '../../../lib/supabaseClient'
+import React, { useState, useEffect, FormEvent } from 'react';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import { useRouter } from 'next/navigation';
 
 type FacturaInsert = {
-  user_id: string
-  cliente_id: string
-  fecha_emisor: string
-  fecha_vencim: string | null
-  concepto: string
-  base_imponib: number
-  iva_percent: number
-  iva_total: number
-  total: number
-  estado: string
-  json_factura?: Record<string, any>
-  enlace_pdf?: string
-}
+  user_id: string;
+  cliente_id: string;
+  fecha_emisor: string;
+  fecha_vencim: string | null;
+  concepto: string;
+  base_imponib: number;
+  iva_percent: number;
+  iva_total: number;
+  total: number;
+  estado: string;
+  json_factura?: Record<string, any>;
+  enlace_pdf?: string;
+};
 
 export default function NuevaFacturaPage() {
-  const supabase = useSupabaseClient<Database>()
-  const router = useRouter()
+  const supabase = useSupabaseClient();
+  const router = useRouter();
 
   // Carga de clientes para el select
-  const [clientes, setClientes] = useState<{ id: string; nombre: string }[]>([])
+  const [clientes, setClientes] = useState<{ id: string; nombre: string }[]>([]);
   useEffect(() => {
     supabase
       .from('clientes')
       .select('id, nombre')
       .order('nombre')
-      .then(({ data }) => {
-        if (data) setClientes(data)
-      })
-  }, [supabase])
+      .then(({ data }) => data && setClientes(data));
+  }, [supabase]);
 
   // Estado del formulario
-  const [clienteId, setClienteId] = useState('')
-  const [fechaEmisor, setFechaEmisor] = useState(new Date().toISOString().slice(0, 10))
-  const [fechaVencim, setFechaVencim] = useState('')
-  const [concepto, setConcepto] = useState('')
-  const [base, setBase] = useState(0)
-  const [ivaPct, setIvaPct] = useState(21)
-  const [ivaTotal, setIvaTotal] = useState(0)
-  const [total, setTotal] = useState(0)
-  const [estado, setEstado] = useState<'borrador' | 'emitida' | 'pagada' | 'vencida'>('borrador')
-  const [jsonFactura, setJsonFactura] = useState('')
-  const [enlacePdf, setEnlacePdf] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [clienteId, setClienteId] = useState('');
+  const [fechaEmisor, setFechaEmisor] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaVencim, setFechaVencim] = useState('');
+  const [concepto, setConcepto] = useState('');
+  const [base, setBase] = useState(0);
+  const [ivaPct, setIvaPct] = useState(21);
+  const [ivaTotal, setIvaTotal] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [estado, setEstado] = useState<'borrador' | 'emitida' | 'pagada' | 'vencida'>('borrador');
+  const [jsonFactura, setJsonFactura] = useState('');
+  const [enlacePdf, setEnlacePdf] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   // Recalcula IVA y Total cuando cambian base o porcentaje
   useEffect(() => {
-    const iva = parseFloat(((base * ivaPct) / 100).toFixed(2))
-    setIvaTotal(iva)
-    setTotal(parseFloat((base + iva).toFixed(2)))
-  }, [base, ivaPct])
+    const iva = parseFloat(((base * ivaPct) / 100).toFixed(2));
+    setIvaTotal(iva);
+    setTotal(parseFloat((base + iva).toFixed(2)));
+  }, [base, ivaPct]);
 
   // Envía el formulario
   async function handleSubmit(e: FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
 
-    // Toma la sesión justo antes de insertar
+    // Comprueba sesión justo antes de insertar
     const {
       data: { session },
-      error: sessErr
-    } = await supabase.auth.getSession()
-
+      error: sessErr,
+    } = await supabase.auth.getSession();
     if (sessErr || !session) {
-      setError('No estás autenticado')
-      setLoading(false)
-      return
+      setError('No estás autenticado');
+      setLoading(false);
+      return;
     }
 
     const nueva: FacturaInsert = {
@@ -89,33 +85,40 @@ export default function NuevaFacturaPage() {
       total,
       estado,
       json_factura: jsonFactura ? JSON.parse(jsonFactura) : undefined,
-      enlace_pdf: enlacePdf || undefined
+      enlace_pdf: enlacePdf || undefined,
+    };
+
+    // IMPORTANTE: pasamos `[nueva]` en un array
+    const { error: supaError } = await supabase
+      .from('facturas')
+      .insert([nueva]);
+
+    setLoading(false);
+    if (supaError) {
+      setError(supaError.message);
+    } else {
+      router.push('/facturas');
     }
-
-    const { error: supaError } = await supabase.from('facturas').insert(nueva)
-    setLoading(false)
-
-    if (supaError) setError(supaError.message)
-    else router.push('/facturas')
   }
 
   return (
-    <section className="p-6 max-w-2xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">➕ Nueva Factura</h1>
-      {error && <p className="text-red-600">Error: {error}</p>}
+    <section className="p-6">
+      <h1 className="text-2xl font-bold mb-4">➕ Nueva Factura</h1>
 
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4">
+      {error && <p className="text-red-600 mb-4">Error: {error}</p>}
+
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         {/* Selección de cliente */}
         <div>
           <label className="block mb-1 font-medium">Cliente</label>
           <select
             value={clienteId}
-            onChange={e => setClienteId(e.target.value)}
+            onChange={(e) => setClienteId(e.target.value)}
             required
             className="w-full border px-2 py-1 rounded"
           >
             <option value="">– Selecciona cliente –</option>
-            {clientes.map(c => (
+            {clientes.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nombre}
               </option>
@@ -130,7 +133,7 @@ export default function NuevaFacturaPage() {
             <input
               type="date"
               value={fechaEmisor}
-              onChange={e => setFechaEmisor(e.target.value)}
+              onChange={(e) => setFechaEmisor(e.target.value)}
               required
               className="w-full border px-2 py-1 rounded"
             />
@@ -140,7 +143,7 @@ export default function NuevaFacturaPage() {
             <input
               type="date"
               value={fechaVencim}
-              onChange={e => setFechaVencim(e.target.value)}
+              onChange={(e) => setFechaVencim(e.target.value)}
               className="w-full border px-2 py-1 rounded"
             />
           </div>
@@ -150,9 +153,9 @@ export default function NuevaFacturaPage() {
         <div>
           <label className="block mb-1 font-medium">Concepto</label>
           <textarea
-            value={concepto}
-            onChange={e => setConcepto(e.target.value)}
             rows={3}
+            value={concepto}
+            onChange={(e) => setConcepto(e.target.value)}
             className="w-full border px-2 py-1 rounded"
           />
         </div>
@@ -165,7 +168,7 @@ export default function NuevaFacturaPage() {
               type="number"
               step="0.01"
               value={base}
-              onChange={e => setBase(parseFloat(e.target.value))}
+              onChange={(e) => setBase(parseFloat(e.target.value))}
               className="w-full border px-2 py-1 rounded"
             />
           </div>
@@ -175,7 +178,7 @@ export default function NuevaFacturaPage() {
               type="number"
               step="0.1"
               value={ivaPct}
-              onChange={e => setIvaPct(parseFloat(e.target.value))}
+              onChange={(e) => setIvaPct(parseFloat(e.target.value))}
               className="w-full border px-2 py-1 rounded"
             />
           </div>
@@ -202,7 +205,7 @@ export default function NuevaFacturaPage() {
           <label className="block mb-1 font-medium">Estado</label>
           <select
             value={estado}
-            onChange={e => setEstado(e.target.value as any)}
+            onChange={(e) => setEstado(e.target.value as any)}
             className="w-full border px-2 py-1 rounded"
           >
             <option value="borrador">borrador</option>
@@ -216,10 +219,10 @@ export default function NuevaFacturaPage() {
         <div>
           <label className="block mb-1 font-medium">JSON interno (opcional)</label>
           <textarea
-            value={jsonFactura}
-            onChange={e => setJsonFactura(e.target.value)}
             rows={2}
-            placeholder='{"items":[…]}'
+            placeholder='{"items":[...]}'
+            value={jsonFactura}
+            onChange={(e) => setJsonFactura(e.target.value)}
             className="w-full border px-2 py-1 rounded"
           />
         </div>
@@ -230,7 +233,7 @@ export default function NuevaFacturaPage() {
           <input
             type="url"
             value={enlacePdf}
-            onChange={e => setEnlacePdf(e.target.value)}
+            onChange={(e) => setEnlacePdf(e.target.value)}
             className="w-full border px-2 py-1 rounded"
           />
         </div>
@@ -246,7 +249,6 @@ export default function NuevaFacturaPage() {
           </button>
           <button
             type="submit"
-            onClick={handleSubmit}
             disabled={loading}
             className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
           >
@@ -255,5 +257,4 @@ export default function NuevaFacturaPage() {
         </div>
       </form>
     </section>
-  )
-}
+);
