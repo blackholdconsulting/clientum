@@ -1,8 +1,4 @@
 // app/layout.tsx
-// -----------------
-// Este archivo es cliente ("use client") porque tus hijos usan hooks.
-// Ya no exporta metadata aquí; solo envuelve tu layout.
-
 "use client";
 
 import SidebarLayout from "../components/Layout";
