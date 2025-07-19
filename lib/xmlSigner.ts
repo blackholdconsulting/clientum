@@ -1,52 +1,53 @@
 // lib/xmlSigner.ts
-import { SignedXml } from 'xml-crypto'
-import { createClient } from '@supabase/supabase-js'
-import streamBuffers from 'stream-buffers'
+import { SignedXml } from "xml-crypto";
+import fs from "fs";
+import path from "path";
 
-// Inicializa Supabase con la Service Role Key para poder descargar cualquier archivo
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// Ajusta estas rutas a donde tengas tu clave privada y certificado
+const KEY_PATH = path.resolve(process.cwd(), "certs", "private-key.pem");
+const CERT_PATH = path.resolve(process.cwd(), "certs", "certificate.pem");
 
-export async function signXMLForUser(userId: string, xmlString: string): Promise<string> {
-  // 1) Descargar la clave privada
-  const privPath = `${userId}/private_key.pem`
-  const certPath = `${userId}/certificate.pem`
-  const { data: privData, error: e1 } = await supabase
-    .storage.from('certs')
-    .download(privPath)
-  if (e1 || !privData) throw new Error('No se pudo descargar private_key.pem')
+const privateKeyPem = fs.readFileSync(KEY_PATH, "utf-8");
+const certPem = fs.readFileSync(CERT_PATH, "utf-8");
 
-  const { data: certData, error: e2 } = await supabase
-    .storage.from('certs')
-    .download(certPath)
-  if (e2 || !certData) throw new Error('No se pudo descargar certificate.pem')
+export async function signXMLForUser(xml: string, userId: string): Promise<string> {
+  // Creamos el objeto para la firma
+  const sig = new SignedXml();
 
-  // 2) Convertir blobs a strings
-  const toPem = async (blob: Blob) => {
-    const buf = await blob.arrayBuffer()
-    return Buffer.from(buf).toString('utf-8')
-  }
-  const privateKey  = await toPem(privData)
-  const certificate = await toPem(certData)
+  // Algoritmos que queremos usar
+  sig.signatureAlgorithm = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
+  sig.signingKey = privateKeyPem;
 
-  // 3) Firmar con xml-crypto
-  const sig = new SignedXml()
-  sig.addReference(
-    "/*", 
-    ["http://www.w3.org/2000/09/xmldsig#enveloped-signature"],
-    "http://www.w3.org/2001/04/xmlenc#sha256"
-  )
-  sig.signingKey = privateKey
+  // Inyectamos el certificado en el KeyInfo
   sig.keyInfoProvider = {
-    getKeyInfo: () =>
-      `<X509Data><X509Certificate>${certificate
+    getKeyInfo() {
+      // Quita las cabeceras/footers y saltos de línea
+      const certBase64 = certPem
         .replace(/-----BEGIN CERTIFICATE-----/, "")
         .replace(/-----END CERTIFICATE-----/, "")
-        .replace(/\r?\n/g, "")}</X509Certificate></X509Data>`,
-    getKey: () => Buffer.from(privateKey),
-  }
-  sig.computeSignature(xmlString, { location: { reference: "/*", action: "append" } })
-  return sig.getSignedXml()
+        .replace(/\r?\n|\r/g, "");
+      return `<X509Data><X509Certificate>${certBase64}</X509Certificate></X509Data>`;
+    },
+    getKey() {
+      return privateKeyPem;
+    },
+  };
+
+  // Aquí va el cambio: addReference ahora sólo recibe un objeto
+  sig.addReference({
+    xpath: "/*",
+    transforms: [
+      "http://www.w3.org/2000/09/xmldsig#enveloped-signature",
+    ],
+    digestAlgorithm: "http://www.w3.org/2001/04/xmlenc#sha256",
+  });
+
+  // Finalmente computamos la firma sobre el documento completo
+  sig.computeSignature(xml, {
+    prefix: "ds",
+    attrs: { xmlns: "http://www.w3.org/2000/09/xmldsig#" },
+  });
+
+  // Devolvemos el XML ya firmado
+  return sig.getSignedXml();
 }
