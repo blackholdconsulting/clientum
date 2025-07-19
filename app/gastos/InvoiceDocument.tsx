@@ -1,72 +1,114 @@
-'use client'
-import React from 'react'
+// app/gastos/InvoiceDocument.tsx
+import React from 'react';
 import {
   Document,
   Page,
-  View,
   Text,
+  View,
   StyleSheet,
-  Font,
-} from '@react-pdf/renderer'
+  PDFDownloadLink,
+} from '@react-pdf/renderer';
 
-// opciones de tipografía
-Font.register({
-  family: 'OpenSans',
-  src: 'https://fonts.gstatic.com/s/opensans/v20/mem8YaGs126MiZpBA-U1UpcaXcl0Aw.ttf'
-})
-
-const styles = StyleSheet.create({
-  page: { padding: 30, fontFamily: 'OpenSans', fontSize: 12 },
-  header: { fontSize: 20, marginBottom: 10, textAlign: 'center' },
-  table: { display: 'table', width: 'auto', marginTop: 20 },
-  row: { flexDirection: 'row' },
-  cell: { flex: 1, border: '1px solid #ddd', padding: 5 },
-  footer: { position: 'absolute', bottom: 30, left: 30, right: 30, textAlign: 'center', fontSize: 10 }
-})
-
-interface InvoiceDocumentProps {
-  factura: {
-    id: string
-    cliente: { Nombre: string; NIF: string; Dirección: string }
-    fecha_emision: string
-    fecha_vencimiento: string
-    concepto: string
-    base_imponible: number
-    iva_percent: number
-    iva_total: number
-    total: number
-  }
+interface InvoiceItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
 }
 
-export function InvoiceDocument({ factura }: InvoiceDocumentProps) {
-  return (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        <Text style={styles.header}>Factura Nº {factura.id}</Text>
+interface InvoiceData {
+  invoiceNumber: string;
+  date: string;
+  customerName: string;
+  items: InvoiceItem[];
+  subtotal: number;
+  tax: number;
+  total: number;
+}
 
-        <Text>Cliente: {factura.cliente.Nombre}</Text>
-        <Text>NIF: {factura.cliente.NIF}</Text>
-        <Text>Dirección: {factura.cliente.Dirección}</Text>
+type InvoiceDocumentProps = {
+  data: InvoiceData;
+};
 
-        <View style={styles.table}>
-          <View style={[styles.row, { backgroundColor: '#eee' }]}>
-            {['Concepto', 'Emisión', 'Vencimiento', 'Base', 'IVA %', 'IVA', 'Total'].map((h) => (
-              <Text key={h} style={styles.cell}>{h}</Text>
-            ))}
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.cell}>{factura.concepto}</Text>
-            <Text style={styles.cell}>{factura.fecha_emision}</Text>
-            <Text style={styles.cell}>{factura.fecha_vencimiento}</Text>
-            <Text style={styles.cell}>€{factura.base_imponible.toFixed(2)}</Text>
-            <Text style={styles.cell}>{factura.iva_percent}%</Text>
-            <Text style={styles.cell}>€{factura.iva_total.toFixed(2)}</Text>
-            <Text style={styles.cell}>€{factura.total.toFixed(2)}</Text>
-          </View>
+export const InvoiceDocument: React.FC<InvoiceDocumentProps> = ({ data }) => (
+  <Document>
+    <Page size="A4" style={styles.page}>
+      <View style={styles.header}>
+        <Text>Factura nº {data.invoiceNumber}</Text>
+        <Text>Fecha: {data.date}</Text>
+        <Text>Cliente: {data.customerName}</Text>
+      </View>
+
+      <View style={styles.table}>
+        {/* Header row */}
+        <View style={styles.row}>
+          <Text style={styles.cell}>Descripción</Text>
+          <Text style={styles.cell}>Cantidad</Text>
+          <Text style={styles.cell}>P. Unitario</Text>
+          <Text style={styles.cell}>Total</Text>
         </View>
+        {/* Data rows */}
+        {data.items.map((item, i) => (
+          <View style={styles.row} key={i}>
+            <Text style={styles.cell}>{item.description}</Text>
+            <Text style={styles.cell}>{item.quantity}</Text>
+            <Text style={styles.cell}>{item.unitPrice.toFixed(2)} €</Text>
+            <Text style={styles.cell}>{item.total.toFixed(2)} €</Text>
+          </View>
+        ))}
+      </View>
 
-        <Text style={styles.footer}>Generated with Clientum &supabase</Text>
-      </Page>
-    </Document>
-  )
-}
+      <View style={styles.footer}>
+        <Text>Subtotal: {data.subtotal.toFixed(2)} €</Text>
+        <Text>IVA: {data.tax.toFixed(2)} €</Text>
+        <Text>Total: {data.total.toFixed(2)} €</Text>
+      </View>
+    </Page>
+  </Document>
+);
+
+// Styles for @react-pdf/renderer
+const styles = StyleSheet.create({
+  page: {
+    padding: 30,
+    fontFamily: 'OpenSans',
+    fontSize: 12,
+  },
+  header: {
+    fontSize: 20,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  table: {
+    // 'table' display isn't supported by @react-pdf; use flex instead
+    display: 'flex',
+    flexDirection: 'column',
+    width: 'auto',
+    marginTop: 20,
+  },
+  row: {
+    flexDirection: 'row',
+  },
+  cell: {
+    flex: 1,
+    border: '1px solid #ddd',
+    padding: 5,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 30,
+    left: 30,
+    right: 30,
+    textAlign: 'center',
+    fontSize: 10,
+  },
+});
+
+export const DownloadInvoiceLink: React.FC<InvoiceDocumentProps> = ({ data }) => (
+  <PDFDownloadLink
+    document={<InvoiceDocument data={data} />}
+    fileName={`Factura-${data.invoiceNumber}.pdf`}
+  >
+    {({ loading }) => (loading ? 'Generando PDF…' : 'Descargar Factura')}
+  </PDFDownloadLink>
+);
