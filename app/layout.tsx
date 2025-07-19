@@ -1,6 +1,8 @@
-// **NO** pongas "use client" en este archivo
+// app/layout.tsx
+// -------------------
+// ¡NO incluyas NINGUNA línea "use client" aquí!
 
-import ClientWrapper from "./components/ClientWrapper";
+import ClientWrapper from "../components/ClientWrapper";
 
 export const metadata = {
   title: "Clientum",
@@ -15,7 +17,6 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body>
-        {/* Aquí envuelves todo lo que necesite React client-side */}
         <ClientWrapper>{children}</ClientWrapper>
       </body>
     </html>
