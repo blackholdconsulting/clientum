@@ -30,7 +30,7 @@ export default function ClientePage({ id }: { id: string }) {
   useEffect(() => {
     async function fetchCliente() {
       const { data, error } = await supabase
-        .from<Cliente>("clientes")
+        .from("clientes")
         .select("*")
         .eq("id", id)
         .single();
