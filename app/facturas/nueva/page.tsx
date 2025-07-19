@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, FormEvent } from 'react';
-import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 
 type FacturaInsert = {
@@ -21,7 +21,7 @@ type FacturaInsert = {
 };
 
 export default function NuevaFacturaPage() {
-  const supabase = useSupabaseClient();
+  const supabase = createClientComponentClient();
   const router = useRouter();
 
   // Carga de clientes para el select
@@ -31,7 +31,9 @@ export default function NuevaFacturaPage() {
       .from('clientes')
       .select('id, nombre')
       .order('nombre')
-      .then(({ data }) => data && setClientes(data));
+      .then(({ data }) => {
+        if (data) setClientes(data);
+      });
   }, [supabase]);
 
   // Estado del formulario
@@ -62,7 +64,6 @@ export default function NuevaFacturaPage() {
     setLoading(true);
     setError(null);
 
-    // Comprueba sesión justo antes de insertar
     const {
       data: { session },
       error: sessErr,
@@ -88,7 +89,6 @@ export default function NuevaFacturaPage() {
       enlace_pdf: enlacePdf || undefined,
     };
 
-    // IMPORTANTE: pasamos `[nueva]` en un array
     const { error: supaError } = await supabase
       .from('facturas')
       .insert([nueva]);
@@ -257,4 +257,5 @@ export default function NuevaFacturaPage() {
         </div>
       </form>
     </section>
-);
+  );
+}
