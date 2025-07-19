@@ -1,11 +1,11 @@
 // app/layout.tsx
 // -----------------
-// Aquí marcamos todo el layout como cliente,
-// porque tus componentes hijos probablemente usan hooks.
-// Ya no exportamos metadata en este archivo.
+// Este archivo es cliente ("use client") porque tus hijos usan hooks.
+// Ya no exporta metadata aquí; solo envuelve tu layout.
+
 "use client";
 
-import ClientWrapper from "../components/ClientWrapper";
+import SidebarLayout from "../components/Layout";
 
 export default function RootLayout({
   children,
@@ -15,7 +15,9 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body>
-        <ClientWrapper>{children}</ClientWrapper>
+        <SidebarLayout>
+          {children}
+        </SidebarLayout>
       </body>
     </html>
   );
