@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   // Inicializa el cliente de Supabase para Route Handlers
   const supabase = createRouteHandlerClient({ cookies });
 
-  // Obtén la sesión actual
+  // Comprueba sesión de usuario
   const {
     data: { session },
     error: sessionError,
@@ -18,8 +18,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    // Lee el parámetro `active` del body
-    const { active } = await request.json();
+    // Lee el body (esperamos { active: boolean })
+    const { active } = (await request.json()) as { active: boolean };
 
     // Genera una clave única
     const newKey = uuidv4().toUpperCase();
@@ -29,13 +29,16 @@ export async function POST(request: Request) {
       .from("licenses")
       .insert([{ key: newKey, active }]);
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    // Si hubo error o data es null/empty, lo manejamos
+    if (error || !data || data.length === 0) {
+      const msg = error?.message ?? "No se pudo crear la licencia";
+      return NextResponse.json({ error: msg }, { status: 500 });
     }
 
-    // Devuelve la licencia creada
-    return NextResponse.json({ license: data![0] });
+    // Devolvemos la primera licencia creada
+    return NextResponse.json({ license: data[0] });
   } catch (e: any) {
     return NextResponse.json({ error: e.message || "Error interno" }, { status: 500 });
   }
 }
+
