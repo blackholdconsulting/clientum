@@ -1,28 +1,36 @@
 // app/api/facturas/sign/route.ts
-import { NextResponse } from 'next/server'
-import { getServerSession } from '@supabase/auth-helpers-nextjs'
-import { signXMLForUser } from '@/lib/xmlSigner'
+import { NextResponse } from "next/server";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
+import { signXMLForUser } from "@/lib/xmlSigner";
 
 export async function POST(request: Request) {
-  // 1) Autenticar al usuario
-  const { data: { session } } = await getServerSession()
-  if (!session) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
-  const userId = session.user.id
+  // Inicializa el cliente de Supabase para Route Handlers
+  const supabase = createRouteHandlerClient({ cookies });
 
-  // 2) Leer XML del body
-  const { xml } = await request.json() as { xml: string }
-  if (!xml) {
-    return NextResponse.json({ error: 'No se ha enviado XML' }, { status: 400 })
+  // Obtén la sesión del usuario
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
+  if (sessionError || !session) {
+    return NextResponse.json(
+      { error: "No autenticado" },
+      { status: 401 }
+    );
   }
 
-  // 3) Firmar
   try {
-    const signedXml = await signXMLForUser(userId, xml)
-    return NextResponse.json({ signedXml })
-  } catch (err: any) {
-    console.error('Error en sign route:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    const { xmlToSign } = await request.json();
+    // signXMLForUser espera el XML y el userId
+    const signedXml = await signXMLForUser(xmlToSign, session.user.id);
+
+    return NextResponse.json({ signedXml });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: e.message || "Error firmando XML" },
+      { status: 500 }
+    );
   }
 }
