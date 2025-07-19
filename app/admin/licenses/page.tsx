@@ -35,7 +35,14 @@ export default function AdminLicensesPage() {
   const generateNew = async () => {
     setLoading(true)
     const newKey = crypto.randomUUID().toUpperCase()
-    await supabase.from('licenses').insert({ key: newKey, active: false })
+    interface License {
+  key: string;
+  active: boolean;
+}
+
+await supabase
+  .from<License>('licenses')
+  .insert([{ key: newKey, active: false }]);
     const { data } = await supabase
       .from('licenses')
       .select('*')
