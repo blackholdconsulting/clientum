@@ -1,9 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Button } from '../components/ui/button'
-import { Card } from '../components/ui/card'
-import { Input } from '../components/ui/input'
 
 export default function ClientesPage() {
   const [search, setSearch] = useState('')
