@@ -1,20 +1,19 @@
-// next.config.js
-const path = require('path')
+// next.config.ts
+import { NextConfig } from 'next'
+import NodePolyfillPlugin from 'node-polyfill-webpack-plugin'
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  webpack(config) {
-    config.resolve.alias = {
-      // conserva los alias que ya tengas
-      ...(config.resolve.alias || {}),
-
-      // alias para que globalize / strong-soap encuentren cldr/event y cldr/supplemental
-      'cldr': require.resolve('cldrjs/dist/cldr.js'),
-      'cldr/event': require.resolve('cldrjs/dist/cldr/event.js'),
-      'cldr/supplemental': require.resolve('cldrjs/dist/cldr/supplemental.js'),
+const nextConfig: NextConfig = {
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        crypto: require.resolve('crypto-browserify'),
+        stream: require.resolve('stream-browserify'),
+      }
+      config.plugins.push(new NodePolyfillPlugin())
     }
     return config
   },
 }
 
-module.exports = nextConfig
+export default nextConfig
