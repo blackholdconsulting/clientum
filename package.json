@@ -36,6 +36,7 @@
     "react": "18.2.0",
     "react-csv": "^2.2.2",
     "react-dom": "18.2.0",
+    "react-icons": "^5.5.0",
     "recharts": "^3.0.2",
     "stream-browserify": "^3.0.0",
     "stream-buffers": "^3.0.3",
