@@ -11,7 +11,7 @@
     "@supabase/supabase-js": "^2.51.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "crypto-browserify": "^3.12.0",        // << añadida
+    "crypto-browserify": "^3.12.0",
     "csv-stringify": "^6.5.2",
     "globalize": "^1.7.0",
     "google-fonts": "^1.0.0",
@@ -30,7 +30,7 @@
     "react-csv": "^2.2.2",
     "react-dom": "18.2.0",
     "recharts": "^3.0.2",
-    "stream-browserify": "^3.0.0",       // << añadida
+    "stream-browserify": "^3.0.0",
     "stream-buffers": "^3.0.3",
     "strong-soap": "^4.1.14",
     "tailwind-merge": "^3.3.1",
