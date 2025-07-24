@@ -1,3 +1,5 @@
+// lib/database.types.ts
+
 export type Json =
   | string
   | number
@@ -6,7 +8,7 @@ export type Json =
   | { [key: string]: Json }
   | Json[]
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       clientes: {
@@ -48,6 +50,84 @@ export interface Database {
           key: string
         }
         Update: Partial<Database['public']['Tables']['licenses']['Insert']>
+      }
+
+      facturas: {
+        Row: {
+          id: string
+          user_id: string
+          cliente_id: string
+          numero: string | null
+          fecha_emisor: string
+          fecha_vencim: string | null
+          concepto: string
+          base_imponib: number
+          iva_percent: number
+          iva_total: number
+          total: number
+          estado: 'borrador' | 'emitida' | 'pagada' | 'vencida'
+          json_factura: Record<string, any> | null
+          enlace_pdf: string | null
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          cliente_id: string
+          numero?: string | null
+          fecha_emisor: string
+          fecha_vencim?: string | null
+          concepto: string
+          base_imponib: number
+          iva_percent: number
+          iva_total: number
+          total: number
+          estado: 'borrador' | 'emitida' | 'pagada' | 'vencida'
+          json_factura?: Record<string, any> | null
+          enlace_pdf?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['facturas']['Insert']>
+      }
+
+      empleados: {
+        Row: {
+          id: number
+          first_name: string
+          last_name: string
+          email: string
+          position: string
+          salary: number
+          status: string
+          hired_at: string
+          created_at: string
+        }
+        Insert: {
+          first_name: string
+          last_name: string
+          email: string
+          position: string
+          salary: number
+          status?: string
+          hired_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['empleados']['Insert']>
+      }
+
+      nominas: {
+        Row: {
+          id: number
+          empleado_id: number
+          fecha_emision: string
+          salario_bruto: number
+          estado: 'pendiente' | 'pagada'
+          created_at: string
+        }
+        Insert: {
+          empleado_id: number
+          fecha_emision: string
+          salario_bruto: number
+          estado: 'pendiente' | 'pagada'
+        }
+        Update: Partial<Database['public']['Tables']['nominas']['Insert']>
       }
     }
     Views: {}

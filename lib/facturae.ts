@@ -1,10 +1,19 @@
-// lib/facturae.ts
+import axios from 'axios'
 
-/**
- * Stub de generación de XML de factura.
- * Sustitúyelo por tu lógica real (xmlbuilder2, xml-js, etc.).
- */
-export function buildFacturaXml(facturaData: any): string {
-  // Aquí solo un envoltorio de ejemplo
-  return `<factura>${JSON.stringify(facturaData)}</factura>`
+export const enviarFacturaAEspaña = async (xml: string) => {
+  try {
+    const response = await axios.post(
+      'https://tu-endpoint-sii.com/api/facturae',
+      { xml },
+      {
+        headers: {
+          'Content-Type': 'application/xml',
+        },
+      }
+    )
+    return response.data
+  } catch (error: any) {
+    console.error('Error enviando a SII:', error.response?.data || error.message)
+    throw new Error('Error al enviar la factura al SII.')
+  }
 }

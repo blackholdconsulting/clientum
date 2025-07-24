@@ -1,58 +1,143 @@
 // app/employees/page.tsx
-"use client";
+'use client'
 
-import React, { useState, useEffect } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { useRouter } from "next/navigation";
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import type { Database } from '@/lib/database.types'
 
-interface Employee {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  position: string;
-  salary: number;
-}
+type Empleado = Database['public']['Tables']['empleados']['Row']
 
 export default function EmployeesPage() {
-  const supabase = createClientComponentClient();
-  const router = useRouter();
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [empleados, setEmpleados] = useState<Empleado[]>([])
+  const supabase = createClientComponentClient<Database>()
 
   useEffect(() => {
-    async function loadEmployees() {
-      setLoading(true);
+    const fetchEmpleados = async () => {
       const { data, error } = await supabase
-        .from("employees")        // Sin genéricos
-        .select("*");
+        .from('empleados')
+        .select('*')
+        .order('last_name', { ascending: true })
       if (error) {
-        console.error("Error cargando empleados:", error);
-      } else if (data) {
-        setEmployees(data as Employee[]);
+        console.error('Error al cargar empleados:', error)
+      } else {
+        setEmpleados(data ?? [])
       }
-      setLoading(false);
     }
-    loadEmployees();
-  }, [supabase]);
-
-  if (loading) return <p>Cargando empleados…</p>;
+    fetchEmpleados()
+  }, [supabase])
 
   return (
-    <main className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Empleados</h1>
-      <ul className="list-disc pl-5 space-y-1">
-        {employees.map((e) => (
-          <li key={e.id}>
-            <button
-              className="text-blue-600 hover:underline"
-              onClick={() => router.push(`/employees/${e.id}`)}
-            >
-              {e.first_name} {e.last_name} — {e.email}
-            </button>
-          </li>
-        ))}
-      </ul>
+    <main className="p-8 bg-gray-100 min-h-screen">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-semibold text-gray-800">Empleados</h1>
+        <Link
+          href="/employees/nuevo"
+          className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded shadow"
+        >
+          Añadir empleado
+        </Link>
+      </div>
+
+      <div className="overflow-x-auto bg-white rounded-lg shadow">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Nombre
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Apellido
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Email
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Puesto
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Salario
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Estado
+              </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Acciones
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {empleados.map((emp) => (
+              <tr key={emp.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                  {emp.first_name}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                  {emp.last_name}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                  {emp.email}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                  {emp.position}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                  {emp.salary.toLocaleString('es-ES')} €
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <span
+                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      emp.status === 'activo'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}
+                  >
+                    {emp.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-center space-x-2">
+                  <Link
+                    href={`/employees/editar/${emp.id}`}
+                    className="text-indigo-600 hover:text-indigo-900"
+                  >
+                    Editar
+                  </Link>
+                  <button
+                    onClick={async () => {
+                      if (confirm('¿Eliminar este empleado?')) {
+                        const { error } = await supabase
+                          .from('empleados')
+                          .delete()
+                          .eq('id', emp.id)
+                        if (error) {
+                          alert('Error al eliminar: ' + error.message)
+                        } else {
+                          setEmpleados((prev) =>
+                            prev.filter((e) => e.id !== emp.id)
+                          )
+                        }
+                      }
+                    }}
+                    className="text-red-600 hover:text-red-900"
+                  >
+                    Eliminar
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {empleados.length === 0 && (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center"
+                >
+                  No hay empleados registrados.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </main>
-  );
+  )
 }

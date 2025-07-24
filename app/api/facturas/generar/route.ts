@@ -4,15 +4,16 @@ import { NextResponse } from 'next/server'
 import fs from 'fs/promises'
 import path from 'path'
 import { validateXmlAgainstXsd } from '@/lib/xsdValidator'
-import { buildFacturaXml } from '@/lib/facturae'
+import { generateFacturaeXML as buildFacturaXml } from '@/utils/facturae'
 
 export async function POST(request: Request) {
   try {
     const { facturaData } = await request.json()
+    
     // 1) Generar XML
     const xml = buildFacturaXml(facturaData)
 
-    // 2) Validar contra XSD (stub)
+    // 2) Validar contra XSD
     const xsdPath = path.join(process.cwd(), 'xsd', 'facturae.xsd')
     const { valid, errors } = await validateXmlAgainstXsd(xml, xsdPath)
     if (!valid) {
