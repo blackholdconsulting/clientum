@@ -1,19 +1,17 @@
-// next.config.js
-/** @type {import('next').NextConfig} */
-const NodePolyfillPlugin = require('node-polyfill-webpack-plugin').default;
+// app/contabilidad/balance-situacion/page.tsx
+import React from 'react'
+import { GiScales } from 'react-icons/gi'
 
-module.exports = {
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      // Añadimos los fallbacks para crypto y stream en el browser
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        crypto: require.resolve('crypto-browserify'),
-        stream: require.resolve('stream-browserify'),
-      };
-      // Y ahora sí podemos instanciar el plugin
-      config.plugins.push(new NodePolyfillPlugin());
-    }
-    return config;
-  },
-};
+export default function BalanceSituacionPage() {
+  return (
+    <main className="p-6 bg-white rounded-md shadow">
+      <header className="flex items-center mb-4">
+        <GiScales className="text-2xl text-indigo-600 mr-2" />
+        <h1 className="text-xl font-semibold">Balance de Situación</h1>
+      </header>
+
+      {/* Aquí iría tu componente o tabla con el balance */}
+      <div className="text-gray-500">Aún no hay datos para mostrar.</div>
+    </main>
+  )
+}
