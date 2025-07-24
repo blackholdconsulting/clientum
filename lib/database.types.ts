@@ -73,7 +73,7 @@ export type Database = {
         Insert: {
           user_id: string
           cliente_id: string
-          numero?: string | null
+          numero?: string
           fecha_emisor: string
           fecha_vencim?: string | null
           concepto: string
@@ -98,7 +98,6 @@ export type Database = {
           salary: number
           status: string
           hired_at: string
-          created_at: string
         }
         Insert: {
           first_name: string
@@ -128,6 +127,31 @@ export type Database = {
           estado: 'pendiente' | 'pagada'
         }
         Update: Partial<Database['public']['Tables']['nominas']['Insert']>
+      }
+
+      // Tablas nuevas de CRM
+      contacts: {
+        Row: Record<string, any>
+        Insert: Record<string, any>
+        Update: Partial<Record<string, any>>
+      }
+
+      reservas: {
+        Row: Record<string, any>
+        Insert: Record<string, any>
+        Update: Partial<Record<string, any>>
+      }
+
+      meetings: {
+        Row: Record<string, any>
+        Insert: Record<string, any>
+        Update: Partial<Record<string, any>>
+      }
+
+      funnels: {
+        Row: Record<string, any>
+        Insert: Record<string, any>
+        Update: Partial<Record<string, any>>
       }
     }
     Views: {}
