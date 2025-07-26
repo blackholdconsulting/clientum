@@ -1,17 +1,17 @@
-// app/contabilidad/balance-situacion/page.tsx
-import React from 'react'
-import { GiScales } from 'react-icons/gi'
+// next.config.ts
+import { NextConfig } from 'next'
+import NodePolyfillPlugin from 'node-polyfill-webpack-plugin'
 
-export default function BalanceSituacionPage() {
-  return (
-    <main className="p-6 bg-white rounded-md shadow">
-      <header className="flex items-center mb-4">
-        <GiScales className="text-2xl text-indigo-600 mr-2" />
-        <h1 className="text-xl font-semibold">Balance de Situación</h1>
-      </header>
-
-      {/* Aquí iría tu componente o tabla con el balance */}
-      <div className="text-gray-500">Aún no hay datos para mostrar.</div>
-    </main>
-  )
+const nextConfig: NextConfig = {
+  webpack(config) {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      crypto: require.resolve('crypto-browserify'),
+      stream: require.resolve('stream-browserify'),
+    }
+    config.plugins.push(new NodePolyfillPlugin())
+    return config
+  },
 }
+
+export default nextConfig
