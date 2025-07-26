@@ -59,7 +59,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 isActive("/impuestos") ? "bg-indigo-100 font-semibold" : ""
               }`}
             >
-              🧾 Impuestos
+              ⚖️ Impuestos
             </Link>
 
             {/* Contabilidad con submenú */}
