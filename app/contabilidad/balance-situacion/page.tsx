@@ -18,9 +18,8 @@ export default function BalanceSituacionPage() {
       {/* Contenido principal */}
       <section className="space-y-4">
         <p className="text-gray-600">
-          Aquí podrás ver la situación patrimonial de tu empresa a la fecha seleccionada.
+          Aquí puedes revisar la situación patrimonial de tu empresa.
         </p>
-        {/* Ejemplo de tabla */}
         <table className="w-full table-fixed border-collapse">
           <thead>
             <tr className="bg-gray-100 text-left">
