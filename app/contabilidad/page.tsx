@@ -1,86 +1,69 @@
 // app/contabilidad/page.tsx
-"use client";
+import Link from 'next/link'
+import { FiGrid, FiBookOpen, FiTool, FiBarChart2, FiPieChart } from 'react-icons/fi'
+import React from 'react'
 
-import React, { useState, useEffect } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { useRouter } from "next/navigation";
-
-interface Factura {
-  fecha_emisor: string;
-  total: number;
-  iva_total: number;
-  estado: string;
+export const metadata = {
+  title: 'Contabilidad | Clientum'
 }
 
 export default function ContabilidadPage() {
-  const supabase = createClientComponentClient();
-  const router = useRouter();
-  const [facturas, setFacturas] = useState<Factura[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function loadFacturas() {
-      setLoading(true);
-
-      // 1) Obtenemos primero el usuario logueado
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-      if (userError || !user) {
-        console.error("No autenticado", userError);
-        setLoading(false);
-        return;
-      }
-
-      // 2) Hacemos la consulta con el user.id
-      const { data: facturaData, error: factError } = await supabase
-        .from("facturas")
-        .select("fecha_emisor, total, iva_total, estado")
-        .eq("user_id", user.id);
-
-      if (factError) {
-        console.error("Error cargando facturas:", factError);
-      } else if (facturaData) {
-        setFacturas(facturaData as Factura[]);
-      }
-      setLoading(false);
+  const cards = [
+    {
+      title: 'Cuadro de cuentas',
+      href: '/contabilidad/cuadro-de-cuentas',
+      icon: <FiGrid className="text-3xl text-indigo-600" />,
+      description: 'Visualiza y gestiona tu plan contable'
+    },
+    {
+      title: 'Libro diario',
+      href: '/contabilidad/libro-diario',
+      icon: <FiBookOpen className="text-3xl text-green-600" />,
+      description: 'Registra y revisa tus asientos diarios'
+    },
+    {
+      title: 'Activos',
+      href: '/contabilidad/activos',
+      icon: <FiTool className="text-3xl text-yellow-600" />,
+      description: 'Gestiona tus activos y amortizaciones'
+    },
+    {
+      title: 'Pérdidas y ganancias',
+      href: '/contabilidad/perdidas-ganancias',
+      icon: <FiBarChart2 className="text-3xl text-red-600" />,
+      description: 'Consulta resultados de tu ejercicio'
+    },
+    {
+      title: 'Balance de situación',
+      href: '/contabilidad/balance-situacion',
+      icon: <FiPieChart className="text-3xl text-blue-600" />,
+      description: 'Analiza el patrimonio de la empresa'
     }
-
-    loadFacturas();
-  }, [supabase]);
-
-  if (loading) return <p>Cargando contabilidad…</p>;
+  ]
 
   return (
-    <main className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Contabilidad</h1>
-      <table className="min-w-full table-auto">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Total (€)</th>
-            <th>IVA (€)</th>
-            <th>Estado</th>
-          </tr>
-        </thead>
-        <tbody>
-          {facturas.map((f, i) => (
-            <tr key={i} className="border-t">
-              <td>{new Date(f.fecha_emisor).toLocaleDateString()}</td>
-              <td>{f.total.toFixed(2)}</td>
-              <td>{f.iva_total.toFixed(2)}</td>
-              <td>{f.estado}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <button
-        onClick={() => router.push("/facturas/new")}
-        className="mt-4 px-4 py-2 bg-green-600 text-white rounded"
-      >
-        Nueva Factura
-      </button>
+    <main className="p-6 bg-gray-100 min-h-screen">
+      <h1 className="text-2xl font-semibold mb-6">Contabilidad</h1>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {cards.map((card) => (
+          <div
+            key={card.href}
+            className="bg-white rounded-lg shadow hover:shadow-lg transition p-6 flex flex-col justify-between"
+          >
+            <div className="flex items-center space-x-4 mb-4">
+              {card.icon}
+              <h2 className="text-lg font-medium">{card.title}</h2>
+            </div>
+            <p className="text-sm text-gray-600 flex-1">{card.description}</p>
+            <Link
+              href={card.href}
+              className="mt-6 inline-block bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded"
+            >
+              Ir a {card.title}
+            </Link>
+          </div>
+        ))}
+      </div>
     </main>
-  );
+  )
 }
