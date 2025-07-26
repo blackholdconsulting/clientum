@@ -2,48 +2,41 @@
 
 import { Fragment, useState } from "react";
 import { Dialog, Transition } from "@headlessui/react";
-import { FiCalendar, FiSettings } from "react-icons/fi";
-import { GiTaxCollector } from "react-icons/gi";
+import { FiCalendar, FiSettings, FiFileText } from "react-icons/fi";
 
 const impuestosDisponibles = [
   { code: "303", name: "Declaración de IVA", period: "Trimestral" },
   { code: "349", name: "Operaciones intracomunitarias", period: "Trimestral" },
-  { code: "130", name: "Impuesto sobre la Renta de las Personas Físicas", period: "Trimestral" },
+  { code: "130", name: "IRPF Trimestral", period: "Trimestral" },
   { code: "200", name: "Impuesto sobre Sociedades", period: "Anual" },
 ];
 
 export default function TaxesPage() {
   const [isOpen, setIsOpen] = useState(false);
-  const [filters, setFilters] = useState({
-    dateFrom: "",
-    dateTo: "",
-    selectedTaxes: impuestosDisponibles.map((t) => t.code),
-  });
 
   return (
     <main className="p-6 bg-white rounded-md shadow">
       <header className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-2">
-          <GiTaxCollector className="text-2xl text-indigo-600" />
+          <FiFileText className="text-2xl text-indigo-600" />
           <h1 className="text-xl font-semibold">Impuestos</h1>
         </div>
         <div className="flex items-center space-x-4">
           <button
             onClick={() => setIsOpen(true)}
-            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
           >
-            <FiSettings className="inline-block mr-1" />
+            <FiSettings className="mr-1" />
             Configurar modelos
           </button>
-          <button className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200">
-            <FiCalendar className="inline-block mr-1" />
+          <button className="flex items-center px-4 py-2 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200">
+            <FiCalendar className="mr-1" />
             Calendario fiscal
           </button>
         </div>
       </header>
 
-      {/* Resumen de impuestos */}
-      <section className="space-y-4">
+      <section className="grid gap-4">
         {impuestosDisponibles.map((t) => (
           <div
             key={t.code}
@@ -58,10 +51,8 @@ export default function TaxesPage() {
         ))}
       </section>
 
-      {/* Diálogo de configuración */}
       <Transition.Root show={isOpen} as={Fragment}>
         <Dialog as="div" className="relative z-10" onClose={setIsOpen}>
-          {/* Fondo semitransparente */}
           <Transition.Child
             as={Fragment}
             enter="ease-out duration-300"
@@ -115,7 +106,7 @@ export default function TaxesPage() {
                           </select>
                           <label className="inline-flex items-center">
                             <input type="checkbox" className="mr-2" />
-                            <FiSettings />
+                            Habilitar
                           </label>
                         </div>
                       </div>
