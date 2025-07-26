@@ -1,109 +1,103 @@
-'use client'
+// app/chat/page.tsx
+"use client"
 
-import { useState, useRef, useEffect } from 'react'
-import SidebarLayout from '@/components/Layout'
-
-type Msg = { from: 'me' | 'bot'; text: string }
+import { Fragment, useState, useRef, useEffect } from "react"
+import { Dialog, Transition } from "@headlessui/react"
+import { FiSend, FiUser, FiCpu } from "react-icons/fi"
+import classNames from "clsx"
 
 export default function ChatPage() {
-  const [history, setHistory] = useState<Msg[]>([
-    { from: 'bot', text: '¡Hola! ¿En qué puedo ayudarte hoy?' }
-  ])
-  const [input, setInput]     = useState('')
-  const [loading, setLoading] = useState(false)
-  const endRef = useRef<HTMLDivElement>(null)
+  const [messages, setMessages] = useState<
+    { from: "user" | "bot"; text: string }[]
+  >([{ from: "bot", text: "¡Hola! ¿En qué puedo ayudarte hoy?" }])
+  const [input, setInput] = useState("")
+  const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Siempre scrollea al último mensaje
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [history])
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
 
-  const sendMessage = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSend = async () => {
     if (!input.trim()) return
-
-    // Añade tu mensaje
-    setHistory(h => [...h, { from: 'me', text: input.trim() }])
-    setInput('')
-    setLoading(true)
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input.trim() }),
-      })
-      const { reply, error } = await res.json()
-      setHistory(h => [
-        ...h,
-        { from: 'bot', text: reply ?? error ?? 'Sin respuesta' }
+    setMessages((m) => [...m, { from: "user", text: input }])
+    setInput("")
+    // aquí iría la llamada real al API
+    setTimeout(() => {
+      setMessages((m) => [
+        ...m,
+        { from: "bot", text: "Procesando tu petición..." },
       ])
-    } catch {
-      setHistory(h => [
-        ...h,
-        { from: 'bot', text: 'Error al conectar con el servidor' }
-      ])
-    } finally {
-      setLoading(false)
+      // tras la respuesta:
+      setTimeout(() => {
+        setMessages((m) => [
+          ...m.slice(0, -1),
+          { from: "bot", text: "Aquí tienes la respuesta generada por la IA." },
+        ])
+      }, 800)
+    }, 300)
+  }
+
+  const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
     }
   }
 
   return (
-    <SidebarLayout>
-      {/* Fondo oscuro general */}
-      <div className="flex flex-col h-full bg-gray-900">
-        {/* Contenedor centrado y ancho máximo */}
-        <div className="flex-1 flex justify-center px-4 py-6">
-          <div className="flex flex-col w-full max-w-3xl bg-gray-800 rounded-xl shadow-lg overflow-hidden">
-            
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-700">
-              <h1 className="text-xl font-semibold text-white">Chat IA de Clientum</h1>
-            </div>
+    <main className="flex-1 p-6 bg-gray-50">
+      <div className="max-w-4xl mx-auto flex flex-col h-[calc(100vh-4rem)] bg-white rounded-lg shadow">
+        {/* Header */}
+        <header className="px-6 py-4 border-b flex items-center">
+          <FiCpu className="text-2xl text-indigo-600 mr-2" />
+          <h1 className="text-xl font-semibold">Chat IA de Clientum</h1>
+        </header>
 
-            {/* Mensajes */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-              {history.map((msg, i) => (
-                <div key={i} className={`flex ${msg.from === 'me' ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    className={`max-w-[75%] px-4 py-2 rounded-xl text-sm ${
-                      msg.from === 'me'
-                        ? 'bg-blue-600 text-white rounded-br-none'
-                        : 'bg-gray-700 text-white rounded-bl-none'
-                    }`}
-                  >
-                    {msg.text}
-                  </div>
-                </div>
-              ))}
-              <div ref={endRef} />
-            </div>
-
-            {/* Entrada fija abajo */}
-            <form
-              onSubmit={sendMessage}
-              className="sticky bottom-0 bg-gray-800 border-t border-gray-700 px-6 py-4 flex space-x-3"
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-gray-100">
+          {messages.map((m, i) => (
+            <div
+              key={i}
+              className={classNames(
+                "max-w-[75%] p-3 rounded-lg",
+                m.from === "user"
+                  ? "bg-indigo-600 text-white self-end"
+                  : "bg-white text-gray-800 self-start"
+              )}
             >
-              <input
-                type="text"
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                disabled={loading}
-                placeholder="Escribe tu pregunta…"
-                className="flex-1 bg-gray-700 text-white placeholder-gray-400 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                type="submit"
-                disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-4 py-2 disabled:opacity-50"
-              >
-                {loading ? '…' : 'Enviar'}
-              </button>
-            </form>
-
-          </div>
+              <div className="flex items-start space-x-2">
+                {m.from === "bot" ? (
+                  <FiCpu className="text-indigo-600 mt-1" />
+                ) : (
+                  <FiUser className="text-gray-500 mt-1" />
+                )}
+                <p className="whitespace-pre-wrap">{m.text}</p>
+              </div>
+            </div>
+          ))}
+          <div ref={bottomRef} />
         </div>
+
+        {/* Input */}
+        <footer className="px-6 py-4 border-t bg-white">
+          <div className="flex items-center space-x-2">
+            <textarea
+              rows={1}
+              className="flex-1 resize-none px-4 py-2 border rounded-lg focus:outline-none focus:ring focus:border-indigo-300"
+              placeholder="Escribe tu pregunta..."
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onKey}
+            />
+            <button
+              onClick={handleSend}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-lg transition"
+            >
+              <FiSend className="text-xl" />
+            </button>
+          </div>
+        </footer>
       </div>
-    </SidebarLayout>
+    </main>
   )
 }
