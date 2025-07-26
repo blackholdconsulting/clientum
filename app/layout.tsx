@@ -13,7 +13,11 @@ async function getActivePath(): Promise<string> {
   return headersList.get("x-invoke-path") || "/";
 }
 
-export default async function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const path = await getActivePath();
   const isActive = (prefix: string) =>
     path === prefix || path.startsWith(prefix + "/");
@@ -23,7 +27,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <body className="bg-gray-50 text-gray-800 flex h-screen overflow-hidden">
         {/* Sidebar */}
         <aside className="w-64 bg-white border-r shadow-md flex flex-col">
-          <div className="p-6 font-bold text-xl text-indigo-600">Clientum</div>
+          <div className="p-6 font-bold text-xl text-indigo-600">
+            Clientum
+          </div>
           <nav className="flex flex-col px-4 text-sm space-y-1">
             <Link
               href="/dashboard"
@@ -52,7 +58,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               🧾 Facturas
             </Link>
 
-            {/* New top‐level “Impuestos” */}
+            {/* Impuestos al nivel superior */}
             <Link
               href="/impuestos"
               className={`py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -62,10 +68,67 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               ⚖️ Impuestos
             </Link>
 
+            {/* Tesorería con submenú */}
+            <div className="relative group">
+              <Link
+                href="/tesoreria/cuentas"
+                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
+                  isActive("/tesoreria") ? "bg-indigo-100 font-semibold" : ""
+                }`}
+              >
+                🏦 Tesorería
+                <span className="text-xs ml-1 transform group-hover:rotate-180 transition-transform">
+                  ▼
+                </span>
+              </Link>
+              <div className="absolute left-full top-0 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-opacity">
+                <Link
+                  href="/tesoreria/cuentas"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/tesoreria/cuentas")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  Cuentas
+                </Link>
+                <Link
+                  href="/tesoreria/cashflow"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/tesoreria/cashflow")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  Cashflow
+                </Link>
+                <Link
+                  href="/tesoreria/pagos-cobros"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/tesoreria/pagos-cobros")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  Pagos y Cobros
+                </Link>
+                <Link
+                  href="/tesoreria/remesas"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/tesoreria/remesas")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  Remesas
+                </Link>
+              </div>
+            </div>
+
             {/* Contabilidad con submenú */}
             <div className="relative group">
               <Link
-                href="/contabilidad"
+                href="/contabilidad/cuadro-de-cuentas"
                 className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
                   isActive("/contabilidad") ? "bg-indigo-100 font-semibold" : ""
                 }`}
@@ -75,7 +138,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   ▼
                 </span>
               </Link>
-              {/* Dropdown */}
               <div className="absolute left-full top-0 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-opacity">
                 <Link
                   href="/contabilidad/cuadro-de-cuentas"
