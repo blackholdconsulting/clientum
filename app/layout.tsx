@@ -15,7 +15,6 @@ async function getActivePath(): Promise<string> {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const path = await getActivePath();
-
   const isActive = (prefix: string) =>
     path === prefix || path.startsWith(prefix + "/");
 
@@ -53,14 +52,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               🧾 Facturas
             </Link>
 
-            {/* Nueva pestaña Impuestos */}
+            {/* New top‐level “Impuestos” */}
             <Link
               href="/impuestos"
               className={`py-2 px-3 rounded hover:bg-indigo-100 ${
                 isActive("/impuestos") ? "bg-indigo-100 font-semibold" : ""
               }`}
             >
-              💼 Impuestos
+              🧾 Impuestos
             </Link>
 
             {/* Contabilidad con submenú */}
