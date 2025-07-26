@@ -1,13 +1,16 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, Fragment } from 'react'
 import {
   FiChevronDown,
   FiSearch,
   FiCalendar,
   FiDownload,
   FiSettings,
+  FiPlus,
+  FiMoreVertical,
 } from 'react-icons/fi'
+import { Menu, Transition } from '@headlessui/react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/lib/database.types'
 
@@ -30,7 +33,6 @@ export default function CuadroDeCuentasPage() {
   const [fecha, setFecha] = useState('')
 
   useEffect(() => {
-    // Ejemplo: carga desde Supabase
     const load = async () => {
       const { data, error } = await supabase
         .from('cuentas')
@@ -40,8 +42,9 @@ export default function CuadroDeCuentasPage() {
         setCuentas(
           data.map((c) => ({
             ...c,
-            // si tu tabla no tiene color, asigna uno aleatorio
-            color: c.color || '#' + Math.floor(Math.random() * 0xffffff).toString(16),
+            color:
+              c.color ||
+              '#' + Math.floor(Math.random() * 0xffffff).toString(16),
           }))
         )
       }
@@ -49,36 +52,97 @@ export default function CuadroDeCuentasPage() {
     load()
   }, [])
 
-  // Filtrado en memoria
   const lista = cuentas
-    .filter((c) =>
-      filtro === 'withValue' ? c.saldo !== 0 : true
+    .filter((c) => (filtro === 'withValue' ? c.saldo !== 0 : true))
+    .filter(
+      (c) =>
+        c.numero.includes(busqueda) ||
+        c.nombre.toLowerCase().includes(busqueda.toLowerCase())
     )
-    .filter((c) =>
-      c.numero.includes(busqueda) ||
-      c.nombre.toLowerCase().includes(busqueda.toLowerCase())
-    )
+
+  const handleExport = (type: 'csv' | 'pdf') => {
+    // Aquí implementa tu lógica de exportar
+    alert(`Exportar como ${type.toUpperCase()}`)
+  }
+
+  const handleNuevoAsiento = () => {
+    // Navega o abre modal para crear asiento
+    alert('Abrir formulario de nuevo asiento')
+  }
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen">
       {/* Header */}
-      <header className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-gray-800 mb-4 md:mb-0">
+      <header className="flex flex-col md:flex-row items-start md:items-center md:justify-between mb-6 gap-4">
+        <h1 className="text-2xl font-semibold text-gray-800">
           Cuadro de cuentas
         </h1>
-        <div className="flex flex-wrap gap-3">
-          {/* Filtros */}
-          <div className="relative">
-            <button
-              onClick={() =>
-                setFiltro(filtro === 'all' ? 'withValue' : 'all')
-              }
-              className="flex items-center bg-white border rounded px-3 py-2 hover:shadow"
+
+        <div className="flex flex-wrap gap-3 items-center">
+          {/* Nuevo asiento */}
+          <button
+            onClick={handleNuevoAsiento}
+            className="flex items-center bg-indigo-600 text-white px-4 py-2 rounded shadow hover:bg-indigo-700"
+          >
+            <FiPlus className="mr-2" /> Nuevo asiento
+          </button>
+
+          {/* Menú Exportar */}
+          <Menu as="div" className="relative inline-block text-left">
+            <Menu.Button className="flex items-center bg-white border rounded px-3 py-2 hover:shadow">
+              <FiDownload className="mr-2" /> Exportar
+              <FiChevronDown className="ml-1" />
+            </Menu.Button>
+
+            <Transition
+              as={Fragment}
+              enter="transition ease-out duration-100"
+              enterFrom="opacity-0 scale-95"
+              enterTo="opacity-100 scale-100"
+              leave="transition ease-in duration-75"
+              leaveFrom="opacity-100 scale-100"
+              leaveTo="opacity-0 scale-95"
             >
-              {filtro === 'all' ? 'Mostrar todas' : 'Con valor'}
-              <FiChevronDown className="ml-2" />
-            </button>
-          </div>
+              <Menu.Items className="absolute right-0 mt-2 w-40 bg-white border rounded shadow-lg focus:outline-none z-10">
+                <Menu.Item>
+                  {({ active }) => (
+                    <button
+                      onClick={() => handleExport('csv')}
+                      className={`${
+                        active ? 'bg-gray-100' : ''
+                      } flex items-center w-full px-4 py-2 text-sm text-gray-700`}
+                    >
+                      CSV
+                    </button>
+                  )}
+                </Menu.Item>
+                <Menu.Item>
+                  {({ active }) => (
+                    <button
+                      onClick={() => handleExport('pdf')}
+                      className={`${
+                        active ? 'bg-gray-100' : ''
+                      } flex items-center w-full px-4 py-2 text-sm text-gray-700`}
+                    >
+                      PDF
+                    </button>
+                  )}
+                </Menu.Item>
+              </Menu.Items>
+            </Transition>
+          </Menu>
+
+          {/* Filtro valor */}
+          <button
+            onClick={() =>
+              setFiltro(filtro === 'all' ? 'withValue' : 'all')
+            }
+            className="flex items-center bg-white border rounded px-3 py-2 hover:shadow"
+          >
+            {filtro === 'all' ? 'Mostrar todas' : 'Con valor'}
+            <FiChevronDown className="ml-2" />
+          </button>
+
           {/* Búsqueda */}
           <div className="relative">
             <FiSearch className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
@@ -90,6 +154,7 @@ export default function CuadroDeCuentasPage() {
               className="pl-10 pr-3 py-2 rounded border w-48 focus:outline-none"
             />
           </div>
+
           {/* Selector de fecha */}
           <div className="relative">
             <FiCalendar className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
@@ -101,10 +166,6 @@ export default function CuadroDeCuentasPage() {
               className="pl-10 pr-3 py-2 rounded border w-52 focus:outline-none"
             />
           </div>
-          {/* Exportar */}
-          <button className="bg-white border rounded p-2 hover:shadow">
-            <FiDownload size={20} />
-          </button>
         </div>
       </header>
 
