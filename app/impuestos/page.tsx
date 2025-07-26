@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, Fragment } from "react";
-import { Dialog, Transition } from "@headlessui/react";
+import { Dialog, Transition, Switch } from "@headlessui/react";
 import { FiSettings, FiChevronLeft, FiChevronRight } from "react-icons/fi";
-import { Switch } from "@headlessui/react";
+import Link from "next/link";
 
 interface Impuesto {
   code: string;
@@ -32,6 +32,7 @@ export default function ImpuestosPage() {
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
+
   const total = IMPUESTOS.length;
   const start = (page - 1) * perPage;
   const end = Math.min(start + perPage, total);
@@ -42,15 +43,21 @@ export default function ImpuestosPage() {
       <header className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold">Impuestos</h1>
         <div className="flex space-x-2">
+          {/* Botón para abrir modal de selección */}
           <button
             onClick={() => setOpen(true)}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
           >
             Selecciona tus modelos
           </button>
-          <button className="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200 transition">
+
+          {/* Botón convertido a Link para el calendario fiscal */}
+          <Link
+            href="/impuestos/calendario"
+            className="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200 transition"
+          >
             Calendario fiscal
-          </button>
+          </Link>
         </div>
       </header>
 
@@ -61,7 +68,11 @@ export default function ImpuestosPage() {
 
       {/* Modal de configuración */}
       <Transition appear show={open} as={Fragment}>
-        <Dialog as="div" className="relative z-10" onClose={() => setOpen(false)}>
+        <Dialog
+          as="div"
+          className="relative z-10"
+          onClose={() => setOpen(false)}
+        >
           <Transition.Child
             as={Fragment}
             enter="ease-out duration-200"
@@ -71,6 +82,7 @@ export default function ImpuestosPage() {
             leaveFrom="opacity-100"
             leaveTo="opacity-0"
           >
+            {/* Fondo semitransparente */}
             <div className="fixed inset-0 bg-black bg-opacity-30" />
           </Transition.Child>
 
@@ -86,7 +98,10 @@ export default function ImpuestosPage() {
                 leaveTo="opacity-0 scale-95"
               >
                 <Dialog.Panel className="w-full max-w-4xl transform overflow-hidden rounded bg-white p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-xl font-semibold mb-4">
+                  <Dialog.Title
+                    as="h3"
+                    className="text-xl font-semibold mb-4"
+                  >
                     Configuración de Impuestos
                   </Dialog.Title>
 
@@ -101,7 +116,10 @@ export default function ImpuestosPage() {
                     </thead>
                     <tbody>
                       {IMPUESTOS.slice(start, end).map((f) => (
-                        <tr key={f.code} className="border-b hover:bg-gray-50">
+                        <tr
+                          key={f.code}
+                          className="border-b hover:bg-gray-50"
+                        >
                           <td className="py-2">
                             <span className="inline-block w-10 text-center bg-gray-100 rounded">
                               {f.code}
@@ -123,14 +141,14 @@ export default function ImpuestosPage() {
                               checked={false}
                               onChange={() => {}}
                               className={`${
-                                false
-                                  ? "bg-blue-600"
-                                  : "bg-gray-300"
+                                false ? "bg-blue-600" : "bg-gray-300"
                               } relative inline-flex h-6 w-11 items-center rounded-full transition`}
                             >
                               <span
                                 className={`${
-                                  false ? "translate-x-6" : "translate-x-1"
+                                  false
+                                    ? "translate-x-6"
+                                    : "translate-x-1"
                                 } inline-block h-4 w-4 transform rounded-full bg-white transition`}
                               />
                             </Switch>
@@ -147,7 +165,9 @@ export default function ImpuestosPage() {
                     </div>
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                        onClick={() =>
+                          setPage((p) => Math.max(p - 1, 1))
+                        }
                         disabled={page === 1}
                         className="p-1 rounded hover:bg-gray-100"
                       >
@@ -157,7 +177,11 @@ export default function ImpuestosPage() {
                         {page} / {totalPages}
                       </span>
                       <button
-                        onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+                        onClick={() =>
+                          setPage((p) =>
+                            Math.min(p + 1, totalPages)
+                          )
+                        }
                         disabled={page === totalPages}
                         className="p-1 rounded hover:bg-gray-100"
                       >
@@ -180,7 +204,7 @@ export default function ImpuestosPage() {
                     </div>
                   </div>
 
-                  {/* Guardar */}
+                  {/* Botón Guardar */}
                   <div className="mt-6 text-right">
                     <button
                       onClick={() => setOpen(false)}
