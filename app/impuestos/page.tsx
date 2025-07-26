@@ -1,234 +1,153 @@
-mkdir -p app/impuestos
-cat > app/impuestos/page.tsx << 'EOF'
+// app/impuestos/page.tsx
 "use client";
 
-import { useState, Fragment } from "react";
 import { Dialog, Transition } from "@headlessui/react";
-import { FiCalendar, FiPlus, FiSettings, FiX } from "react-icons/fi";
-import { GiReceiptTax } from "react-icons/gi";
+import { FiCalendar, FiSettings } from "react-icons/fi";
+import { useState, Fragment } from "react";
+import Link from "next/link";
 
-interface Modelo {
+interface Impuesto {
   code: string;
   name: string;
   period: "Trimestral" | "Anual";
 }
 
-const MODELOS: Modelo[] = [
+const impuestosDisponibles: Impuesto[] = [
   { code: "303", name: "Declaración de IVA", period: "Trimestral" },
-  { code: "349", name: "Intracomunitarias", period: "Trimestral" },
-  { code: "200", name: "Impuesto sobre Sociedades", period: "Anual" },
-  { code: "110", name: "Retenciones IRPF", period: "Trimestral" },
-  { code: "130", name: "IRPF Personas Físicas", period: "Trimestral" },
-  { code: "111", name: "Anual Retenciones", period: "Anual" },
+  { code: "200", name: "Impuesto de sociedades", period: "Anual" },
+  { code: "123", name: "Retenciones IRPF", period: "Trimestral" },
+  // añade aquí los que necesites...
 ];
 
 export default function ImpuestosPage() {
   const [open, setOpen] = useState(false);
-  const [filter, setFilter] = useState<"Todos" | "Ventas" | "Compras">("Todos");
-  const [toggled, setToggled] = useState<Record<string, boolean>>({});
-  const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(10);
-
-  const filtered = MODELOS.filter((m) => {
-    if (filter === "Todos") return true;
-    return m.code.startsWith(filter === "Ventas" ? "3" : "2");
-  });
-
-  const total = filtered.length;
-  const start = (page - 1) * perPage;
-  const end = start + perPage;
-  const pageItems = filtered.slice(start, end);
 
   return (
-    <main className="p-6 bg-white rounded-md shadow-md">
+    <main className="p-6 bg-white rounded-md shadow">
+      {/* Header */}
       <header className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold flex items-center">
-          <GiReceiptTax className="mr-2 text-indigo-600" /> Impuestos
-        </h1>
-        <div className="flex space-x-2">
-          <button className="flex items-center px-4 py-2 border rounded-md hover:bg-gray-50">
-            <FiCalendar className="mr-2" /> Calendario fiscal
-          </button>
-          <button
-            onClick={() => setOpen(true)}
-            className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-          >
-            <FiPlus className="mr-2" /> Selecciona tus modelos
-          </button>
+        <div className="flex items-center text-2xl font-semibold text-gray-800">
+          <FiSettings className="mr-2 text-indigo-600" />
+          Impuestos
         </div>
+        <button
+          onClick={() => setOpen(true)}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+        >
+          Selecciona tus modelos
+        </button>
       </header>
 
-      <div className="mb-6 border rounded-md p-4 flex justify-between items-center hover:shadow-sm transition">
-        <div className="flex items-center space-x-3">
-          <FiSettings className="text-xl text-gray-500" />
-          <span className="font-medium">Modelos de impuestos</span>
-        </div>
-        <button className="text-blue-600 hover:underline">Leer artículo</button>
-      </div>
-
-      <section>
-        <h2 className="text-lg font-semibold mb-2">Resumen de impuestos</h2>
-        <div className="border rounded-md overflow-auto">
-          <table className="min-w-full text-left">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="px-4 py-2">Categoría</th>
-                <th className="px-4 py-2">Subtotal</th>
-                <th className="px-4 py-2">Importe</th>
-              </tr>
-            </thead>
-            <tbody>
-              {["Ventas", "Compras"].map((cat) => (
-                <tr key={cat} className="border-b">
-                  <td className="px-4 py-3">{cat}</td>
-                  <td className="px-4 py-3">No hay datos disponibles</td>
-                  <td className="px-4 py-3"></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {/* Lista principal */}
+      <section className="space-y-4">
+        {impuestosDisponibles.map((f) => (
+          <div
+            key={f.code}
+            className="flex items-center justify-between p-4 border rounded-md hover:shadow-sm transition"
+          >
+            <div className="flex items-center">
+              <span className="inline-block w-8 text-center font-mono mr-4">
+                {f.code}
+              </span>
+              <span className="text-gray-700">{f.name}</span>
+            </div>
+            <div className="flex items-center space-x-4">
+              <FiCalendar className="text-lg text-gray-500" />
+              <select
+                defaultValue={f.period}
+                className="border rounded-md p-1"
+              >
+                <option>Trimestral</option>
+                <option>Anual</option>
+              </select>
+              <label className="inline-flex items-center">
+                <input
+                  type="checkbox"
+                  className="mr-2"
+                />
+                Activar
+              </label>
+            </div>
+          </div>
+        ))}
       </section>
 
-      <Transition.Root show={open} as={Fragment}>
-        <Dialog as="div" className="fixed inset-0 z-50 overflow-y-auto" onClose={setOpen}>
-          <div className="flex items-center justify-center min-h-screen px-4 text-center">
-            <Transition.Child
-              as={Fragment}
-              enter="ease-out duration-300"
-              enterFrom="opacity-0"
-              enterTo="opacity-30"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-30"
-              leaveTo="opacity-0"
-            >
-              <div className="fixed inset-0 bg-black" />
-            </Transition.Child>
+      {/* Modal de configuración */}
+      <Transition appear show={open} as={Fragment}>
+        <Dialog as="div" className="relative z-10" onClose={() => setOpen(false)}>
+          {/* Fondo semitransparente */}
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-200"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-150"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-30" />
+          </Transition.Child>
 
-            <Transition.Child
-              as={Fragment}
-              enter="ease-out duration-300"
-              enterFrom="opacity-0 scale-95"
-              enterTo="opacity-100 scale-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100 scale-100"
-              leaveTo="opacity-0 scale-95"
-            >
-              <div className="inline-block w-full max-w-2xl p-6 my-8 overflow-hidden text-left align-middle transform bg-white shadow-xl rounded-lg">
-                <div className="flex justify-between items-center mb-4">
-                  <Dialog.Title className="text-xl font-medium text-gray-900">
-                    Configuración de impuestos
+          {/* Panel */}
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-200"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-150"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-lg transform overflow-hidden rounded-2xl bg-white p-6 align-middle shadow-xl transition-all">
+                  <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900 mb-4">
+                    Configurar impuestos
                   </Dialog.Title>
-                  <button onClick={() => setOpen(false)}>
-                    <FiX size={20} className="text-gray-600 hover:text-gray-800" />
-                  </button>
-                </div>
+                  <div className="space-y-4">
+                    {impuestosDisponibles.map((f) => (
+                      <div key={f.code} className="flex items-center justify-between">
+                        <div>
+                          <span className="font-mono mr-2">{f.code}</span>
+                          {f.name}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <select
+                            defaultValue={f.period}
+                            className="border rounded-md p-1"
+                          >
+                            <option>Trimestral</option>
+                            <option>Anual</option>
+                          </select>
+                          <label className="inline-flex items-center">
+                            <input type="checkbox" className="mr-2" />
+                            Activado
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
 
-                <div className="flex items-center mb-4 space-x-3">
-                  <label className="font-medium">Mostrar:</label>
-                  <select
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value as any)}
-                    className="border rounded-md p-2"
-                  >
-                    <option>Todos</option>
-                    <option>Ventas</option>
-                    <option>Compras</option>
-                  </select>
-                </div>
-
-                <div className="max-h-80 overflow-auto mb-4">
-                  <table className="min-w-full text-left">
-                    <thead className="border-b">
-                      <tr>
-                        <th className="px-4 py-2">Formulario</th>
-                        <th className="px-4 py-2">Descripción</th>
-                        <th className="px-4 py-2">Período</th>
-                        <th className="px-4 py-2">Estado</th>
-                        <th className="px-4 py-2 text-right">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pageItems.map((m) => (
-                        <tr key={m.code} className="border-b hover:bg-gray-50">
-                          <td className="px-4 py-2 font-mono">{m.code}</td>
-                          <td className="px-4 py-2">{m.name}</td>
-                          <td className="px-4 py-2">
-                            <select defaultValue={m.period} className="border rounded p-1">
-                              <option>Trimestral</option>
-                              <option>Anual</option>
-                            </select>
-                          </td>
-                          <td className="px-4 py-2">
-                            <input
-                              type="checkbox"
-                              checked={!!toggled[m.code]}
-                              onChange={() =>
-                                setToggled((prev) => ({ ...prev, [m.code]: !prev[m.code] }))
-                              }
-                              className="h-5 w-5 text-blue-600 rounded border-gray-300"
-                            />
-                          </td>
-                          <td className="px-4 py-2 text-right">
-                            <FiSettings className="inline-block cursor-pointer text-gray-600 hover:text-gray-800" />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-gray-600">
-                    {start + 1}–{Math.min(end, total)} de {total} entradas
-                  </p>
-                  <div className="flex items-center space-x-2">
-                    <select
-                      value={perPage}
-                      onChange={(e) => {
-                        setPerPage(+e.target.value);
-                        setPage(1);
-                      }}
-                      className="border rounded p-1"
-                    >
-                      {[5, 10, 20, 50].map((n) => (
-                        <option key={n} value={n}>
-                          {n} por página
-                        </option>
-                      ))}
-                    </select>
+                  <div className="mt-6 text-right">
                     <button
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      className="px-3 py-1 border rounded disabled:opacity-50"
+                      onClick={() => setOpen(false)}
+                      className="px-4 py-2 bg-gray-200 rounded-md mr-2 hover:bg-gray-300 transition"
                     >
-                      &lt; Anterior
+                      Cancelar
                     </button>
                     <button
-                      onClick={() =>
-                        setPage((p) => Math.min(p + 1, Math.ceil(total / perPage)))
-                      }
-                      disabled={end >= total}
-                      className="px-3 py-1 border rounded disabled:opacity-50"
+                      onClick={() => setOpen(false)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
                     >
-                      Siguiente &gt;
+                      Guardar
                     </button>
                   </div>
-                </div>
-
-                <div className="mt-6 text-right">
-                  <button
-                    onClick={() => setOpen(false)}
-                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                  >
-                    Guardar
-                  </button>
-                </div>
-              </div>
-            </Transition.Child>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
           </div>
         </Dialog>
-      </Transition.Root>
+      </Transition>
     </main>
-);
-EOF
+  );
+}
