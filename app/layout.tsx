@@ -13,11 +13,7 @@ async function getActivePath(): Promise<string> {
   return headersList.get("x-invoke-path") || "/";
 }
 
-export default async function RootLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
   const path = await getActivePath();
   const isActive = (prefix: string) =>
     path === prefix || path.startsWith(prefix + "/");
@@ -28,7 +24,7 @@ export default async function RootLayout({
         {/* Sidebar */}
         <aside className="w-64 bg-white border-r shadow-md flex flex-col">
           <div className="p-6 font-bold text-xl text-indigo-600">Clientum</div>
-          <nav className="flex flex-col px-4 text-sm space-y-1">
+          <nav className="flex-1 flex flex-col px-4 text-sm space-y-1">
             {/* Dashboard */}
             <Link
               href="/dashboard"
@@ -84,9 +80,7 @@ export default async function RootLayout({
                 <Link
                   href="/negocio/proyectos"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/negocio/proyectos")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/negocio/proyectos") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   📁 Proyectos
@@ -94,9 +88,7 @@ export default async function RootLayout({
                 <Link
                   href="/negocio/plan-futuro"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/negocio/plan-futuro")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/negocio/plan-futuro") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   🔮 Plan futuro
@@ -131,9 +123,7 @@ export default async function RootLayout({
                 <Link
                   href="/tesoreria/cuentas"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/tesoreria/cuentas")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/tesoreria/cuentas") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   Cuentas
@@ -141,9 +131,7 @@ export default async function RootLayout({
                 <Link
                   href="/tesoreria/cashflow"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/tesoreria/cashflow")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/tesoreria/cashflow") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   Cashflow
@@ -151,9 +139,7 @@ export default async function RootLayout({
                 <Link
                   href="/tesoreria/pagos-cobros"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/tesoreria/pagos-cobros")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/tesoreria/pagos-cobros") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   Pagos y Cobros
@@ -161,9 +147,7 @@ export default async function RootLayout({
                 <Link
                   href="/tesoreria/remesas"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/tesoreria/remesas")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/tesoreria/remesas") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   Remesas
@@ -188,9 +172,7 @@ export default async function RootLayout({
                 <Link
                   href="/contabilidad/cuadro-de-cuentas"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/contabilidad/cuadro-de-cuentas")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/contabilidad/cuadro-de-cuentas") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   Cuadro de cuentas
@@ -198,9 +180,7 @@ export default async function RootLayout({
                 <Link
                   href="/contabilidad/libro-diario"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/contabilidad/libro-diario")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/contabilidad/libro-diario") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   Libro diario
@@ -208,9 +188,7 @@ export default async function RootLayout({
                 <Link
                   href="/contabilidad/activos"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/contabilidad/activos")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/contabilidad/activos") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   Activos
@@ -218,9 +196,7 @@ export default async function RootLayout({
                 <Link
                   href="/contabilidad/perdidas-ganancias"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/contabilidad/perdidas-ganancias")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/contabilidad/perdidas-ganancias") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   Pérdidas y ganancias
@@ -228,9 +204,7 @@ export default async function RootLayout({
                 <Link
                   href="/contabilidad/balance-situacion"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/contabilidad/balance-situacion")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/contabilidad/balance-situacion") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   Balance de situación
@@ -253,7 +227,7 @@ export default async function RootLayout({
               <Link
                 href="#"
                 className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
-                  isActive("/RR.HH") ? "bg-indigo-100 font-semibold" : ""
+                  isActive("/rrhh") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
                 👥 RRHH
@@ -263,59 +237,74 @@ export default async function RootLayout({
               </Link>
               <div className="absolute left-full top-0 ml-2 w-56 bg-white border rounded shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-opacity">
                 <Link
-                  href="/RR.HH/employees"
+                  href="/rrhh/employees"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/RR.HH/employees")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/rrhh/employees") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   👤 Empleados
                 </Link>
                 <Link
-                  href="/RR.HH/payroll"
+                  href="/rrhh/payroll"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/RR.HH/payroll")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/rrhh/payroll") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   💰 Nóminas
                 </Link>
                 <Link
-                  href="/RR.HH/gastos"
+                  href="/rrhh/gastos"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/RR.HH/gastos")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/rrhh/gastos") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   🧾 Gastos
                 </Link>
                 <Link
-                  href="/RR.HH/horarios"
+                  href="/rrhh/horarios"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/RR.HH/horarios")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/rrhh/horarios") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   ⏰ Horarios
                 </Link>
                 <Link
-                  href="/RR.HH/vacaciones"
+                  href="/rrhh/vacaciones"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/RR.HH/vacaciones")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/rrhh/vacaciones") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   🌴 Vacaciones
                 </Link>
               </div>
             </div>
-
           </nav>
+
+          {/* Ayuda y soporte (fijo al pie) */}
+          <div className="mt-auto border-t pt-4 px-4 text-sm">
+            <div className="font-medium mb-2">Ayuda y soporte</div>
+            <Link href="#" className="block py-1 hover:text-indigo-600">
+              📚 Academia Clientum
+            </Link>
+            <Link href="#" className="block py-1 hover:text-indigo-600">
+              🎓 Tutoriales
+            </Link>
+            <Link href="#" className="block py-1 hover:text-indigo-600">
+              ⭐ Votar mejoras
+            </Link>
+            <Link href="#" className="block py-1 hover:text-indigo-600">
+              🆕 Novedades
+            </Link>
+            <Link href="#" className="block py-1 hover:text-indigo-600">
+              📞 Llámanos
+            </Link>
+            <Link href="#" className="block py-1 hover:text-indigo-600">
+              🛠️ Contactar soporte
+            </Link>
+            <Link href="#" className="block py-1 hover:text-indigo-600">
+              💬 Chat con nosotros
+            </Link>
+          </div>
         </aside>
 
         {/* Main content */}
