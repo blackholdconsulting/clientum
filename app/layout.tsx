@@ -29,6 +29,7 @@ export default async function RootLayout({
         <aside className="w-64 bg-white border-r shadow-md flex flex-col">
           <div className="p-6 font-bold text-xl text-indigo-600">Clientum</div>
           <nav className="flex flex-col px-4 text-sm space-y-1">
+            {/* Dashboard */}
             <Link
               href="/dashboard"
               className={`py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -38,6 +39,7 @@ export default async function RootLayout({
               📊 Dashboard
             </Link>
 
+            {/* Clientes */}
             <Link
               href="/clientes"
               className={`py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -47,6 +49,7 @@ export default async function RootLayout({
               👥 Clientes
             </Link>
 
+            {/* Facturas */}
             <Link
               href="/facturas"
               className={`py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -56,7 +59,7 @@ export default async function RootLayout({
               🧾 Facturas
             </Link>
 
-            {/* Negocio con submenú */}
+            {/* Negocio */}
             <div className="relative group">
               <Link
                 href="#"
@@ -111,7 +114,7 @@ export default async function RootLayout({
               ⚖️ Impuestos
             </Link>
 
-            {/* Tesorería con submenú */}
+            {/* Tesorería */}
             <div className="relative group">
               <Link
                 href="/tesoreria/cuentas"
@@ -168,10 +171,10 @@ export default async function RootLayout({
               </div>
             </div>
 
-            {/* Contabilidad con submenú */}
+            {/* Contabilidad */}
             <div className="relative group">
               <Link
-                href="/contabilidad/cuadro-de-cuentas"
+                href="/contabilidad"
                 className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
                   isActive("/contabilidad") ? "bg-indigo-100 font-semibold" : ""
                 }`}
@@ -235,6 +238,7 @@ export default async function RootLayout({
               </div>
             </div>
 
+            {/* Chat IA */}
             <Link
               href="/chat"
               className={`py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -244,14 +248,73 @@ export default async function RootLayout({
               💬 Chat IA
             </Link>
 
-            <Link
-              href="/employees"
-              className={`py-2 px-3 rounded hover:bg-indigo-100 ${
-                isActive("/employees") ? "bg-indigo-100 font-semibold" : ""
-              }`}
-            >
-              🧑‍💼 Empleados
-            </Link>
+            {/* RRHH */}
+            <div className="relative group">
+              <Link
+                href="#"
+                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
+                  isActive("/RR.HH") ? "bg-indigo-100 font-semibold" : ""
+                }`}
+              >
+                👥 RRHH
+                <span className="text-xs ml-1 transform group-hover:rotate-180 transition-transform">
+                  ▼
+                </span>
+              </Link>
+              <div className="absolute left-full top-0 ml-2 w-56 bg-white border rounded shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-opacity">
+                <Link
+                  href="/RR.HH/employees"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/RR.HH/employees")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  👤 Empleados
+                </Link>
+                <Link
+                  href="/RR.HH/payroll"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/RR.HH/payroll")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  💰 Nóminas
+                </Link>
+                <Link
+                  href="/RR.HH/gastos"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/RR.HH/gastos")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  🧾 Gastos
+                </Link>
+                <Link
+                  href="/RR.HH/horarios"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/RR.HH/horarios")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  ⏰ Horarios
+                </Link>
+                <Link
+                  href="/RR.HH/vacaciones"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/RR.HH/vacaciones")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  🌴 Vacaciones
+                </Link>
+              </div>
+            </div>
+
           </nav>
         </aside>
 
