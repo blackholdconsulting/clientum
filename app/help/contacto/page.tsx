@@ -1,12 +1,30 @@
-export default function PhonePage() {
+export default function SupportPage() {
   return (
-    <main className="p-6 bg-white rounded-md shadow max-w-md">
-      <h1 className="text-2xl font-semibold mb-4">Llámanos</h1>
+    <main className="p-6 bg-white rounded-md shadow max-w-lg">
+      <h1 className="text-2xl font-semibold mb-4">Contactar Soporte</h1>
       <p className="mb-4">
-        Nuestro equipo de soporte está disponible de Lunes a Viernes de 9h a
-        18h.
+        Rellena el siguiente formulario y te responderemos lo antes posible:
       </p>
-      <p className="text-lg font-medium">Tel: <a href="tel:+34123456789" className="text-indigo-600">+34 123 456 789</a></p>
+      <form className="space-y-4">
+        <div>
+          <label className="block mb-1">Email</label>
+          <input type="email" className="w-full border rounded p-2" />
+        </div>
+        <div>
+          <label className="block mb-1">Asunto</label>
+          <input type="text" className="w-full border rounded p-2" />
+        </div>
+        <div>
+          <label className="block mb-1">Descripción</label>
+          <textarea className="w-full border rounded p-2" rows={4} />
+        </div>
+        <button
+          type="submit"
+          className="px-5 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+        >
+          Enviar
+        </button>
+      </form>
     </main>
 );
 }
