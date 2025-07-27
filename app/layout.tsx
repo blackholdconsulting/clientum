@@ -9,8 +9,8 @@ export const metadata = {
 };
 
 async function getActivePath(): Promise<string> {
-  const headersList = await headers();
-  return headersList.get("x-invoke-path") || "/";
+  const h = await headers();
+  return h.get("x-invoke-path") || "/";
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
@@ -68,7 +68,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   ▼
                 </span>
               </Link>
-              <div className="absolute left-full top-0 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-opacity">
+              <div className="absolute left-full top-0 ml-2 w-56 bg-white border rounded shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-opacity">
                 <Link
                   href="/negocio/tareas"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
@@ -92,6 +92,22 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   }`}
                 >
                   🔮 Plan futuro
+                </Link>
+                <Link
+                  href="/negocio/estudio-mercado"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/negocio/estudio-mercado") ? "bg-indigo-50 font-medium" : ""
+                  }`}
+                >
+                  🔍 Estudio de Mercado
+                </Link>
+                <Link
+                  href="/negocio/analisis-competencia"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/negocio/analisis-competencia") ? "bg-indigo-50 font-medium" : ""
+                  }`}
+                >
+                  🕵️‍♂️ Análisis Competencia
                 </Link>
               </div>
             </div>
