@@ -1,4 +1,3 @@
-// app/RR.HH/vacaciones/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -13,9 +12,10 @@ type Vacacion = Database["public"]["Tables"]["vacaciones"]["Row"];
 export default function VacacionesPage() {
   const supabase = createClientComponentClient<Database>();
   const router = useRouter();
+  const empresa = "MiEmpresa S.L."; // Cámbialo a tu razón social
+
   const [vacaciones, setVacaciones] = useState<Vacacion[]>([]);
   const [loading, setLoading] = useState(true);
-  const empresa = "MiEmpresa S.L."; // Cambia por tu nombre de empresa
 
   useEffect(() => {
     supabase
@@ -29,7 +29,6 @@ export default function VacacionesPage() {
       });
   }, [supabase]);
 
-  // Export CSV
   const exportCSV = () => {
     const header = ["Empleado ID","Inicio","Fin","Tipo","Motivo","Empresa"];
     const rows = vacaciones.map(v => [
@@ -46,13 +45,10 @@ export default function VacacionesPage() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = "vacaciones.csv";
-    a.click();
+    a.href = url; a.download = "vacaciones.csv"; a.click();
     URL.revokeObjectURL(url);
   };
 
-  // Export PDF
   const exportPDF = () => {
     const doc = new jsPDF({ unit: "pt", format: "letter" });
     const marginLeft = 40;
@@ -67,13 +63,12 @@ export default function VacacionesPage() {
     y += 30;
 
     // Encabezados
-    const cols = ["Empleado ID","Inicio","Fin","Tipo","Motivo"];
-    cols.forEach((h, i) => {
-      doc.text(h, marginLeft + i * 100, y);
-    });
+    ["Empleado ID","Inicio","Fin","Tipo","Motivo"].forEach((h, i) =>
+      doc.text(h, marginLeft + i * 100, y)
+    );
     y += 16;
     doc.setLineWidth(0.5);
-    doc.line(marginLeft, y, marginLeft + cols.length * 100 - 20, y);
+    doc.line(marginLeft, y, marginLeft + 500, y);
     y += 10;
 
     // Filas
@@ -90,7 +85,7 @@ export default function VacacionesPage() {
       }
     });
 
-    // Espacio para firmas
+    // Firmas
     y += 40;
     doc.text("Firma empleado: ____________________", marginLeft, y);
     y += 30;
@@ -99,55 +94,37 @@ export default function VacacionesPage() {
     doc.save("vacaciones.pdf");
   };
 
-  if (loading) {
-    return <p className="p-6">Cargando...</p>;
-  }
+  if (loading) return <p className="p-6">Cargando...</p>;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => router.back()}
-            className="text-gray-600 hover:text-gray-800"
-          >
-            ← Volver
-          </button>
-          <h1 className="text-2xl font-bold">Vacaciones</h1>
-        </div>
-        <Link href="/RR.HH/vacaciones/nuevo">
+        <button
+          onClick={() => router.back()}
+          className="text-gray-600 hover:text-gray-800"
+        >
+          ← Volver
+        </button>
+        <h1 className="text-2xl font-bold">Vacaciones</h1>
+        <Link href="/rrhh/vacaciones/nuevo">
           <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
             Solicitar vacaciones
           </button>
         </Link>
       </div>
 
-      {/* Empty state */}
       {vacaciones.length === 0 ? (
         <div className="text-center py-16 bg-white rounded shadow">
           <p className="text-xl font-semibold">Sin vacaciones</p>
-          <p className="mt-2 text-gray-500">
-            Todavía no hay solicitudes de vacaciones.
-          </p>
-          <Link href="/RR.HH/vacaciones/nuevo">
+          <p className="mt-2 text-gray-500">No hay solicitudes aún.</p>
+          <Link href="/rrhh/vacaciones/nuevo">
             <button className="mt-6 px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
               Solicitar vacaciones
             </button>
           </Link>
-          <p className="mt-8 text-sm">
-            <Link
-              href="https://docs.clientum.com/vacaciones"
-              target="_blank"
-              className="text-blue-600 hover:underline"
-            >
-              Consulta la política de vacaciones
-            </Link>
-          </p>
         </div>
       ) : (
         <div className="bg-white p-4 rounded shadow space-y-4">
-          {/* Export buttons */}
           <div className="flex justify-end space-x-2">
             <button
               onClick={exportCSV}
@@ -162,7 +139,6 @@ export default function VacacionesPage() {
               Generar PDF
             </button>
           </div>
-          {/* Table */}
           <div className="overflow-x-auto">
             <table className="min-w-full text-left">
               <thead className="bg-gray-100">
@@ -175,7 +151,7 @@ export default function VacacionesPage() {
                 </tr>
               </thead>
               <tbody>
-                {vacaciones.map((v) => (
+                {vacaciones.map(v => (
                   <tr key={v.id} className="border-t">
                     <td className="px-4 py-2">{v.empleado_id}</td>
                     <td className="px-4 py-2">{v.start_date}</td>
