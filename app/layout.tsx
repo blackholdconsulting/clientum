@@ -21,7 +21,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
   return (
     <html lang="es">
-      <body className="bg-gray-50 text-gray-800 flex h-screen overflow-hidden">
+      <body className="bg-gray-50 text-gray-800 flex h-screen">
         {/* Sidebar */}
         <aside className="w-64 bg-white border-r shadow-md flex flex-col">
           <div className="p-6 font-bold text-xl text-indigo-600">Clientum</div>
