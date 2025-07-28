@@ -67,7 +67,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   ▼
                 </span>
               </Link>
-              <div className="absolute left-full top-0 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-opacity">
+              <div className="absolute left-full top-0 ml-2 w-52 bg-white border rounded shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-opacity">
                 <Link
                   href="/negocio/tareas"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
@@ -108,9 +108,18 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 >
                   Análisis competencia
                 </Link>
+                <Link
+                  href="/negocio/continuar-proyecto"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/negocio/continuar-proyecto") ? "bg-indigo-50 font-medium" : ""
+                  }`}
+                >
+                  Continuar Proyecto
+                </Link>
               </div>
             </div>
 
+            {/* Impuestos */}
             <Link
               href="/impuestos"
               className={`py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -153,9 +162,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 <Link
                   href="/tesoreria/pagos-cobros"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/tesoreria/pagos-cobros")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/tesoreria/pagos-cobros") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   Pagos y cobros
@@ -184,13 +191,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   ▼
                 </span>
               </Link>
-              <div className="absolute left-full top-0 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-opacity">
+              <div className="absolute left-full top-0 ml-2 w-56 bg-white border rounded shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-opacity">
                 <Link
                   href="/contabilidad/cuadro-de-cuentas"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/contabilidad/cuadro-de-cuentas")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/contabilidad/cuadro-de-cuentas") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   Cuadro de cuentas
@@ -198,9 +203,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 <Link
                   href="/contabilidad/libro-diario"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/contabilidad/libro-diario")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/contabilidad/libro-diario") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   Libro diario
@@ -216,9 +219,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 <Link
                   href="/contabilidad/perdidas-ganancias"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/contabilidad/perdidas-ganancias")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/contabilidad/perdidas-ganancias") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   Pérdidas y ganancias
@@ -226,9 +227,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 <Link
                   href="/contabilidad/balance-situacion"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/contabilidad/balance-situacion")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
+                    isActive("/contabilidad/balance-situacion") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
                   Balance de situación
@@ -303,7 +302,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             </div>
           </nav>
 
-          {/* Ayuda y soporte siempre abajo */}
+          {/* Ayuda y soporte */}
           <div className="px-4 mt-auto border-t pt-2">
             <div className="text-xs font-semibold mb-1">Ayuda y soporte</div>
             <Link
@@ -342,6 +341,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             >
               💬 Contáctanos
             </Link>
+
             {/* Perfil y logout */}
             <div className="mt-3">
               <Link
