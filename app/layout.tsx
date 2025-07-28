@@ -9,8 +9,8 @@ export const metadata = {
 };
 
 async function getActivePath(): Promise<string> {
-  const h = await headers();
-  return h.get("x-invoke-path") || "/";
+  const headersList = await headers();
+  return headersList.get("x-invoke-path") || "/";
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
@@ -24,8 +24,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         {/* Sidebar */}
         <aside className="w-64 bg-white border-r shadow-md flex flex-col">
           <div className="p-6 font-bold text-xl text-indigo-600">Clientum</div>
-          <nav className="flex-1 flex flex-col px-4 text-sm space-y-1">
-            {/* Dashboard */}
+          <nav className="flex flex-col px-4 text-sm space-y-1">
+
             <Link
               href="/dashboard"
               className={`py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -35,7 +35,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               📊 Dashboard
             </Link>
 
-            {/* Clientes */}
             <Link
               href="/clientes"
               className={`py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -45,7 +44,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               👥 Clientes
             </Link>
 
-            {/* Facturas */}
             <Link
               href="/facturas"
               className={`py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -55,10 +53,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               🧾 Facturas
             </Link>
 
-            {/* Negocio */}
+            {/* --- Negocio con submenú --- */}
             <div className="relative group">
               <Link
-                href="#"
+                href="/negocio"
                 className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
                   isActive("/negocio") ? "bg-indigo-100 font-semibold" : ""
                 }`}
@@ -68,14 +66,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   ▼
                 </span>
               </Link>
-              <div className="absolute left-full top-0 ml-2 w-56 bg-white border rounded shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-opacity">
+              <div className="absolute left-full top-0 ml-2 w-52 bg-white border rounded shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-opacity">
                 <Link
                   href="/negocio/tareas"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
                     isActive("/negocio/tareas") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
-                  🗒️ Tareas
+                  Tareas
                 </Link>
                 <Link
                   href="/negocio/proyectos"
@@ -83,7 +81,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                     isActive("/negocio/proyectos") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
-                  📁 Proyectos
+                  Proyectos
                 </Link>
                 <Link
                   href="/negocio/plan-futuro"
@@ -91,7 +89,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                     isActive("/negocio/plan-futuro") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
-                  🔮 Plan futuro
+                  Plan futuro
                 </Link>
                 <Link
                   href="/negocio/estudio-mercado"
@@ -99,7 +97,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                     isActive("/negocio/estudio-mercado") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
-                  🔍 Estudio de Mercado
+                  Estudio de mercado
                 </Link>
                 <Link
                   href="/negocio/analisis-competencia"
@@ -107,12 +105,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                     isActive("/negocio/analisis-competencia") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
-                  🕵️‍♂️ Análisis Competencia
+                  Análisis competencia
                 </Link>
               </div>
             </div>
 
-            {/* Impuestos */}
             <Link
               href="/impuestos"
               className={`py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -122,15 +119,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               ⚖️ Impuestos
             </Link>
 
-            {/* Tesorería */}
+            {/* Tesorería con submenú */}
             <div className="relative group">
               <Link
-                href="/tesoreria/cuentas"
+                href="/tesoreria"
                 className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
                   isActive("/tesoreria") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
-                🏦 Tesorería
+                💰 Tesorería
                 <span className="text-xs ml-1 transform group-hover:rotate-180 transition-transform">
                   ▼
                 </span>
@@ -158,7 +155,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                     isActive("/tesoreria/pagos-cobros") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
-                  Pagos y Cobros
+                  Pagos y cobros
                 </Link>
                 <Link
                   href="/tesoreria/remesas"
@@ -171,7 +168,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               </div>
             </div>
 
-            {/* Contabilidad */}
+            {/* Contabilidad con submenú */}
             <div className="relative group">
               <Link
                 href="/contabilidad"
@@ -228,7 +225,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               </div>
             </div>
 
-            {/* Chat IA */}
             <Link
               href="/chat"
               className={`py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -238,88 +234,99 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               💬 Chat IA
             </Link>
 
-            {/* RRHH */}
+            {/* RRHH con submenú */}
             <div className="relative group">
               <Link
-                href="#"
+                href="/RR.HH"
                 className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
-                  isActive("/rrhh") ? "bg-indigo-100 font-semibold" : ""
+                  isActive("/RR.HH") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
-                👥 RRHH
+                👤 RRHH
                 <span className="text-xs ml-1 transform group-hover:rotate-180 transition-transform">
                   ▼
                 </span>
               </Link>
-              <div className="absolute left-full top-0 ml-2 w-56 bg-white border rounded shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-opacity">
+              <div className="absolute left-full top-0 ml-2 w-52 bg-white border rounded shadow-lg opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-opacity">
                 <Link
-                  href="/rrhh/employees"
+                  href="/RR.HH/employees"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/rrhh/employees") ? "bg-indigo-50 font-medium" : ""
+                    isActive("/RR.HH/employees") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
-                  👤 Empleados
+                  Empleados
                 </Link>
                 <Link
-                  href="/rrhh/payroll"
+                  href="/RR.HH/payroll"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/rrhh/payroll") ? "bg-indigo-50 font-medium" : ""
+                    isActive("/RR.HH/payroll") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
-                  💰 Nóminas
+                  Nóminas
                 </Link>
                 <Link
-                  href="/rrhh/gastos"
+                  href="/RR.HH/gastos"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/rrhh/gastos") ? "bg-indigo-50 font-medium" : ""
+                    isActive("/RR.HH/gastos") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
-                  🧾 Gastos
+                  Gastos
                 </Link>
                 <Link
-                  href="/rrhh/horarios"
+                  href="/RR.HH/horarios"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/rrhh/horarios") ? "bg-indigo-50 font-medium" : ""
+                    isActive("/RR.HH/horarios") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
-                  ⏰ Horarios
+                  Horarios
                 </Link>
                 <Link
-                  href="/rrhh/vacaciones"
+                  href="/RR.HH/vacaciones"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/rrhh/vacaciones") ? "bg-indigo-50 font-medium" : ""
+                    isActive("/RR.HH/vacaciones") ? "bg-indigo-50 font-medium" : ""
                   }`}
                 >
-                  🌴 Vacaciones
+                  Vacaciones
                 </Link>
               </div>
             </div>
           </nav>
 
-          {/* Ayuda y soporte (fijo al pie) */}
-          <div className="mt-auto border-t pt-4 px-4 text-sm">
-            <div className="font-medium mb-2">Ayuda y soporte</div>
-            <Link href="#" className="block py-1 hover:text-indigo-600">
-              📚 Academia Clientum
-            </Link>
-            <Link href="#" className="block py-1 hover:text-indigo-600">
-              🎓 Tutoriales
-            </Link>
-            <Link href="#" className="block py-1 hover:text-indigo-600">
-              ⭐ Votar mejoras
-            </Link>
-            <Link href="#" className="block py-1 hover:text-indigo-600">
-              🆕 Novedades
-            </Link>
-            <Link href="#" className="block py-1 hover:text-indigo-600">
-              📞 Llámanos
-            </Link>
-            <Link href="#" className="block py-1 hover:text-indigo-600">
-              🛠️ Contactar soporte
-            </Link>
-            <Link href="#" className="block py-1 hover:text-indigo-600">
-              💬 Chat con nosotros
-            </Link>
+          {/* Ayuda y soporte al fondo */}
+          <div className="mt-auto px-4 pb-4 pt-6 border-t text-sm text-gray-600">
+            <div className="font-semibold mb-2">Ayuda y soporte</div>
+            <ul className="space-y-1">
+              <li>
+                <Link href="/help/academia" className="hover:underline">
+                  📘 Academia Clientum
+                </Link>
+              </li>
+              <li>
+                <Link href="/help/tutoriales" className="hover:underline">
+                  🎥 Tutoriales
+                </Link>
+              </li>
+              <li>
+                <Link href="/help/votar-mejoras" className="hover:underline">
+                  🗳️ Votar mejoras
+                </Link>
+              </li>
+              <li>
+                <Link href="/help/novedades" className="hover:underline">
+                  ✨ Novedades
+                </Link>
+              </li>
+              <li>
+                <Link href="/help/soporte" className="hover:underline">
+                  📞 Soporte
+                </Link>
+              </li>
+              <li>
+                <Link href="/help/contacto" className="hover:underline">
+                  💬 Háblanos
+                </Link>
+              </li>
+            </ul>
           </div>
         </aside>
 
