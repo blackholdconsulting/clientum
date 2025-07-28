@@ -88,6 +88,27 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['facturas']['Insert']>
       }
 
+      // —— Nueva tabla de solicitudes de vacaciones ——
+      vacaciones: {
+        Row: {
+          id: string
+          empleado_id: string
+          start_date: string
+          end_date: string
+          tipo: string
+          motivo: string | null
+          created_at: string
+        }
+        Insert: {
+          empleado_id: string
+          start_date: string
+          end_date: string
+          tipo: string
+          motivo?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['vacaciones']['Insert']>
+      }
+
       empleados: {
         Row: {
           id: number
