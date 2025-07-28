@@ -1,57 +1,60 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { saveSetting, loadSetting } from "../../../utils/settings";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
-export default function FacturaeSettingsPage() {
-  const [certPem, setCertPem] = useState("");
-  const [keyPem, setKeyPem] = useState("");
-  const [saved, setSaved] = useState(false);
+export default function VerifactuSettingsPage() {
+  const supabase = createClientComponentClient();
+  const [key, setKey] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
 
+  // Cargar al montar
   useEffect(() => {
-    loadSetting("FACTURAE_CERT").then(v => v && setCertPem(v));
-    loadSetting("FACTURAE_KEY").then(v => v && setKeyPem(v));
-  }, []);
+    (async () => {
+      const {
+        data: [{ value } = { value: "" }],
+      } = await supabase
+        .from("account_settings")
+        .select("value")
+        .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
+        .eq("key", "VERIFACTU_KEY")
+        .limit(1);
+      setKey(value);
+    })();
+  }, [supabase]);
 
-  const onSave = async (e: React.FormEvent) => {
+  const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    await saveSetting("FACTURAE_CERT", certPem);
-    await saveSetting("FACTURAE_KEY", keyPem);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    const userId = (await supabase.auth.getUser()).data.user?.id!;
+    const { error } = await supabase
+      .from("account_settings")
+      .upsert({ user_id: userId, key: "VERIFACTU_KEY", value: key });
+    if (error) setMessage("Error: " + error.message);
+    else setMessage("Clave guardada correctamente");
   };
 
   return (
     <main className="max-w-xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-4">Ajustes Facturae</h1>
-      <form onSubmit={onSave} className="space-y-4">
-        <div>
-          <label className="block font-medium mb-1">Certificado (PEM)</label>
-          <textarea
-            value={certPem}
-            onChange={e => setCertPem(e.target.value)}
-            className="w-full border px-3 py-2 rounded h-32 font-mono text-sm"
-            placeholder="-----BEGIN CERTIFICATE-----\n..."
+      <h1 className="text-2xl font-bold mb-4">Ajustes Verifactu</h1>
+      <form onSubmit={save} className="space-y-4">
+        <label className="block">
+          <span className="font-medium">API Key</span>
+          <input
+            type="text"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            placeholder="sk_..."
+            className="mt-1 block w-full rounded border px-3 py-2"
             required
           />
-        </div>
-        <div>
-          <label className="block font-medium mb-1">Clave privada (PEM)</label>
-          <textarea
-            value={keyPem}
-            onChange={e => setKeyPem(e.target.value)}
-            className="w-full border px-3 py-2 rounded h-32 font-mono text-sm"
-            placeholder="-----BEGIN PRIVATE KEY-----\n..."
-            required
-          />
-        </div>
+        </label>
         <button
           type="submit"
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
           Guardar
         </button>
-        {saved && <p className="text-green-600">¡Guardado correctamente!</p>}
+        {message && <p className="mt-2">{message}</p>}
       </form>
     </main>
   );
