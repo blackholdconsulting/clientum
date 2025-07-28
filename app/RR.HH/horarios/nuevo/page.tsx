@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Database } from "../../../../lib/database.types";
 
-// Ajuste: tabla en plural "registro_horarios"
-type RegistroHorario = Database["public"]["Tables"]["registro_horarios"]["Row"];
+// Usar el nombre exacto de la tabla según tu esquema
+type RegistroHorario = Database["public"]["Tables"]["registro_horario"]["Row"];
 
 export default function NewHorarioPage() {
   const supabase = createClientComponentClient<Database>();
@@ -34,7 +34,7 @@ export default function NewHorarioPage() {
     e.preventDefault();
     setSaving(true);
     const { error } = await supabase
-      .from("registro_horarios")      // plural
+      .from("registro_horario") // nombre singular
       .insert([
         {
           fecha: form.fecha!,
