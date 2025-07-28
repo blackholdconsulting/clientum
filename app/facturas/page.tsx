@@ -1,7 +1,7 @@
 // app/facturas/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { buildFacturaeXML, FacturaeData } from "../../lib/facturae";
 
@@ -24,11 +24,18 @@ export default function FacturasPage() {
     cp: "",
     ciudad: "",
   });
-  const [lineas, setLineas] = useState<{ descripcion: string; cantidad: number; precio: number }[]>([]);
+  const [lineasRaw, setLineasRaw] = useState<{ descripcion: string; cantidad: number; precio: number }[]>([]);
   const [iva, setIva] = useState(21);
   const [irpf, setIrpf] = useState(0);
 
   const enviarVerifactu = async () => {
+    // Convertir lineasRaw al formato que espera FacturaeData
+    const lineas = lineasRaw.map((l) => ({
+      descripcion: l.descripcion,
+      unidades: l.cantidad,
+      precioUnitario: l.precio,
+    }));
+
     const data: FacturaeData = {
       serie,
       numero,
@@ -76,7 +83,7 @@ export default function FacturasPage() {
     <main className="max-w-4xl mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-bold">Crear Factura</h1>
 
-      {/* Formulario básico */}
+      {/* Encabezado: serie, número, fechas */}
       <div className="grid grid-cols-2 gap-4">
         <input
           type="text"
@@ -108,92 +115,70 @@ export default function FacturasPage() {
         />
       </div>
 
-      {/* Datos emisor y receptor */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Datos del emisor y receptor */}
+      <div className="grid grid-cols-2 gap-6">
         <fieldset className="space-y-2">
           <legend className="font-medium">Emisor</legend>
-          <input
-            type="text"
-            placeholder="Nombre"
-            value={emisor.nombre}
-            onChange={(e) => setEmisor({ ...emisor, nombre: e.target.value })}
-            className="border px-3 py-2 rounded w-full"
-          />
-          <input
-            type="text"
-            placeholder="NIF"
-            value={emisor.nif}
-            onChange={(e) => setEmisor({ ...emisor, nif: e.target.value })}
-            className="border px-3 py-2 rounded w-full"
-          />
-          <input
-            type="text"
-            placeholder="Dirección"
-            value={emisor.direccion}
-            onChange={(e) => setEmisor({ ...emisor, direccion: e.target.value })}
-            className="border px-3 py-2 rounded w-full"
-          />
-          <div className="flex space-x-2">
+          {["nombre", "nif", "direccion"].map((field) => (
             <input
+              key={field}
               type="text"
-              placeholder="CP"
-              value={emisor.cp}
-              onChange={(e) => setEmisor({ ...emisor, cp: e.target.value })}
-              className="border px-3 py-2 rounded w-1/2"
+              placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
+              value={(emisor as any)[field]}
+              onChange={(e) =>
+                setEmisor({ ...emisor, [field]: e.target.value })
+              }
+              className="border px-3 py-2 rounded w-full"
             />
-            <input
-              type="text"
-              placeholder="Ciudad"
-              value={emisor.ciudad}
-              onChange={(e) => setEmisor({ ...emisor, ciudad: e.target.value })}
-              className="border px-3 py-2 rounded w-1/2"
-            />
+          ))}
+          <div className="flex gap-2">
+            {["cp", "ciudad"].map((field) => (
+              <input
+                key={field}
+                type="text"
+                placeholder={field.toUpperCase()}
+                value={(emisor as any)[field]}
+                onChange={(e) =>
+                  setEmisor({ ...emisor, [field]: e.target.value })
+                }
+                className="border px-3 py-2 rounded w-1/2"
+              />
+            ))}
           </div>
         </fieldset>
-
         <fieldset className="space-y-2">
           <legend className="font-medium">Receptor</legend>
-          <input
-            type="text"
-            placeholder="Nombre"
-            value={receptor.nombre}
-            onChange={(e) => setReceptor({ ...receptor, nombre: e.target.value })}
-            className="border px-3 py-2 rounded w-full"
-          />
-          <input
-            type="text"
-            placeholder="CIF"
-            value={receptor.cif}
-            onChange={(e) => setReceptor({ ...receptor, cif: e.target.value })}
-            className="border px-3 py-2 rounded w-full"
-          />
-          <input
-            type="text"
-            placeholder="Dirección"
-            value={receptor.direccion}
-            onChange={(e) => setReceptor({ ...receptor, direccion: e.target.value })}
-            className="border px-3 py-2 rounded w-full"
-          />
-          <div className="flex space-x-2">
+          {["nombre", "cif", "direccion"].map((field) => (
             <input
+              key={field}
               type="text"
-              placeholder="CP"
-              value={receptor.cp}
-              onChange={(e) => setReceptor({ ...receptor, cp: e.target.value })}
-              className="border px-3 py-2 rounded w-1/2"
+              placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
+              value={(receptor as any)[field]}
+              onChange={(e) =>
+                setReceptor({ ...receptor, [field]: e.target.value })
+              }
+              className="border px-3 py-2 rounded w-full"
             />
-            <input
-              type="text"
-              placeholder="Ciudad"
-              value={receptor.ciudad}
-              onChange={(e) => setReceptor({ ...receptor, ciudad: e.target.value })}
-              className="border px-3 py-2 rounded w-1/2"
-            />
+          ))}
+          <div className="flex gap-2">
+            {["cp", "ciudad"].map((field) => (
+              <input
+                key={field}
+                type="text"
+                placeholder={field.toUpperCase()}
+                value={(receptor as any)[field]}
+                onChange={(e) =>
+                  setReceptor({ ...receptor, [field]: e.target.value })
+                }
+                className="border px-3 py-2 rounded w-1/2"
+              />
+            ))}
           </div>
         </fieldset>
       </div>
 
-      {/* Botón de envío */}
+      {/* Aquí podrías añadir UI para editar lineasRaw, iva e irpf... */}
+
       <button
         onClick={enviarVerifactu}
         className="px-6 py-3 bg-indigo-600 text-white rounded hover:bg-indigo-700"
@@ -201,5 +186,5 @@ export default function FacturasPage() {
         Enviar a Verifactu
       </button>
     </main>
-);
+  );
 }
