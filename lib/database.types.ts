@@ -111,6 +111,26 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['empleados']['Insert']>
       }
 
+      // —— Nueva tabla de registro de horarios ——
+      registro_horario: {
+        Row: {
+          id: string
+          empleado_id: string
+          fecha: string
+          hora_entrada: string
+          hora_salida: string
+          notas: string | null
+        }
+        Insert: {
+          empleado_id: string
+          fecha: string
+          hora_entrada: string
+          hora_salida: string
+          notas?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['registro_horario']['Insert']>
+      }
+
       nominas: {
         Row: {
           id: number
