@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Database } from "../../../../lib/database.types";
 
-type RegistroHorario = Database["public"]["Tables"]["registro_horario"]["Row"];
+// Ajuste: tabla en plural "registro_horarios"
+type RegistroHorario = Database["public"]["Tables"]["registro_horarios"]["Row"];
 
 export default function NewHorarioPage() {
   const supabase = createClientComponentClient<Database>();
@@ -33,14 +34,16 @@ export default function NewHorarioPage() {
     e.preventDefault();
     setSaving(true);
     const { error } = await supabase
-      .from("registro_horario")
-      .insert([{
-        fecha: form.fecha!,
-        hora_inicio: form.hora_inicio!,
-        hora_fin: form.hora_fin!,
-        empleado_id: form.empleado_id!,
-        notas: form.notas || null,
-      }]);
+      .from("registro_horarios")      // plural
+      .insert([
+        {
+          fecha: form.fecha!,
+          hora_inicio: form.hora_inicio!,
+          hora_fin: form.hora_fin!,
+          empleado_id: form.empleado_id!,
+          notas: form.notas || null,
+        },
+      ]);
     if (error) {
       setErrorMsg(error.message);
     } else {
@@ -117,7 +120,6 @@ export default function NewHorarioPage() {
             required
             className="mt-1 block w-full border rounded px-3 py-2"
           />
-          {/* Opcional: aquí podrías reemplazar con un <select> de empleados cargados */}
         </div>
 
         <div>
