@@ -54,6 +54,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               🧾 Facturas
             </Link>
 
+            <Link
+              href="/presupuestos"
+              className={`py-2 px-3 rounded hover:bg-indigo-100 ${
+                isActive("/presupuestos") ? "bg-indigo-100 font-semibold" : ""
+              }`}
+            >
+              💼 Presupuestos
+            </Link>
+
             {/* Negocio */}
             <div className="relative group">
               <Link
