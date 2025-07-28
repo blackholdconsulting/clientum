@@ -1,3 +1,4 @@
+// app/RR.HH/employees/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -26,7 +27,7 @@ export default function EmployeesPage() {
       setLoading(false);
     }
     load();
-  }, []);
+  }, [supabase]);
 
   return (
     <div className="p-6">
@@ -72,7 +73,5 @@ export default function EmployeesPage() {
         </div>
       )}
     </div>
-);
-}
-  )
+  );
 }
