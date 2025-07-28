@@ -330,11 +330,62 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           </div>
         </aside>
 
-        {/* Main content */}
+        {/* Menú de usuario */}
+          <UserMenu />
+
+        </aside>
+
+        {/* Contenido principal */}
         <main className="flex-1 overflow-y-auto p-8 bg-gray-100">
           {children}
         </main>
       </body>
     </html>
+  );
+}
+
+// Componente separado para el dropdown de usuario
+function UserMenu() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="px-4 pb-6 pt-4 border-t relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center space-x-2 hover:bg-gray-100 rounded p-2 transition"
+      >
+        <span className="flex-1 text-gray-800">Mi perfil</span>
+        <svg
+          className={`w-4 h-4 text-gray-600 transform transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <ul className="absolute left-4 right-4 bottom-16 bg-white border rounded shadow-lg text-sm">
+          <li>
+            <Link
+              href="/profile"
+              className="block px-4 py-2 hover:bg-indigo-50"
+              onClick={() => setOpen(false)}
+            >
+              👤 Mi perfil
+            </Link>
+          </li>
+          <li>
+            <Link
+              href="/api/auth/logout"
+              className="block px-4 py-2 hover:bg-indigo-50"
+            >
+              🔌 Desconectar
+            </Link>
+          </li>
+        </ul>
+      )}
+    </div>
   );
 }
