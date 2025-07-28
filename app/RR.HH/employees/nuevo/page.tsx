@@ -1,165 +1,151 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import type { Database } from '@/lib/database.types'
+import { useState, ChangeEvent, FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { Database } from "../../../../lib/database.types";
 
 export default function NewEmployeePage() {
-  const supabase = createClientComponentClient<Database>()
-  const router = useRouter()
+  const supabase = createClientComponentClient<Database>();
+  const router = useRouter();
 
   const [form, setForm] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-    position: '',
-    salary: '',
-    status: 'activo',
-    hired_at: '',
-  })
-  const [loading, setLoading] = useState(false)
-  const [errorMsg, setErrorMsg] = useState('')
+    first_name: "",
+    last_name: "",
+    email: "",
+    position: "",
+    salary: "",
+    hired_at: "",
+    status: "activo",
+  });
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
-    const { name, value } = e.target
-    setForm((f) => ({ ...f, [name]: value }))
-  }
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setErrorMsg('')
-
-    const { error } = await supabase.from('empleados').insert({
-      first_name: form.first_name,
-      last_name: form.last_name,
-      email: form.email,
-      position: form.position,
-      salary: Number(form.salary),
-      status: form.status,
-      hired_at: form.hired_at,
-    })
-
-    setLoading(false)
-    if (error) setErrorMsg(error.message)
-    else router.push('/employees')
-  }
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    const { error } = await supabase
+      .from("employees")
+      .insert({ ...form, salary: Number(form.salary) });
+    if (error) {
+      setErrorMsg(error.message);
+      console.error(error);
+    } else {
+      router.push("/RR.HH/employees");
+    }
+    setSaving(false);
+  };
 
   return (
-    <main className="bg-gray-50 min-h-screen p-8">
-      <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow">
-        <h1 className="text-2xl font-semibold mb-6">+ Nuevo Empleado</h1>
+    <div className="p-6 max-w-xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">Añadir empleado</h1>
 
-        {errorMsg && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
-            {errorMsg}
-          </div>
-        )}
+      <form onSubmit={handleSubmit} className="space-y-4 bg-white p-6 rounded shadow">
+        {errorMsg && <p className="text-red-600">{errorMsg}</p>}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <label className="block">
-            <span className="text-gray-700">Nombre</span>
-            <input
-              name="first_name"
-              value={form.first_name}
-              onChange={handleChange}
-              required
-              className="mt-1 block w-full border-gray-300 rounded px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </label>
+        <div>
+          <label className="block text-sm font-medium">Nombre</label>
+          <input
+            name="first_name"
+            value={form.first_name}
+            onChange={handleChange}
+            className="mt-1 w-full border rounded px-3 py-2"
+            required
+          />
+        </div>
 
-          <label className="block">
-            <span className="text-gray-700">Apellidos</span>
-            <input
-              name="last_name"
-              value={form.last_name}
-              onChange={handleChange}
-              required
-              className="mt-1 block w-full border-gray-300 rounded px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </label>
+        <div>
+          <label className="block text-sm font-medium">Apellidos</label>
+          <input
+            name="last_name"
+            value={form.last_name}
+            onChange={handleChange}
+            className="mt-1 w-full border rounded px-3 py-2"
+            required
+          />
+        </div>
 
-          <label className="block">
-            <span className="text-gray-700">Email</span>
-            <input
-              type="email"
-              name="email"
-              value={form.email}
-              onChange={handleChange}
-              required
-              className="mt-1 block w-full border-gray-300 rounded px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </label>
+        <div>
+          <label className="block text-sm font-medium">Email</label>
+          <input
+            name="email"
+            type="email"
+            value={form.email}
+            onChange={handleChange}
+            className="mt-1 w-full border rounded px-3 py-2"
+            required
+          />
+        </div>
 
-          <label className="block">
-            <span className="text-gray-700">Puesto</span>
-            <input
-              name="position"
-              value={form.position}
-              onChange={handleChange}
-              required
-              className="mt-1 block w-full border-gray-300 rounded px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </label>
+        <div>
+          <label className="block text-sm font-medium">Cargo</label>
+          <input
+            name="position"
+            value={form.position}
+            onChange={handleChange}
+            className="mt-1 w-full border rounded px-3 py-2"
+          />
+        </div>
 
-          <label className="block">
-            <span className="text-gray-700">Salario (€)</span>
-            <input
-              type="number"
-              name="salary"
-              value={form.salary}
-              onChange={handleChange}
-              required
-              className="mt-1 block w-full border-gray-300 rounded px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </label>
+        <div>
+          <label className="block text-sm font-medium">Salario</label>
+          <input
+            name="salary"
+            type="number"
+            value={form.salary}
+            onChange={handleChange}
+            className="mt-1 w-full border rounded px-3 py-2"
+          />
+        </div>
 
-          <label className="block">
-            <span className="text-gray-700">Fecha de Alta</span>
-            <input
-              type="date"
-              name="hired_at"
-              value={form.hired_at}
-              onChange={handleChange}
-              required
-              className="mt-1 block w-full border-gray-300 rounded px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </label>
+        <div>
+          <label className="block text-sm font-medium">Fecha de alta</label>
+          <input
+            name="hired_at"
+            type="date"
+            value={form.hired_at}
+            onChange={handleChange}
+            className="mt-1 w-full border rounded px-3 py-2"
+          />
+        </div>
 
-          <label className="block">
-            <span className="text-gray-700">Estado</span>
-            <select
-              name="status"
-              value={form.status}
-              onChange={handleChange}
-              className="mt-1 block w-full border-gray-300 rounded px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="activo">Activo</option>
-              <option value="inactivo">Inactivo</option>
-            </select>
-          </label>
+        <div>
+          <label className="block text-sm font-medium">Estado</label>
+          <select
+            name="status"
+            value={form.status}
+            onChange={handleChange}
+            className="mt-1 w-full border rounded px-3 py-2"
+          >
+            <option value="activo">Activo</option>
+            <option value="inactivo">Inactivo</option>
+          </select>
+        </div>
 
-          <div className="flex justify-end space-x-3">
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {loading ? 'Guardando…' : 'Guardar Empleado'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </main>
-  )
+        <div className="flex justify-end space-x-2">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+          >
+            {saving ? "Guardando..." : "Guardar"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 }
