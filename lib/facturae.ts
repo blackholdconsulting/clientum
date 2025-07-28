@@ -1,26 +1,49 @@
-// lib/facturae.ts
 import { create } from "xmlbuilder2";
 
-// Monta un objeto JS según el XSD de Facturae
-export function buildFacturaeXML(data: {
+export interface FacturaeData {
   serie: string;
   numero: string;
   fecha: string;
   vencimiento: string;
-  emisor: { nombre: string; nif: string; direccion: string; cp: string; ciudad: string };
-  receptor: { nombre: string; cif: string; direccion: string; cp: string; ciudad: string };
-  lineas: { descripcion: string; unidades: number; precioUnitario: number }[];
+  emisor: {
+    nombre: string;
+    nif: string;
+    direccion: string;
+    cp: string;
+    ciudad: string;
+  };
+  receptor: {
+    nombre: string;
+    cif: string;
+    direccion: string;
+    cp: string;
+    ciudad: string;
+  };
+  lineas: {
+    descripcion: string;
+    unidades: number;
+    precioUnitario: number;
+  }[];
   iva: number;
   irpf: number;
-}) {
+}
+
+/**  
+ * Genera un XML Facturae v3.2 a partir de los datos proporcionados  
+ */
+export function buildFacturaeXML(data: FacturaeData): string {
   const { serie, numero, fecha, vencimiento, emisor, receptor, lineas, iva, irpf } = data;
+  const base = lineas.reduce((sum, l) => sum + l.unidades * l.precioUnitario, 0);
+  const ivaImp = +(base * iva / 100).toFixed(2);
+  const irpfImp = +(base * irpf / 100).toFixed(2);
+
   const factura = {
     Facturae: {
       "@xmlns": "http://www.facturae.es/Facturae/2009/v3.2/Facturaev3_2.xsd",
       FileHeader: {
         SchemaVersion: "3.2.1",
         Modality: "I",
-        InvoiceIssuerType: "EM",
+        InvoiceIssuerType: "EM"
       },
       Parties: {
         SellerParty: {
@@ -30,8 +53,8 @@ export function buildFacturaeXML(data: {
             Address: emisor.direccion,
             PostCode: emisor.cp,
             City: emisor.ciudad,
-            CountryCode: "ES",
-          },
+            CountryCode: "ES"
+          }
         },
         BuyerParty: {
           PartyIdentification: { VATIdentification: { TaxIdentificationNumber: receptor.cif } },
@@ -40,9 +63,9 @@ export function buildFacturaeXML(data: {
             Address: receptor.direccion,
             PostCode: receptor.cp,
             City: receptor.ciudad,
-            CountryCode: "ES",
-          },
-        },
+            CountryCode: "ES"
+          }
+        }
       },
       Invoices: {
         Invoice: {
@@ -50,8 +73,7 @@ export function buildFacturaeXML(data: {
             InvoiceNumber: `${serie}-${numero}`,
             InvoiceSeriesCode: serie,
             InvoiceDate: fecha,
-            PurchaseOrderReference: "",
-            InvoiceDocumentType: "FC", // Factura
+            InvoiceDocumentType: "FC"
           },
           InvoiceItems: {
             InvoiceItem: lineas.map((l, idx) => ({
@@ -59,38 +81,27 @@ export function buildFacturaeXML(data: {
               ItemDescription: l.descripcion,
               Quantity: l.unidades,
               UnitPriceWithoutTax: l.precioUnitario.toFixed(2),
-              TotalCost: (l.unidades * l.precioUnitario).toFixed(2),
-            })),
+              TotalCost: (l.unidades * l.precioUnitario).toFixed(2)
+            }))
           },
           TaxesOutputs: {
             Tax: [
               {
-                TaxTypeCode: "01",          // IVA
+                TaxTypeCode: "01",
                 TaxRate: iva.toFixed(2),
-                TaxableBase: lineas
-                  .reduce((sum, l) => sum + l.unidades * l.precioUnitario, 0)
-                  .toFixed(2),
-                TaxAmount: (
-                  (lineas.reduce((sum, l) => sum + l.unidades * l.precioUnitario, 0) *
-                    iva) /
-                  100
-                ).toFixed(2),
-              },
-            ],
+                TaxableBase: base.toFixed(2),
+                TaxAmount: ivaImp.toFixed(2)
+              }
+            ]
           },
           LegalLiterals: {
-            LegalLiteral: `Retención IRPF ${irpf}%: -${(
-              (lineas.reduce((sum, l) => sum + l.unidades * l.precioUnitario, 0) *
-                irpf) /
-              100
-            ).toFixed(2)} €`,
-          },
-        },
-      },
-    },
+            LegalLiteral: `Retención IRPF ${irpf}%: -${irpfImp.toFixed(2)} €`
+          }
+        }
+      }
+    }
   };
 
-  // Creamos el XML
   const doc = create(factura as any, { encoding: "UTF-8" });
   return doc.end({ prettyPrint: true });
 }
