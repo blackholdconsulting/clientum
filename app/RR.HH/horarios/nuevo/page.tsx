@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Database } from "../../../../lib/database.types";
 
-// Usa el nombre exacto de tu tabla en Singular
 type RegistroHorario = Database["public"]["Tables"]["registro_horario"]["Row"];
 
 export default function NewHorarioPage() {
@@ -18,16 +17,20 @@ export default function NewHorarioPage() {
     hora_entrada: "",
     hora_salida: "",
     empleado_id: "",
-    notas: "",
   });
+  const [notas, setNotas] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleChange = (
-    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: ChangeEvent<HTMLInputElement>
   ) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
+  };
+
+  const handleNotas = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    setNotas(e.target.value);
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -35,14 +38,14 @@ export default function NewHorarioPage() {
     setSaving(true);
 
     const { error } = await supabase
-      .from("registro_horario")      // tabla singular
+      .from("registro_horario")
       .insert([
         {
           fecha: form.fecha!,
           hora_entrada: form.hora_entrada!,
           hora_salida: form.hora_salida!,
           empleado_id: form.empleado_id!,
-          notas: form.notas || null,
+          notas: notas || null,
         },
       ]);
 
@@ -51,22 +54,18 @@ export default function NewHorarioPage() {
     } else {
       router.push("/RR.HH/horarios");
     }
-
     setSaving(false);
   };
 
   return (
-    <div className="p-6 max-w-lg mx-auto">
+    <div className="p-6 max-w-md mx-auto">
       <h1 className="text-2xl font-bold mb-6">Crear horario</h1>
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-6 rounded shadow space-y-4"
-      >
-        {errorMsg && (
-          <div className="text-red-600 text-sm">{errorMsg}</div>
-        )}
+
+      <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow space-y-4">
+        {errorMsg && <p className="text-red-600">{errorMsg}</p>}
+
         <div>
-          <label className="block text-sm font-medium text-gray-700">Fecha</label>
+          <label className="block text-sm font-medium">Fecha</label>
           <input
             type="date"
             name="fecha"
@@ -76,11 +75,10 @@ export default function NewHorarioPage() {
             className="mt-1 block w-full border rounded px-3 py-2"
           />
         </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Hora entrada
-            </label>
+            <label className="block text-sm font-medium">Hora entrada</label>
             <input
               type="time"
               name="hora_entrada"
@@ -91,9 +89,7 @@ export default function NewHorarioPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Hora salida
-            </label>
+            <label className="block text-sm font-medium">Hora salida</label>
             <input
               type="time"
               name="hora_salida"
@@ -104,10 +100,9 @@ export default function NewHorarioPage() {
             />
           </div>
         </div>
+
         <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Empleado (ID)
-          </label>
+          <label className="block text-sm font-medium">Empleado (ID)</label>
           <input
             type="text"
             name="empleado_id"
@@ -118,16 +113,17 @@ export default function NewHorarioPage() {
             className="mt-1 block w-full border rounded px-3 py-2"
           />
         </div>
+
         <div>
-          <label className="block text-sm font-medium text-gray-700">Notas</label>
+          <label className="block text-sm font-medium">Notas</label>
           <textarea
-            name="notas"
-            value={form.notas || ""}
-            onChange={handleChange}
+            value={notas}
+            onChange={handleNotas}
             rows={3}
             className="mt-1 block w-full border rounded px-3 py-2"
           />
         </div>
+
         <div className="flex justify-end space-x-3 pt-4 border-t">
           <button
             type="button"
