@@ -19,18 +19,11 @@ export default function VacacionesPage() {
   useEffect(() => {
     supabase
       .from("vacaciones")
-      .select(`
-        id,
-        empleado_id,
-        start_date,
-        end_date,
-        tipo,
-        motivo
-      `)
+      .select("*") // trae también created_at
       .order("start_date", { ascending: false })
       .then(({ data, error }) => {
         if (error) console.error(error);
-        else setVacaciones(data);
+        else if (data) setVacaciones(data);
         setLoading(false);
       });
   }, [supabase]);
@@ -44,15 +37,13 @@ export default function VacacionesPage() {
       v.end_date,
       v.tipo,
       v.motivo ?? "",
-      "MiEmpresa S.L."    // ajusta aquí el nombre de tu empresa
+      "MiEmpresa S.L."
     ]);
     const csv = [header, ...rows].map(r => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = "vacaciones.csv";
-    a.click();
+    a.href = url; a.download = "vacaciones.csv"; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -64,16 +55,12 @@ export default function VacacionesPage() {
     doc.text(`Empresa: MiEmpresa S.L.`, 40, 60);
     doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 400, 60);
 
-    const startY = 90;
-    const rowHeight = 20;
-    // encabezados
+    const startY = 90, rowH = 20;
     const cols = ["Empleado ID","Inicio","Fin","Tipo","Motivo"];
-    cols.forEach((h, i) => {
-      doc.text(h, 40 + i * 100, startY);
-    });
-    // filas
-    vacaciones.forEach((v, idx) => {
-      const y = startY + (idx + 1) * rowHeight;
+    cols.forEach((h, i) => doc.text(h, 40 + i * 100, startY));
+
+    vacaciones.forEach((v, i) => {
+      const y = startY + (i + 1) * rowH;
       doc.text(v.empleado_id, 40, y);
       doc.text(v.start_date, 140, y);
       doc.text(v.end_date, 240, y);
@@ -84,9 +71,7 @@ export default function VacacionesPage() {
     doc.save("vacaciones.pdf");
   };
 
-  if (loading) {
-    return <p className="p-6">Cargando...</p>;
-  }
+  if (loading) return <p className="p-6">Cargando...</p>;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -145,7 +130,7 @@ export default function VacacionesPage() {
                 </tr>
               </thead>
               <tbody>
-                {vacaciones.map((v) => (
+                {vacaciones.map(v => (
                   <tr key={v.id} className="border-t">
                     <td className="px-4 py-2">{v.empleado_id}</td>
                     <td className="px-4 py-2">{v.start_date}</td>
