@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Database } from "../../../../lib/database.types";
 
+// Tu tabla de Supabase define los campos hora_entrada y hora_salida
 type RegistroHorario = Database["public"]["Tables"]["registro_horario"]["Row"];
 
 export default function NewHorarioPage() {
@@ -14,8 +15,8 @@ export default function NewHorarioPage() {
 
   const [form, setForm] = useState<Partial<RegistroHorario>>({
     fecha: "",
-    hora_inicio: "",
-    hora_fin: "",
+    hora_entrada: "",
+    hora_salida: "",
     empleado_id: "",
     notas: "",
   });
@@ -37,13 +38,15 @@ export default function NewHorarioPage() {
 
     const { error } = await supabase
       .from("registro_horario")
-      .insert([{
-        fecha: form.fecha!,
-        hora_inicio: form.hora_inicio!,
-        hora_fin: form.hora_fin!,
-        empleado_id: form.empleado_id!,
-        notas: form.notas || null,
-      }]);
+      .insert([
+        {
+          fecha: form.fecha!,
+          hora_entrada: form.hora_entrada!,
+          hora_salida: form.hora_salida!,
+          empleado_id: form.empleado_id!,
+          notas: form.notas || null,
+        },
+      ]);
 
     if (error) {
       setErrorMsg(error.message);
@@ -56,10 +59,7 @@ export default function NewHorarioPage() {
   return (
     <div className="p-6 max-w-md mx-auto">
       <h1 className="text-2xl font-bold mb-6">Crear horario</h1>
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-6 rounded shadow space-y-4"
-      >
+      <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow space-y-4">
         {errorMsg && (
           <div className="text-red-600 text-sm">{errorMsg}</div>
         )}
@@ -81,12 +81,12 @@ export default function NewHorarioPage() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Hora inicio
+              Hora entrada
             </label>
             <input
               type="time"
-              name="hora_inicio"
-              value={form.hora_inicio || ""}
+              name="hora_entrada"
+              value={form.hora_entrada || ""}
               onChange={handleChange}
               required
               className="mt-1 block w-full border rounded px-3 py-2"
@@ -94,12 +94,12 @@ export default function NewHorarioPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Hora fin
+              Hora salida
             </label>
             <input
               type="time"
-              name="hora_fin"
-              value={form.hora_fin || ""}
+              name="hora_salida"
+              value={form.hora_salida || ""}
               onChange={handleChange}
               required
               className="mt-1 block w-full border rounded px-3 py-2"
