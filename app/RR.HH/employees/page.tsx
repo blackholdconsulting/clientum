@@ -6,7 +6,7 @@ import Link from "next/link";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Database } from "../../../lib/database.types";
 
-type Employee = Database["public"]["Tables"]["employees"]["Row"];
+type Employee = Database["public"]["Tables"]["empleados"]["Row"];
 
 export default function EmployeesPage() {
   const supabase = createClientComponentClient<Database>();
@@ -16,11 +16,11 @@ export default function EmployeesPage() {
   useEffect(() => {
     async function load() {
       const { data, error } = await supabase
-        .from("employees")
+        .from("empleados")
         .select("*")
         .order("created_at", { ascending: false });
       if (error) {
-        console.error("Error fetching employees:", error);
+        console.error("Error fetching empleados:", error);
       } else {
         setEmployees(data);
       }
