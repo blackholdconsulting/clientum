@@ -1,3 +1,4 @@
+// lib/facturae.ts
 import { create } from "xmlbuilder2";
 
 export interface FacturaeData {
@@ -28,9 +29,6 @@ export interface FacturaeData {
   irpf: number;
 }
 
-/**  
- * Genera un XML Facturae v3.2 a partir de los datos proporcionados  
- */
 export function buildFacturaeXML(data: FacturaeData): string {
   const { serie, numero, fecha, vencimiento, emisor, receptor, lineas, iva, irpf } = data;
   const base = lineas.reduce((sum, l) => sum + l.unidades * l.precioUnitario, 0);
@@ -40,32 +38,22 @@ export function buildFacturaeXML(data: FacturaeData): string {
   const factura = {
     Facturae: {
       "@xmlns": "http://www.facturae.es/Facturae/2009/v3.2/Facturaev3_2.xsd",
-      FileHeader: {
-        SchemaVersion: "3.2.1",
-        Modality: "I",
-        InvoiceIssuerType: "EM"
-      },
+      FileHeader: { SchemaVersion: "3.2.1", Modality: "I", InvoiceIssuerType: "EM" },
       Parties: {
         SellerParty: {
           PartyIdentification: { VATIdentification: { TaxIdentificationNumber: emisor.nif } },
           PartyName: { Name: emisor.nombre },
           PostalAddress: {
-            Address: emisor.direccion,
-            PostCode: emisor.cp,
-            City: emisor.ciudad,
-            CountryCode: "ES"
+            Address: emisor.direccion, PostCode: emisor.cp, City: emisor.ciudad, CountryCode: "ES"
           }
         },
         BuyerParty: {
           PartyIdentification: { VATIdentification: { TaxIdentificationNumber: receptor.cif } },
           PartyName: { Name: receptor.nombre },
           PostalAddress: {
-            Address: receptor.direccion,
-            PostCode: receptor.cp,
-            City: receptor.ciudad,
-            CountryCode: "ES"
+            Address: receptor.direccion, PostCode: receptor.cp, City: receptor.ciudad, CountryCode: "ES"
           }
-        }
+        },
       },
       Invoices: {
         Invoice: {
@@ -102,6 +90,5 @@ export function buildFacturaeXML(data: FacturaeData): string {
     }
   };
 
-  const doc = create(factura as any, { encoding: "UTF-8" });
-  return doc.end({ prettyPrint: true });
+  return create(factura as any, { encoding: "UTF-8" }).end({ prettyPrint: true });
 }
