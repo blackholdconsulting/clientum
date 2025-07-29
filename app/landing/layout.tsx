@@ -1,8 +1,10 @@
 // app/landing/layout.tsx
+import React from "react";
+
 export default function LandingLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return <div>{children}</div>;
 }
