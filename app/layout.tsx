@@ -80,9 +80,7 @@ export default async function RootLayout({
                 </Link>
                 <Link
                   href="/negocio/analisis-de-la-competencia"
-                  className={linkClass(
-                    "/negocio/analisis-de-la-competencia"
-                  )}
+                  className={linkClass("/negocio/analisis-de-la-competencia")}
                 >
                   📊 Análisis de la competencia
                 </Link>
@@ -97,6 +95,24 @@ export default async function RootLayout({
                   className={linkClass("/negocio/continuar-proyecto")}
                 >
                   ▶️ Continuar proyecto
+                </Link>
+              </div>
+            </div>
+
+            {/* NOP */}
+            <div>
+              <Link href="/NOP" className={linkClass("/NOP")}>
+                🧮 NOP
+              </Link>
+              <div className="pl-4 space-y-1">
+                <Link href="/NOP/budget" className={linkClass("/NOP/budget")}>
+                  💰 Budget
+                </Link>
+                <Link href="/NOP/opex" className={linkClass("/NOP/opex")}>
+                  📉 OPEX
+                </Link>
+                <Link href="/NOP/capex" className={linkClass("/NOP/capex")}>
+                  🏗️ CAPEX
                 </Link>
               </div>
             </div>
