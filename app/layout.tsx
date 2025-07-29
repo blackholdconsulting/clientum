@@ -20,18 +20,17 @@ export default async function RootLayout({
   children: ReactNode;
 }) {
   const path = await getActivePath();
-  const isActive = (p: string) => path === p || path.startsWith(p + "/");
+  const isActive = (prefix: string) =>
+    path === prefix || path.startsWith(prefix + "/");
 
   return (
     <html lang="es">
-      <head>
-        <title>Clientum</title>
-      </head>
       <body className="bg-gray-50 text-gray-800 flex h-screen overflow-hidden">
         {/* Sidebar */}
         <aside className="w-64 bg-white border-r shadow flex flex-col">
           <div className="p-6 font-bold text-xl text-indigo-600">Clientum</div>
           <nav className="flex-1 overflow-y-auto px-4 space-y-1 text-sm">
+            {/* Dashboard */}
             <Link
               href="/dashboard"
               className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -40,6 +39,8 @@ export default async function RootLayout({
             >
               📊 Dashboard
             </Link>
+
+            {/* Clientes */}
             <Link
               href="/clientes"
               className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -58,17 +59,8 @@ export default async function RootLayout({
             >
               🧾 Facturas
             </Link>
-            <Link
-              href="/facturas/historico"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/facturas/historico")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              📜 Histórico
-            </Link>
 
+            {/* Presupuestos */}
             <Link
               href="/presupuestos"
               className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -78,74 +70,71 @@ export default async function RootLayout({
               💼 Presupuestos
             </Link>
 
-            {/* Negocio */}
-            <Link
-              href="/negocio"
-              className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
-                isActive("/negocio") ? "bg-indigo-100 font-semibold" : ""
-              }`}
-            >
-              🚀 Negocio
-            </Link>
-            <Link
-              href="/negocio/tareas"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/negocio/tareas") ? "bg-indigo-100 font-semibold" : ""
-              }`}
-            >
-              📋 Mis tareas
-            </Link>
-            <Link
-              href="/negocio/proyectos"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/negocio/proyectos")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              📁 Proyectos
-            </Link>
-            <Link
-              href="/negocio/plan-futuro"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/negocio/plan-futuro")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              🔮 Plan futuro
-            </Link>
-            <Link
-              href="/negocio/estudio-mercado"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/negocio/estudio-mercado")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              📊 Estudio de mercado
-            </Link>
-            <Link
-              href="/negocio/analisis-competencia"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/negocio/analisis-competencia")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              🔍 Análisis competencia
-            </Link>
-            <Link
-              href="/negocio/continuar-proyecto"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/negocio/continuar-proyecto")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              ▶️ Continuar proyecto
-            </Link>
+            {/* Negocio dropdown */}
+            <div className="group relative">
+              <div
+                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
+                  isActive("/negocio") ? "bg-indigo-100 font-semibold" : ""
+                }`}
+              >
+                <span>🚀 Negocio</span>
+                <span className="text-xs ml-1 transform group-hover:rotate-180 transition-transform">
+                  ▼
+                </span>
+              </div>
+              <div className="absolute left-full top-0 ml-2 w-64 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
+                <Link
+                  href="/negocio/tareas"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/negocio/tareas") ? "bg-indigo-50 font-medium" : ""
+                  }`}
+                >
+                  📝 Mis tareas
+                </Link>
+                <Link
+                  href="/negocio/proyectos"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/negocio/proyectos")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  📁 Proyectos
+                </Link>
+                <Link
+                  href="/negocio/analisis-de-la-competencia"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/negocio/analisis-de-la-competencia")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  📊 Análisis de la competencia
+                </Link>
+                <Link
+                  href="/negocio/estudio-de-mercado"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/negocio/estudio-de-mercado")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  🔎 Estudio de mercado
+                </Link>
+                <Link
+                  href="/negocio/continuar-proyecto"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/negocio/continuar-proyecto")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  ▶️ Continuar proyecto
+                </Link>
+              </div>
+            </div>
 
+            {/* Impuestos */}
             <Link
               href="/impuestos"
               className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -164,46 +153,6 @@ export default async function RootLayout({
             >
               🏦 Tesorería
             </Link>
-            <Link
-              href="/tesoreria/cuentas"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/tesoreria/cuentas")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              💳 Cuentas
-            </Link>
-            <Link
-              href="/tesoreria/cashflow"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/tesoreria/cashflow")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              💸 Cashflow
-            </Link>
-            <Link
-              href="/tesoreria/pagos-cobros"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/tesoreria/pagos-cobros")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              💰 Pagos y cobros
-            </Link>
-            <Link
-              href="/tesoreria/remesas"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/tesoreria/remesas")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              ✉️ Remesas
-            </Link>
 
             {/* Contabilidad */}
             <Link
@@ -214,57 +163,8 @@ export default async function RootLayout({
             >
               📈 Contabilidad
             </Link>
-            <Link
-              href="/contabilidad/cuadro-de-cuentas"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/contabilidad/cuadro-de-cuentas")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              📋 Cuadro de cuentas
-            </Link>
-            <Link
-              href="/contabilidad/libro-diario"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/contabilidad/libro-diario")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              📖 Libro diario
-            </Link>
-            <Link
-              href="/contabilidad/activos"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/contabilidad/activos")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              🏷️ Activos
-            </Link>
-            <Link
-              href="/contabilidad/perdidas-ganancias"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/contabilidad/perdidas-ganancias")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              📉 Pérdidas y ganancias
-            </Link>
-            <Link
-              href="/contabilidad/balance-situacion"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/contabilidad/balance-situacion")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              ⚖️ Balance de situación
-            </Link>
 
+            {/* Chat IA */}
             <Link
               href="/chat"
               className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
@@ -283,95 +183,55 @@ export default async function RootLayout({
             >
               👩‍💼 RRHH
             </Link>
-            <Link
-              href="/RR.HH/employees"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/RR.HH/employees")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              👥 Empleados
-            </Link>
-            <Link
-              href="/RR.HH/nominas"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/RR.HH/nominas")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              🧾 Nóminas
-            </Link>
-            <Link
-              href="/RR.HH/gastos"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/RR.HH/gastos") ? "bg-indigo-100 font-semibold" : ""
-              }`}
-            >
-              💸 Gastos
-            </Link>
-            <Link
-              href="/RR.HH/horarios"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/RR.HH/horarios")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              ⏰ Horarios
-            </Link>
-            <Link
-              href="/RR.HH/vacaciones"
-              className={`block py-2 px-3 pl-8 rounded hover:bg-indigo-100 ${
-                isActive("/RR.HH/vacaciones")
-                  ? "bg-indigo-100 font-semibold"
-                  : ""
-              }`}
-            >
-              🌴 Vacaciones
-            </Link>
           </nav>
 
           {/* Ayuda y soporte */}
           <div className="px-4 mt-auto border-t pt-2 space-y-1">
             <div className="text-xs font-semibold">Ayuda y soporte</div>
-            <Link href="/help/academia">
-              <a className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
-                📘 Academia Clientum
-              </a>
+            <Link
+              href="/help/academia"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              📘 Academia Clientum
             </Link>
-            <Link href="/help/tutoriales">
-              <a className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
-                🎥 Tutoriales
-              </a>
+            <Link
+              href="/help/tutoriales"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              🎥 Tutoriales
             </Link>
-            <Link href="/help/votar-mejoras">
-              <a className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
-                👍 Votar mejoras
-              </a>
+            <Link
+              href="/help/votar-mejoras"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              👍 Votar mejoras
             </Link>
-            <Link href="/help/novedades">
-              <a className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
-                🆕 Novedades
-              </a>
+            <Link
+              href="/help/novedades"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              🆕 Novedades
             </Link>
-            <Link href="/help/soporte">
-              <a className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
-                🛠️ Soporte
-              </a>
+            <Link
+              href="/help/soporte"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              🛠️ Soporte
             </Link>
-            <Link href="/help/contacto">
-              <a className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
-                💬 Contáctanos
-              </a>
+            <Link
+              href="/help/contacto"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              💬 Contáctanos
             </Link>
+
             <div className="mt-3">
-              <Link href="/profile">
-                <a className="flex items-center py-2 px-3 text-sm hover:bg-gray-100 rounded">
-                  <div className="h-8 w-8 bg-gray-200 rounded-full mr-2" />
-                  Mi cuenta
-                </a>
+              <Link
+                href="/profile"
+                className="flex items-center py-2 px-3 text-sm hover:bg-gray-100 rounded"
+              >
+                <div className="h-8 w-8 bg-gray-200 rounded-full mr-2" />
+                Mi cuenta
               </Link>
               <UserMenu />
             </div>
