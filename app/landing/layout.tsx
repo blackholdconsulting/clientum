@@ -1,6 +1,4 @@
 // app/landing/layout.tsx
-import React from "react";
-
 export const metadata = {
   title: "Clientum - Landing",
 };
