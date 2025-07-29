@@ -1,4 +1,3 @@
-// app/api/chat/route.ts
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
@@ -7,12 +6,23 @@ const openai = new OpenAI({
 });
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
+  try {
+    const { messages } = await req.json();
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages,
-  });
+    if (!messages || !Array.isArray(messages)) {
+      return NextResponse.json({ error: "Formato de mensajes inválido" }, { status: 400 });
+    }
 
-  return NextResponse.json(completion.choices[0].message);
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages,
+    });
+
+    return NextResponse.json({
+      content: completion.choices[0].message.content,
+    });
+  } catch (error: any) {
+    console.error("Error en API Chat:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }
