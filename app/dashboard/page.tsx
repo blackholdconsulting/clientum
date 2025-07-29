@@ -33,22 +33,14 @@ export default function DashboardPage() {
   >([]);
 
   useEffect(() => {
-    // Datos simulados - reemplazar con fetch a la API real
-    setKpis({
-      ingresos: 12500,
-      gastos: 8200,
-      beneficio: 4300,
-      facturasPendientes: 5,
-    });
+    // Aquí se debería llamar a la API /api/dashboard/kpis
+    fetch("/api/dashboard/kpis")
+      .then((res) => res.json())
+      .then((data) => setKpis(data));
 
-    setChartData([
-      { mes: "Ene", ingresos: 3000, gastos: 1500 },
-      { mes: "Feb", ingresos: 3500, gastos: 1800 },
-      { mes: "Mar", ingresos: 4000, gastos: 2000 },
-      { mes: "Abr", ingresos: 4200, gastos: 2100 },
-      { mes: "May", ingresos: 3800, gastos: 2300 },
-      { mes: "Jun", ingresos: 5000, gastos: 2500 },
-    ]);
+    fetch("/api/dashboard/chart")
+      .then((res) => res.json())
+      .then((data) => setChartData(data));
   }, []);
 
   return (
@@ -98,26 +90,32 @@ export default function DashboardPage() {
       </div>
 
       {/* Acciones rápidas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link
-          href="/facturas/nueva"
-          className="bg-indigo-600 text-white p-4 rounded-lg shadow hover:bg-indigo-700 text-center"
-        >
-          Crear Factura
-        </Link>
-        <Link
-          href="/clientes/nuevo"
-          className="bg-indigo-600 text-white p-4 rounded-lg shadow hover:bg-indigo-700 text-center"
-        >
-          Añadir Cliente
-        </Link>
-        <Link
-          href="/tesoreria"
-          className="bg-indigo-600 text-white p-4 rounded-lg shadow hover:bg-indigo-700 text-center"
-        >
-          Ver Tesorería
-        </Link>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Link href="/facturas/nueva" className="btn-dashboard">Crear Factura</Link>
+        <Link href="/clientes/nuevo" className="btn-dashboard">Añadir Cliente</Link>
+        <Link href="/tesoreria" className="btn-dashboard">Ver Tesorería</Link>
+        <Link href="/presupuestos/nuevo" className="btn-dashboard">Crear Presupuesto</Link>
+        <Link href="/NOP/opex" className="btn-dashboard">Ver OPEX</Link>
+        <Link href="/NOP/capex" className="btn-dashboard">Ver CAPEX</Link>
+        <Link href="/NOP/budget" className="btn-dashboard">Budget Anual</Link>
+        <Link href="/contabilidad/reportes" className="btn-dashboard">Reporte Contabilidad</Link>
+        <Link href="/RRHH/nominas" className="btn-dashboard">Gestión Nóminas</Link>
       </div>
+
+      <style jsx>{`
+        .btn-dashboard {
+          background-color: #4f46e5;
+          color: white;
+          padding: 1rem;
+          text-align: center;
+          border-radius: 0.5rem;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          transition: background-color 0.2s ease-in-out;
+        }
+        .btn-dashboard:hover {
+          background-color: #4338ca;
+        }
+      `}</style>
     </div>
   );
 }
