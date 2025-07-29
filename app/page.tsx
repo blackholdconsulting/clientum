@@ -8,11 +8,9 @@ export default async function Home() {
   const { data: { session } } = await supabase.auth.getSession();
 
   if (session?.user) {
-    // Redirigir automáticamente si el usuario está loggeado
-    redirect('/dashboard');
+    redirect('/dashboard');  // Usuario logueado
   } else {
-    // Si no hay sesión, redirigir a la landing
-    redirect('/landing');
+    redirect('/landing');    // Usuario no logueado
   }
 
   return null;
