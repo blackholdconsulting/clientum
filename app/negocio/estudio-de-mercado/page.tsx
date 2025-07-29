@@ -1,66 +1,235 @@
 // app/negocio/estudio-de-mercado/page.tsx
-import Link from "next/link";
+"use client";
+
+import { useState, Fragment } from "react";
+import { Tab } from "@headlessui/react";
+
+function classNames(...classes: string[]) {
+  return classes.filter(Boolean).join(" ");
+}
 
 export default function EstudioMercadoPage() {
+  const sections = [
+    "Visión General",
+    "Segmentación",
+    "Tamaño de Mercado",
+    "Tendencias",
+    "Conclusiones",
+  ] as const;
+  const [active, setActive] = useState<typeof sections[number]>(
+    "Visión General"
+  );
+
+  const [vision, setVision] = useState({
+    objetivo: "",
+    alcance: "",
+    metodología: "",
+  });
+  const [segmentacion, setSegmentacion] = useState({
+    demográfica: "",
+    geográfica: "",
+    psicográfica: "",
+    conductual: "",
+  });
+  const [tamano, setTamano] = useState({
+    mercadoTotal: "",
+    mercadoServible: "",
+    mercadoObtenible: "",
+  });
+  const [tendencias, setTendencias] = useState({
+    tecnológicas: "",
+    económicas: "",
+    sociales: "",
+    regulatorias: "",
+  });
+  const [conclusiones, setConclusiones] = useState("");
+
   return (
-    <main className="p-6 bg-white rounded-md shadow-lg">
-      {/* Cabecera con breadcrumb */}
-      <header className="flex items-center mb-6">
-        <Link
-          href="/negocio"
-          className="text-gray-500 hover:underline mr-2"
-        >
-          ← Volver
-        </Link>
-        <h1 className="text-2xl font-semibold">Estudio de Mercado</h1>
-      </header>
+    <div className="max-w-4xl mx-auto p-8 space-y-6">
+      <h1 className="text-4xl font-bold text-indigo-700">
+        Estudio de Mercado
+      </h1>
 
-      {/* Sección de introducción */}
-      <section className="mb-8">
-        <p className="text-gray-700">
-          En esta sección podrás analizar el mercado, evaluar la competencia  
-          y obtener datos clave para tomar decisiones estratégicas.
-        </p>
-      </section>
+      <Tab.Group
+        selectedIndex={sections.indexOf(active)}
+        onChange={(i) => setActive(sections[i])}
+      >
+        <Tab.List className="flex space-x-2 border-b">
+          {sections.map((sec) => (
+            <Tab key={sec} as={Fragment}>
+              {({ selected }) => (
+                <button
+                  className={classNames(
+                    "py-2 px-4 -mb-px font-medium",
+                    selected
+                      ? "border-b-2 border-indigo-600 text-indigo-600"
+                      : "text-gray-600 hover:text-gray-800"
+                  )}
+                >
+                  {sec}
+                </button>
+              )}
+            </Tab>
+          ))}
+        </Tab.List>
 
-      {/* Componentes de contenido */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Gráfica de tendencias */}
-        <div className="p-4 border rounded-md">
-          <h2 className="font-medium mb-2">Tendencias de búsqueda</h2>
-          <div className="h-40 bg-gray-100 flex items-center justify-center text-gray-400">
-            [Gráfica de tendencias]
-          </div>
-        </div>
+        <Tab.Panels className="pt-6 space-y-6">
+          {/* Visión General */}
+          <Tab.Panel>
+            <div className="space-y-4">
+              <label className="block">
+                <span className="font-semibold">Objetivo del estudio</span>
+                <textarea
+                  rows={3}
+                  value={vision.objetivo}
+                  onChange={(e) =>
+                    setVision({ ...vision, objetivo: e.target.value })
+                  }
+                  className="mt-1 w-full border rounded p-2"
+                  placeholder="Definir claramente qué buscamos conocer..."
+                />
+              </label>
+              <label className="block">
+                <span className="font-semibold">Alcance y cobertura</span>
+                <textarea
+                  rows={2}
+                  value={vision.alcance}
+                  onChange={(e) =>
+                    setVision({ ...vision, alcance: e.target.value })
+                  }
+                  className="mt-1 w-full border rounded p-2"
+                  placeholder="Mercados, segmentos y regiones a analizar..."
+                />
+              </label>
+              <label className="block">
+                <span className="font-semibold">Metodología</span>
+                <textarea
+                  rows={2}
+                  value={vision.metodología}
+                  onChange={(e) =>
+                    setVision({ ...vision, metodología: e.target.value })
+                  }
+                  className="mt-1 w-full border rounded p-2"
+                  placeholder="Cuantitativa, cualitativa, fuentes primarias/secundarias..."
+                />
+              </label>
+            </div>
+          </Tab.Panel>
 
-        {/* Listado de competidores */}
-        <div className="p-4 border rounded-md">
-          <h2 className="font-medium mb-2">Principales competidores</h2>
-          <ul className="list-disc pl-5 space-y-1 text-gray-700">
-            <li>Empresa A – 25% cuota de mercado</li>
-            <li>Empresa B – 18% cuota de mercado</li>
-            <li>Empresa C – 12% cuota de mercado</li>
-            <li>Otros – 45%</li>
-          </ul>
-        </div>
+          {/* Segmentación */}
+          <Tab.Panel>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {(
+                [
+                  "demográfica",
+                  "geográfica",
+                  "psicográfica",
+                  "conductual",
+                ] as const
+              ).map((key) => (
+                <label key={key} className="block">
+                  <span className="font-semibold capitalize">{key}</span>
+                  <textarea
+                    rows={3}
+                    value={segmentacion[key]}
+                    onChange={(e) =>
+                      setSegmentacion({
+                        ...segmentacion,
+                        [key]: e.target.value,
+                      })
+                    }
+                    className="mt-1 w-full border rounded p-2"
+                    placeholder={`Describir segmentación ${key}...`}
+                  />
+                </label>
+              ))}
+            </div>
+          </Tab.Panel>
 
-        {/* Mapa de calor geográfico */}
-        <div className="p-4 border rounded-md md:col-span-2">
-          <h2 className="font-medium mb-2">Mapa de calor geográfico</h2>
-          <div className="h-48 bg-gray-100 flex items-center justify-center text-gray-400">
-            [Mapa de calor]
-          </div>
-        </div>
-      </section>
+          {/* Tamaño de Mercado */}
+          <Tab.Panel>
+            <div className="space-y-4">
+              <label className="block">
+                <span className="font-semibold">Mercado Total (TAM)</span>
+                <input
+                  type="text"
+                  value={tamano.mercadoTotal}
+                  onChange={(e) =>
+                    setTamano({ ...tamano, mercadoTotal: e.target.value })
+                  }
+                  className="mt-1 w-full border rounded p-2"
+                  placeholder="p.ej. €X millones"
+                />
+              </label>
+              <label className="block">
+                <span className="font-semibold">Mercado Servible (SAM)</span>
+                <input
+                  type="text"
+                  value={tamano.mercadoServible}
+                  onChange={(e) =>
+                    setTamano({ ...tamano, mercadoServible: e.target.value })
+                  }
+                  className="mt-1 w-full border rounded p-2"
+                  placeholder="Porción del TAM accesible"
+                />
+              </label>
+              <label className="block">
+                <span className="font-semibold">Mercado Obtenible (SOM)</span>
+                <input
+                  type="text"
+                  value={tamano.mercadoObtenible}
+                  onChange={(e) =>
+                    setTamano({ ...tamano, mercadoObtenible: e.target.value })
+                  }
+                  className="mt-1 w-full border rounded p-2"
+                  placeholder="Nuestra cuota proyectada"
+                />
+              </label>
+            </div>
+          </Tab.Panel>
 
-      {/* Llamada a la acción */}
-      <footer className="mt-8 text-right">
-        <button
-          className="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition"
-        >
-          Descargar informe completo
-        </button>
-      </footer>
-    </main>
+          {/* Tendencias */}
+          <Tab.Panel>
+            <div className="space-y-4">
+              {(
+                [
+                  "tecnológicas",
+                  "económicas",
+                  "sociales",
+                  "regulatorias",
+                ] as const
+              ).map((key) => (
+                <label key={key} className="block">
+                  <span className="font-semibold capitalize">{key}</span>
+                  <textarea
+                    rows={3}
+                    value={tendencias[key]}
+                    onChange={(e) =>
+                      setTendencias({ ...tendencias, [key]: e.target.value })
+                    }
+                    className="mt-1 w-full border rounded p-2"
+                    placeholder={`Analizar tendencias ${key}...`}
+                  />
+                </label>
+              ))}
+            </div>
+          </Tab.Panel>
+
+          {/* Conclusiones */}
+          <Tab.Panel>
+            <label className="block">
+              <span className="font-semibold">Conclusiones clave</span>
+              <textarea
+                rows={5}
+                value={conclusiones}
+                onChange={(e) => setConclusiones(e.target.value)}
+                className="mt-1 w-full border rounded p-2"
+                placeholder="Resumir insights y recomendaciones..."
+              />
+            </label>
+          </Tab.Panel>
+        </Tab.Panels>
+      </Tab.Group>
+    </div>
   );
 }
