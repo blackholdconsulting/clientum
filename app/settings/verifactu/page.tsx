@@ -1,15 +1,18 @@
+// app/settings/verifactu/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
+const SETTING_KEY = "verifactu_key";
+
 export default function VerifactuSettingsPage() {
   const supabase = createClientComponentClient();
   const [key, setKey] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const SETTING_KEY = "verifactu_key";
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // Al montar, cargamos el valor actual de la clave
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase
@@ -18,54 +21,76 @@ export default function VerifactuSettingsPage() {
         .eq("key", SETTING_KEY)
         .single();
       if (error && error.code !== "PGRST116") {
-        console.error("Error fetching Verifactu key:", error);
-      }
-      if (data?.value) {
+        setError("Error cargando la clave");
+      } else if (data) {
         setKey(data.value);
       }
-      setLoading(false);
     })();
   }, []);
 
-  const handleSave = async () => {
-    setSaving(true);
-    // Upsert: crea o actualiza
-    const { error } = await supabase
+  // Guardar cambios
+  const guardar = async () => {
+    setError(null);
+    setSaved(false);
+
+    // Obtener el usuario actual
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+    if (sessionError || !session?.user.id) {
+      setError("Debes iniciar sesión para guardar la clave");
+      return;
+    }
+    const userId = session.user.id;
+
+    const { error: upsertError } = await supabase
       .from("account_settings")
       .upsert({
-        user_id: supabase.auth.user()?.id,
+        user_id: userId,
         key: SETTING_KEY,
         value: key.trim(),
       });
-    if (error) {
-      alert("Error guardando la clave: " + error.message);
+
+    if (upsertError) {
+      setError("Error guardando la clave");
     } else {
-      alert("Clave de Verifactu guardada correctamente");
+      setSaved(true);
     }
-    setSaving(false);
   };
 
-  if (loading) return <p>Cargando ajuste de Verifactu…</p>;
-
   return (
-    <div className="max-w-lg mx-auto p-6">
-      <h1 className="text-2xl mb-4">Ajustes de Verifactu</h1>
-      <label className="block mb-2">
-        Tu API Key de Verifactu
+    <div className="max-w-xl mx-auto p-6 space-y-4">
+      <h1 className="text-2xl font-semibold">Ajustes Verifactu</h1>
+
+      <label className="block">
+        <span className="font-medium">Clave API de Verifactu</span>
         <input
           type="text"
-          className="mt-1 w-full border rounded px-3 py-2"
           value={key}
           onChange={(e) => setKey(e.target.value)}
-          placeholder="pk_test_abcdef123456..."
+          className="mt-1 block w-full border rounded px-3 py-2"
+          placeholder="Introduce tu clave de Verifactu"
         />
       </label>
+
+      {error && (
+        <div className="text-red-600 font-medium">
+          {error}
+        </div>
+      )}
+
+      {saved && (
+        <div className="text-green-600 font-medium">
+          Clave guardada correctamente.
+        </div>
+      )}
+
       <button
-        className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
-        onClick={handleSave}
-        disabled={saving || key.trim() === ""}
+        onClick={guardar}
+        className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
       >
-        {saving ? "Guardando…" : "Guardar clave"}
+        Guardar
       </button>
     </div>
   );
