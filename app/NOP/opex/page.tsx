@@ -37,7 +37,10 @@ export default function OpexPage() {
     setForm({ categoria: "", descripcion: "", monto: 0, fecha: "" });
   };
 
-  const totalGastos = opexList.reduce((acc, curr) => acc + Number(curr.monto), 0);
+  const totalGastos = opexList.reduce(
+    (acc, curr) => acc + Number(curr.monto),
+    0
+  );
 
   return (
     <div className="p-6">
@@ -83,6 +86,30 @@ export default function OpexPage() {
         </button>
       </form>
 
-      <h2 className="text-lg font-semibold mb-2">Total OPEX: {totalGastos.toFixed(2)} €</h2>
+      <h2 className="text-lg font-semibold mb-2">
+        Total OPEX: {totalGastos.toFixed(2)} €
+      </h2>
 
-      <table className="min-w-full b
+      <table className="min-w-full bg-white shadow rounded-lg">
+        <thead>
+          <tr className="bg-gray-100 border-b">
+            <th className="py-2 px-4 text-left">Categoría</th>
+            <th className="py-2 px-4 text-left">Descripción</th>
+            <th className="py-2 px-4 text-left">Monto (€)</th>
+            <th className="py-2 px-4 text-left">Fecha</th>
+          </tr>
+        </thead>
+        <tbody>
+          {opexList.map((gasto) => (
+            <tr key={gasto.id} className="border-b hover:bg-gray-50">
+              <td className="py-2 px-4">{gasto.categoria}</td>
+              <td className="py-2 px-4">{gasto.descripcion}</td>
+              <td className="py-2 px-4">{gasto.monto}</td>
+              <td className="py-2 px-4">{gasto.fecha}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
