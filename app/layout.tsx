@@ -1,27 +1,28 @@
 // app/layout.tsx
+"use client";
+
 import "./globals.css";
 import Link from "next/link";
-import { headers } from "next/headers";
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import UserMenu from "../components/UserMenu";
 
 export const metadata = {
   title: "Clientum",
 };
 
-async function getActivePath(): Promise<string> {
-  const h = await headers();
-  return h.get("x-invoke-path") || "/";
-}
+export default function RootLayout({ children }: { children: ReactNode }) {
+  // Para detectar la ruta activa sin necesidad de headers()
+  const [active, setActive] = useState(stringifyPath());
+  if (typeof window !== "undefined") {
+    window.addEventListener("popstate", () => setActive(stringifyPath()));
+  }
 
-export default async function RootLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  const path = await getActivePath();
+  function stringifyPath() {
+    return window?.location.pathname || "/";
+  }
+
   const isActive = (prefix: string) =>
-    path === prefix || path.startsWith(prefix + "/");
+    active === prefix || active.startsWith(prefix + "/");
 
   return (
     <html lang="es">
@@ -31,29 +32,31 @@ export default async function RootLayout({
           <div className="p-6 font-bold text-xl text-indigo-600">Clientum</div>
           <nav className="flex-1 overflow-y-auto px-4 space-y-1 text-sm">
             {/* Dashboard */}
-            <Link
-              href="/dashboard"
-              className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
-                isActive("/dashboard") ? "bg-indigo-100 font-semibold" : ""
-              }`}
-            >
-              📊 Dashboard
+            <Link href="/dashboard">
+              <a
+                className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
+                  isActive("/dashboard") ? "bg-indigo-100 font-semibold" : ""
+                }`}
+              >
+                📊 Dashboard
+              </a>
             </Link>
 
             {/* Clientes */}
-            <Link
-              href="/clientes"
-              className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
-                isActive("/clientes") ? "bg-indigo-100 font-semibold" : ""
-              }`}
-            >
-              👥 Clientes
+            <Link href="/clientes">
+              <a
+                className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
+                  isActive("/clientes") ? "bg-indigo-100 font-semibold" : ""
+                }`}
+              >
+                👥 Clientes
+              </a>
             </Link>
 
             {/* Facturas dropdown */}
             <div className="group relative">
-              <div
-                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
+              <button
+                className={`w-full flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 focus:outline-none ${
                   isActive("/facturas") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
@@ -61,46 +64,49 @@ export default async function RootLayout({
                 <span className="text-xs ml-1 transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </div>
-              <div className="absolute left-full top-0 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
-                <Link
-                  href="/facturas"
-                  className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/facturas") &&
-                    !isActive("/facturas/historico")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
-                  }`}
-                >
-                  Listado
+              </button>
+              <div className="absolute left-full top-0 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-focus-within:opacity-100 group-focus-within:visible transition-opacity z-10">
+                <Link href="/facturas">
+                  <a
+                    className={`block py-2 px-3 hover:bg-indigo-50 ${
+                      isActive("/facturas") &&
+                      !isActive("/facturas/historico")
+                        ? "bg-indigo-50 font-medium"
+                        : ""
+                    }`}
+                  >
+                    Listado
+                  </a>
                 </Link>
-                <Link
-                  href="/facturas/historico"
-                  className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/facturas/historico")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
-                  }`}
-                >
-                  Histórico
+                <Link href="/facturas/historico">
+                  <a
+                    className={`block py-2 px-3 hover:bg-indigo-50 ${
+                      isActive("/facturas/historico")
+                        ? "bg-indigo-50 font-medium"
+                        : ""
+                    }`}
+                  >
+                    Histórico
+                  </a>
                 </Link>
               </div>
             </div>
 
             {/* Presupuestos */}
-            <Link
-              href="/presupuestos"
-              className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
-                isActive("/presupuestos") ? "bg-indigo-100 font-semibold" : ""
-              }`}
-            >
-              💼 Presupuestos
+            <Link href="/presupuestos">
+              <a
+                className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
+                  isActive("/presupuestos") ? "bg-indigo-100 font-semibold" : ""
+                }`}
+              >
+                💼 Presupuestos
+              </a>
             </Link>
 
             {/* Negocio dropdown */}
             <div className="group relative">
-              <div
-                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
+              <button
+                className={`w-full flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 focus:outline-none ${
                   isActive("/negocio") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
@@ -108,53 +114,57 @@ export default async function RootLayout({
                 <span className="text-xs ml-1 transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </div>
-              <div className="absolute left-full top-0 ml-2 w-52 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
-                <Link
-                  href="/negocio/tareas"
-                  className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/negocio/tareas") ? "bg-indigo-50 font-medium" : ""
-                  }`}
-                >
-                  Mis tareas
+              </button>
+              <div className="absolute left-full top-0 ml-2 w-52 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-focus-within:opacity-100 group-focus-within:visible transition-opacity z-10">
+                <Link href="/negocio/tareas">
+                  <a
+                    className={`block py-2 px-3 hover:bg-indigo-50 ${
+                      isActive("/negocio/tareas") ? "bg-indigo-50 font-medium" : ""
+                    }`}
+                  >
+                    Mis tareas
+                  </a>
                 </Link>
-                <Link
-                  href="/negocio/proyectos"
-                  className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/negocio/proyectos")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
-                  }`}
-                >
-                  Proyectos
+                <Link href="/negocio/proyectos">
+                  <a
+                    className={`block py-2 px-3 hover:bg-indigo-50 ${
+                      isActive("/negocio/proyectos")
+                        ? "bg-indigo-50 font-medium"
+                        : ""
+                    }`}
+                  >
+                    Proyectos
+                  </a>
                 </Link>
-                <Link
-                  href="/negocio/continuar-proyecto"
-                  className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/negocio/continuar-proyecto")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
-                  }`}
-                >
-                  Continuar proyecto
+                <Link href="/negocio/continuar-proyecto">
+                  <a
+                    className={`block py-2 px-3 hover:bg-indigo-50 ${
+                      isActive("/negocio/continuar-proyecto")
+                        ? "bg-indigo-50 font-medium"
+                        : ""
+                    }`}
+                  >
+                    Continuar proyecto
+                  </a>
                 </Link>
               </div>
             </div>
 
             {/* Impuestos */}
-            <Link
-              href="/impuestos"
-              className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
-                isActive("/impuestos") ? "bg-indigo-100 font-semibold" : ""
-              }`}
-            >
-              ⚖️ Impuestos
+            <Link href="/impuestos">
+              <a
+                className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
+                  isActive("/impuestos") ? "bg-indigo-100 font-semibold" : ""
+                }`}
+              >
+                ⚖️ Impuestos
+              </a>
             </Link>
 
             {/* Tesorería dropdown */}
             <div className="group relative">
-              <div
-                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
+              <button
+                className={`w-full flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 focus:outline-none ${
                   isActive("/tesoreria") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
@@ -162,35 +172,35 @@ export default async function RootLayout({
                 <span className="text-xs ml-1 transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </div>
-              <div className="absolute left-full top-0 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
-                <Link
-                  href="/tesoreria/cuentas"
-                  className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/tesoreria/cuentas")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
-                  }`}
-                >
-                  Cuentas
+              </button>
+              <div className="absolute left-full top-0 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-focus-within:opacity-100 group-focus-within:visible transition-opacity z-10">
+                <Link href="/tesoreria/cuentas">
+                  <a
+                    className={`block py-2 px-3 hover:bg-indigo-50 ${
+                      isActive("/tesoreria/cuentas") ? "bg-indigo-50 font-medium" : ""
+                    }`}
+                  >
+                    Cuentas
+                  </a>
                 </Link>
-                <Link
-                  href="/tesoreria/pagos-cobros"
-                  className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/tesoreria/pagos-cobros")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
-                  }`}
-                >
-                  Pagos y cobros
+                <Link href="/tesoreria/pagos-cobros">
+                  <a
+                    className={`block py-2 px-3 hover:bg-indigo-50 ${
+                      isActive("/tesoreria/pagos-cobros")
+                        ? "bg-indigo-50 font-medium"
+                        : ""
+                    }`}
+                  >
+                    Pagos y cobros
+                  </a>
                 </Link>
               </div>
             </div>
 
             {/* Contabilidad dropdown */}
             <div className="group relative">
-              <div
-                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
+              <button
+                className={`w-full flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 focus:outline-none ${
                   isActive("/contabilidad") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
@@ -198,45 +208,48 @@ export default async function RootLayout({
                 <span className="text-xs ml-1 transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </div>
-              <div className="absolute left-full top-0 ml-2 w-56 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
-                <Link
-                  href="/contabilidad/cuadro-de-cuentas"
-                  className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/contabilidad/cuadro-de-cuentas")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
-                  }`}
-                >
-                  Cuadro de cuentas
+              </button>
+              <div className="absolute left-full top-0 ml-2 w-56 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-focus-within:opacity-100 group-focus-within:visible transition-opacity z-10">
+                <Link href="/contabilidad/cuadro-de-cuentas">
+                  <a
+                    className={`block py-2 px-3 hover:bg-indigo-50 ${
+                      isActive("/contabilidad/cuadro-de-cuentas")
+                        ? "bg-indigo-50 font-medium"
+                        : ""
+                    }`}
+                  >
+                    Cuadro de cuentas
+                  </a>
                 </Link>
-                <Link
-                  href="/contabilidad/libro-diario"
-                  className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/contabilidad/libro-diario")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
-                  }`}
-                >
-                  Libro diario
+                <Link href="/contabilidad/libro-diario">
+                  <a
+                    className={`block py-2 px-3 hover:bg-indigo-50 ${
+                      isActive("/contabilidad/libro-diario")
+                        ? "bg-indigo-50 font-medium"
+                        : ""
+                    }`}
+                  >
+                    Libro diario
+                  </a>
                 </Link>
               </div>
             </div>
 
             {/* Chat IA */}
-            <Link
-              href="/chat"
-              className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
-                isActive("/chat") ? "bg-indigo-100 font-semibold" : ""
-              }`}
-            >
-              💬 Chat IA
+            <Link href="/chat">
+              <a
+                className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
+                  isActive("/chat") ? "bg-indigo-100 font-semibold" : ""
+                }`}
+              >
+                💬 Chat IA
+              </a>
             </Link>
 
             {/* RRHH dropdown */}
             <div className="group relative">
-              <div
-                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
+              <button
+                className={`w-full flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 focus:outline-none ${
                   isActive("/RR.HH") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
@@ -244,27 +257,27 @@ export default async function RootLayout({
                 <span className="text-xs ml-1 transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </div>
-              <div className="absolute left-full top-0 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
-                <Link
-                  href="/RR.HH/employees"
-                  className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/RR.HH/employees")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
-                  }`}
-                >
-                  Empleados
+              </button>
+              <div className="absolute left-full top-0 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-focus-within:opacity-100 group-focus-within:visible transition-opacity z-10">
+                <Link href="/RR.HH/employees">
+                  <a
+                    className={`block py-2 px-3 hover:bg-indigo-50 ${
+                      isActive("/RR.HH/employees") ? "bg-indigo-50 font-medium" : ""
+                    }`}
+                  >
+                    Empleados
+                  </a>
                 </Link>
-                <Link
-                  href="/RR.HH/horarios"
-                  className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/RR.HH/horarios")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
-                  }`}
-                >
-                  Horarios
+                <Link href="/RR.HH/horarios">
+                  <a
+                    className={`block py-2 px-3 hover:bg-indigo-50 ${
+                      isActive("/RR.HH/horarios")
+                        ? "bg-indigo-50 font-medium"
+                        : ""
+                    }`}
+                  >
+                    Horarios
+                  </a>
                 </Link>
               </div>
             </div>
@@ -273,49 +286,42 @@ export default async function RootLayout({
           {/* Ayuda y soporte */}
           <div className="px-4 mt-auto border-t pt-2 space-y-1">
             <div className="text-xs font-semibold">Ayuda y soporte</div>
-            <Link
-              href="/help/academia"
-              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              📘 Academia Clientum
+            <Link href="/help/academia">
+              <a className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
+                📘 Academia Clientum
+              </a>
             </Link>
-            <Link
-              href="/help/tutoriales"
-              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              🎥 Tutoriales
+            <Link href="/help/tutoriales">
+              <a className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
+                🎥 Tutoriales
+              </a>
             </Link>
-            <Link
-              href="/help/votar-mejoras"
-              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              👍 Votar mejoras
+            <Link href="/help/votar-mejoras">
+              <a className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
+                👍 Votar mejoras
+              </a>
             </Link>
-            <Link
-              href="/help/novedades"
-              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              🆕 Novedades
+            <Link href="/help/novedades">
+              <a className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
+                🆕 Novedades
+              </a>
             </Link>
-            <Link
-              href="/help/soporte"
-              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              🛠️ Soporte
+            <Link href="/help/soporte">
+              <a className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
+                🛠️ Soporte
+              </a>
             </Link>
-            <Link
-              href="/help/contacto"
-              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              💬 Contáctanos
+            <Link href="/help/contacto">
+              <a className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
+                💬 Contáctanos
+              </a>
             </Link>
             <div className="mt-3">
-              <Link
-                href="/profile"
-                className="flex items-center py-2 px-3 text-sm hover:bg-gray-100 rounded"
-              >
-                <div className="h-8 w-8 bg-gray-200 rounded-full mr-2" />
-                Mi cuenta
+              <Link href="/profile">
+                <a className="flex items-center py-2 px-3 text-sm hover:bg-gray-100 rounded">
+                  <div className="h-8 w-8 bg-gray-200 rounded-full mr-2" />
+                  Mi cuenta
+                </a>
               </Link>
               <UserMenu />
             </div>
