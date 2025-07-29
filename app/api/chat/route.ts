@@ -14,11 +14,11 @@ export async function POST(req: Request) {
       messages,
     });
 
-    return NextResponse.json({
-      content: completion.choices[0].message.content,
-    });
+    const content = completion.choices?.[0]?.message?.content || "⚠️ Sin respuesta";
+
+    return NextResponse.json({ content });
   } catch (error: any) {
-    console.error("Chat API Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Error API Chat:", error);
+    return NextResponse.json({ content: `Error: ${error.message}` }, { status: 500 });
   }
 }
