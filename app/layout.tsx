@@ -27,13 +27,13 @@ export default async function RootLayout({
     <html lang="es">
       <body className="bg-gray-50 text-gray-800 flex h-screen overflow-hidden">
         {/* Sidebar */}
-        <aside className="w-64 bg-white border-r shadow-md flex flex-col">
+        <aside className="w-64 bg-white border-r shadow flex flex-col">
           <div className="p-6 font-bold text-xl text-indigo-600">Clientum</div>
-          <nav className="flex-1 flex flex-col px-4 text-sm space-y-1 overflow-y-auto">
+          <nav className="flex-1 overflow-y-auto px-4 space-y-1 text-sm">
             {/* Dashboard */}
             <Link
               href="/dashboard"
-              className={`py-2 px-3 rounded hover:bg-indigo-100 ${
+              className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
                 isActive("/dashboard") ? "bg-indigo-100 font-semibold" : ""
               }`}
             >
@@ -43,7 +43,7 @@ export default async function RootLayout({
             {/* Clientes */}
             <Link
               href="/clientes"
-              className={`py-2 px-3 rounded hover:bg-indigo-100 ${
+              className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
                 isActive("/clientes") ? "bg-indigo-100 font-semibold" : ""
               }`}
             >
@@ -52,18 +52,17 @@ export default async function RootLayout({
 
             {/* Facturas dropdown */}
             <div className="group relative">
-              <Link
-                href="/facturas"
-                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 ${
+              <div
+                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
                   isActive("/facturas") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
-                🧾 Facturas
-                <span className="text-xs ml-1 transform transition-transform group-hover:rotate-180">
+                <span>🧾 Facturas</span>
+                <span className="text-xs ml-1 transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </Link>
-              <div className="absolute left-full top-0 z-50 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
+              </div>
+              <div className="absolute left-full top-0 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
                 <Link
                   href="/facturas"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
@@ -91,7 +90,7 @@ export default async function RootLayout({
             {/* Presupuestos */}
             <Link
               href="/presupuestos"
-              className={`py-2 px-3 rounded hover:bg-indigo-100 ${
+              className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
                 isActive("/presupuestos") ? "bg-indigo-100 font-semibold" : ""
               }`}
             >
@@ -100,18 +99,17 @@ export default async function RootLayout({
 
             {/* Negocio dropdown */}
             <div className="group relative">
-              <Link
-                href="/negocio"
-                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 ${
+              <div
+                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
                   isActive("/negocio") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
-                🚀 Negocio
-                <span className="text-xs ml-1 transform transition-transform group-hover:rotate-180">
+                <span>🚀 Negocio</span>
+                <span className="text-xs ml-1 transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </Link>
-              <div className="absolute left-full top-0 z-50 ml-2 w-52 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
+              </div>
+              <div className="absolute left-full top-0 ml-2 w-52 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
                 <Link
                   href="/negocio/tareas"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
@@ -131,16 +129,6 @@ export default async function RootLayout({
                   Proyectos
                 </Link>
                 <Link
-                  href="/negocio/plan-futuro"
-                  className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/negocio/plan-futuro")
-                      ? "bg-indigo-50 font-medium"
-                      : ""
-                  }`}
-                >
-                  Plan futuro
-                </Link>
-                <Link
                   href="/negocio/continuar-proyecto"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
                     isActive("/negocio/continuar-proyecto")
@@ -156,7 +144,7 @@ export default async function RootLayout({
             {/* Impuestos */}
             <Link
               href="/impuestos"
-              className={`py-2 px-3 rounded hover:bg-indigo-100 ${
+              className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
                 isActive("/impuestos") ? "bg-indigo-100 font-semibold" : ""
               }`}
             >
@@ -165,18 +153,17 @@ export default async function RootLayout({
 
             {/* Tesorería dropdown */}
             <div className="group relative">
-              <Link
-                href="/tesoreria"
-                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 ${
+              <div
+                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
                   isActive("/tesoreria") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
-                🏦 Tesorería
-                <span className="text-xs ml-1 transform transition-transform group-hover:rotate-180">
+                <span>🏦 Tesorería</span>
+                <span className="text-xs ml-1 transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </Link>
-              <div className="absolute left-full top-0 z-50 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
+              </div>
+              <div className="absolute left-full top-0 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
                 <Link
                   href="/tesoreria/cuentas"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
@@ -202,18 +189,17 @@ export default async function RootLayout({
 
             {/* Contabilidad dropdown */}
             <div className="group relative">
-              <Link
-                href="/contabilidad"
-                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 ${
+              <div
+                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
                   isActive("/contabilidad") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
-                📈 Contabilidad
-                <span className="text-xs ml-1 transform transition-transform group-hover:rotate-180">
+                <span>📈 Contabilidad</span>
+                <span className="text-xs ml-1 transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </Link>
-              <div className="absolute left-full top-0 z-50 ml-2 w-56 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
+              </div>
+              <div className="absolute left-full top-0 ml-2 w-56 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
                 <Link
                   href="/contabilidad/cuadro-de-cuentas"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
@@ -240,7 +226,7 @@ export default async function RootLayout({
             {/* Chat IA */}
             <Link
               href="/chat"
-              className={`py-2 px-3 rounded hover:bg-indigo-100 ${
+              className={`block py-2 px-3 rounded hover:bg-indigo-100 ${
                 isActive("/chat") ? "bg-indigo-100 font-semibold" : ""
               }`}
             >
@@ -249,18 +235,17 @@ export default async function RootLayout({
 
             {/* RRHH dropdown */}
             <div className="group relative">
-              <Link
-                href="/RR.HH"
-                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 ${
+              <div
+                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 cursor-pointer ${
                   isActive("/RR.HH") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
-                👩‍💼 RRHH
-                <span className="text-xs ml-1 transform transition-transform group-hover:rotate-180">
+                <span>👩‍💼 RRHH</span>
+                <span className="text-xs ml-1 transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </Link>
-              <div className="absolute left-full top-0 z-50 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
+              </div>
+              <div className="absolute left-full top-0 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
                 <Link
                   href="/RR.HH/employees"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
@@ -286,17 +271,41 @@ export default async function RootLayout({
           </nav>
 
           {/* Ayuda y soporte */}
-          <div className="px-4 mt-auto border-t pt-2">
-            <div className="text-xs font-semibold mb-1">Ayuda y soporte</div>
+          <div className="px-4 mt-auto border-t pt-2 space-y-1">
+            <div className="text-xs font-semibold">Ayuda y soporte</div>
             <Link
               href="/help/academia"
-              className="flex items-center py-1 px-2 text-sm hover:bg-gray-100 rounded"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
             >
               📘 Academia Clientum
             </Link>
             <Link
+              href="/help/tutoriales"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              🎥 Tutoriales
+            </Link>
+            <Link
+              href="/help/votar-mejoras"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              👍 Votar mejoras
+            </Link>
+            <Link
+              href="/help/novedades"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              🆕 Novedades
+            </Link>
+            <Link
+              href="/help/soporte"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              🛠️ Soporte
+            </Link>
+            <Link
               href="/help/contacto"
-              className="flex items-center py-1 px-2 text-sm hover:bg-gray-100 rounded"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
             >
               💬 Contáctanos
             </Link>
@@ -314,7 +323,7 @@ export default async function RootLayout({
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 overflow-y-auto p-8 bg-gray-100">
+        <main className="flex-1 p-8 overflow-y-auto bg-gray-100">
           {children}
         </main>
       </body>
