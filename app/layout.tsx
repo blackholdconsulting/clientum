@@ -40,6 +40,9 @@ export default async function RootLayout({
             <Link href="/clientes" className={linkClass("/clientes")}>
               👥 Clientes
             </Link>
+            <Link href="/proveedores" className={linkClass("/proveedores")}>
+              🛒 Proveedores
+            </Link>
 
             {/* Facturas + Histórico */}
             <div>
