@@ -7,7 +7,7 @@ interface Message {
   text: string;
 }
 
-export default function ChatPage() {  // 👈 Export default obligatorio
+export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([
     { from: "bot", text: "¡Hola! ¿En qué puedo ayudarte hoy?" },
   ]);
@@ -16,8 +16,8 @@ export default function ChatPage() {  // 👈 Export default obligatorio
   const handleSend = async () => {
     if (!input.trim()) return;
 
-    const newMessage = { from: "user", text: input };
-    setMessages((prev) => [...prev, newMessage]);
+    const newMessage: Message = { from: "user", text: input }; // ✅ Tipado explícito
+    setMessages((prev: Message[]) => [...prev, newMessage]);   // ✅ Tipado en callback
     const userInput = input;
     setInput("");
 
@@ -39,7 +39,8 @@ export default function ChatPage() {  // 👈 Export default obligatorio
 
       const data = await res.json();
       if (data.content) {
-        setMessages((prev) => [...prev, { from: "bot", text: data.content }]);
+        const botMessage: Message = { from: "bot", text: data.content }; // ✅ Tipado explícito
+        setMessages((prev: Message[]) => [...prev, botMessage]);
       }
     } catch (error) {
       console.error("Error:", error);
