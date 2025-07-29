@@ -38,6 +38,7 @@ export async function POST(req: Request) {
         mes: item.mes,
         gasto: item.gasto,
         presupuesto: item.presupuesto,
+        tipo: item.tipo,
       }))
     )
     .select();
