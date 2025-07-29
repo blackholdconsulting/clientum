@@ -10,8 +10,8 @@ export const metadata = {
 };
 
 async function getActivePath(): Promise<string> {
-  const headersList = await headers();
-  return headersList.get("x-invoke-path") || "/";
+  const h = await headers();
+  return h.get("x-invoke-path") || "/";
 }
 
 export default async function RootLayout({
@@ -50,18 +50,19 @@ export default async function RootLayout({
               👥 Clientes
             </Link>
 
-            {/* Facturas con dropdown */}
+            {/* Facturas dropdown */}
             <div className="group relative">
-              <button
-                className={`w-full flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 focus:outline-none ${
+              <Link
+                href="/facturas"
+                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 ${
                   isActive("/facturas") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
                 🧾 Facturas
-                <span className="text-xs ml-1 transform group-hover:rotate-180 transition-transform">
+                <span className="text-xs ml-1 transform transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </button>
+              </Link>
               <div className="absolute left-full top-0 z-50 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
                 <Link
                   href="/facturas"
@@ -97,18 +98,19 @@ export default async function RootLayout({
               💼 Presupuestos
             </Link>
 
-            {/* Negocio con dropdown */}
+            {/* Negocio dropdown */}
             <div className="group relative">
-              <button
-                className={`w-full flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 focus:outline-none ${
+              <Link
+                href="/negocio"
+                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 ${
                   isActive("/negocio") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
                 🚀 Negocio
-                <span className="text-xs ml-1 transform group-hover:rotate-180 transition-transform">
+                <span className="text-xs ml-1 transform transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </button>
+              </Link>
               <div className="absolute left-full top-0 z-50 ml-2 w-52 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
                 <Link
                   href="/negocio/tareas"
@@ -128,7 +130,26 @@ export default async function RootLayout({
                 >
                   Proyectos
                 </Link>
-                {/* … agrega más items según necesites */}
+                <Link
+                  href="/negocio/plan-futuro"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/negocio/plan-futuro")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  Plan futuro
+                </Link>
+                <Link
+                  href="/negocio/continuar-proyecto"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/negocio/continuar-proyecto")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  Continuar proyecto
+                </Link>
               </div>
             </div>
 
@@ -142,18 +163,19 @@ export default async function RootLayout({
               ⚖️ Impuestos
             </Link>
 
-            {/* Tesorería con dropdown */}
+            {/* Tesorería dropdown */}
             <div className="group relative">
-              <button
-                className={`w-full flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 focus:outline-none ${
+              <Link
+                href="/tesoreria"
+                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 ${
                   isActive("/tesoreria") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
                 🏦 Tesorería
-                <span className="text-xs ml-1 transform group-hover:rotate-180 transition-transform">
+                <span className="text-xs ml-1 transform transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </button>
+              </Link>
               <div className="absolute left-full top-0 z-50 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
                 <Link
                   href="/tesoreria/cuentas"
@@ -166,31 +188,31 @@ export default async function RootLayout({
                   Cuentas
                 </Link>
                 <Link
-                  href="/tesoreria/cashflow"
+                  href="/tesoreria/pagos-cobros"
                   className={`block py-2 px-3 hover:bg-indigo-50 ${
-                    isActive("/tesoreria/cashflow")
+                    isActive("/tesoreria/pagos-cobros")
                       ? "bg-indigo-50 font-medium"
                       : ""
                   }`}
                 >
-                  Cashflow
+                  Pagos y cobros
                 </Link>
-                {/* … */}
               </div>
             </div>
 
-            {/* Contabilidad con dropdown */}
+            {/* Contabilidad dropdown */}
             <div className="group relative">
-              <button
-                className={`w-full flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 focus:outline-none ${
+              <Link
+                href="/contabilidad"
+                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 ${
                   isActive("/contabilidad") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
                 📈 Contabilidad
-                <span className="text-xs ml-1 transform group-hover:rotate-180 transition-transform">
+                <span className="text-xs ml-1 transform transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </button>
+              </Link>
               <div className="absolute left-full top-0 z-50 ml-2 w-56 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
                 <Link
                   href="/contabilidad/cuadro-de-cuentas"
@@ -212,7 +234,6 @@ export default async function RootLayout({
                 >
                   Libro diario
                 </Link>
-                {/* … */}
               </div>
             </div>
 
@@ -226,18 +247,19 @@ export default async function RootLayout({
               💬 Chat IA
             </Link>
 
-            {/* RRHH con dropdown */}
+            {/* RRHH dropdown */}
             <div className="group relative">
-              <button
-                className={`w-full flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 focus:outline-none ${
+              <Link
+                href="/RR.HH"
+                className={`flex justify-between items-center py-2 px-3 rounded hover:bg-indigo-100 ${
                   isActive("/RR.HH") ? "bg-indigo-100 font-semibold" : ""
                 }`}
               >
                 👩‍💼 RRHH
-                <span className="text-xs ml-1 transform group-hover:rotate-180 transition-transform">
+                <span className="text-xs ml-1 transform transition-transform group-hover:rotate-180">
                   ▼
                 </span>
-              </button>
+              </Link>
               <div className="absolute left-full top-0 z-50 ml-2 w-48 bg-white border rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
                 <Link
                   href="/RR.HH/employees"
@@ -249,7 +271,16 @@ export default async function RootLayout({
                 >
                   Empleados
                 </Link>
-                {/* … */}
+                <Link
+                  href="/RR.HH/horarios"
+                  className={`block py-2 px-3 hover:bg-indigo-50 ${
+                    isActive("/RR.HH/horarios")
+                      ? "bg-indigo-50 font-medium"
+                      : ""
+                  }`}
+                >
+                  Horarios
+                </Link>
               </div>
             </div>
           </nav>
@@ -262,30 +293,6 @@ export default async function RootLayout({
               className="flex items-center py-1 px-2 text-sm hover:bg-gray-100 rounded"
             >
               📘 Academia Clientum
-            </Link>
-            <Link
-              href="/help/tutoriales"
-              className="flex items-center py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              🎥 Tutoriales
-            </Link>
-            <Link
-              href="/help/votar-mejoras"
-              className="flex items-center py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              👍 Votar mejoras
-            </Link>
-            <Link
-              href="/help/novedades"
-              className="flex items-center py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              🆕 Novedades
-            </Link>
-            <Link
-              href="/help/soporte"
-              className="flex items-center py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              🛠️ Soporte
             </Link>
             <Link
               href="/help/contacto"
@@ -306,7 +313,7 @@ export default async function RootLayout({
           </div>
         </aside>
 
-        {/* Contenido principal */}
+        {/* Main content */}
         <main className="flex-1 overflow-y-auto p-8 bg-gray-100">
           {children}
         </main>
