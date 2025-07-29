@@ -28,7 +28,7 @@ export default function HistoricoFacturasPage() {
     (async () => {
       const { data, error } = await supabase
         .from("facturas")
-        .select("cliente", { count: "exact" });
+        .select("cliente");
       if (!error && data) {
         const únicos = Array.from(new Set(data.map((f) => f.cliente)));
         setClientes(únicos);
@@ -49,16 +49,14 @@ export default function HistoricoFacturasPage() {
     if (!error && data) setFacturas(data);
   };
 
-  // Efecto inicial y cuando cambian filtros
   useEffect(() => {
     loadFacturas();
   }, [filtroCliente, desde, hasta, minImporte, maxImporte]);
 
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold mb-6">Histórico Facturas</h1>
+      <h1 className="text-3xl font-bold mb-6">Histórico de Facturas</h1>
 
-      {/* Filtros */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div>
           <label className="block text-sm font-medium mb-1">Cliente</label>
@@ -98,7 +96,9 @@ export default function HistoricoFacturasPage() {
               type="number"
               min={0}
               value={minImporte}
-              onChange={(e) => setMinImporte(e.target.value === "" ? "" : Number(e.target.value))}
+              onChange={(e) =>
+                setMinImporte(e.target.value === "" ? "" : Number(e.target.value))
+              }
               className="w-full border rounded px-3 py-2 bg-white"
             />
           </div>
@@ -108,14 +108,15 @@ export default function HistoricoFacturasPage() {
               type="number"
               min={0}
               value={maxImporte}
-              onChange={(e) => setMaxImporte(e.target.value === "" ? "" : Number(e.target.value))}
+              onChange={(e) =>
+                setMaxImporte(e.target.value === "" ? "" : Number(e.target.value))
+              }
               className="w-full border rounded px-3 py-2 bg-white"
             />
           </div>
         </div>
       </div>
 
-      {/* Tabla */}
       <div className="overflow-x-auto bg-white rounded shadow">
         <table className="min-w-full text-left">
           <thead className="bg-gray-100">
