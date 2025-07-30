@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { buildFacturaeXML, InvoiceData } from "@/lib/facturae";
 
 interface Linea {
   descripcion: string;
@@ -62,10 +63,15 @@ export default function NuevaFacturaElectronicaPage() {
       ["Base imponible:", base.toFixed(2) + " €"],
       [`IVA (${vat}%):`, ivaImport.toFixed(2) + " €"],
       ["Total:", total.toFixed(2) + " €"],
+      [],
+      [`Comentarios: ${comentarios}`],
+      [`IBAN: ${iban}`],
     ];
     const csvContent =
       "\uFEFF" +
-      [headers, ...rows, ...summary].map((r) => r.join(",")).join("\n");
+      [headers, ...rows, ...summary]
+        .map((r) => r.join(","))
+        .join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -76,79 +82,78 @@ export default function NuevaFacturaElectronicaPage() {
 
   // PDF
   const exportPDF = async () => {
+    if (!contRef.current) return;
+    const canvas = await html2canvas(contRef.current, { scale: 2, useCORS: true });
+    const imgData = canvas.toDataURL("image/png");
+
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const W = doc.internal.pageSize.getWidth();
-    doc.setFontSize(20);
-    doc.text("FACTURA", W - 80, 40, { align: "right" });
-    doc.setFontSize(10);
-    let y = 60;
-    doc.text(`Fecha de factura: ${new Date().toLocaleDateString()}`, 40, y);
-    y += 14;
-    doc.text(`Número de factura: 2024-0001`, 40, y);
-    y += 14;
-    doc.text(
-      `Fecha de vencimiento: ${new Date(Date.now() + 86400000).toLocaleDateString()}`,
-      40,
-      y
-    );
-    y += 20;
-    doc.line(40, y, W - 40, y);
-    y += 20;
+    doc.addImage(imgData, "PNG", 0, 0, W, (canvas.height * W) / canvas.width);
 
-    // Emisor/Receptor
-    doc.setFontSize(12);
-    doc.text("Emisor:", 40, y);
-    doc.text("Receptor:", W / 2 + 20, y);
-    doc.setFontSize(10);
-    y += 14;
-    doc.text(emisor.nombre, 40, y);
-    doc.text(receptor.nombre, W / 2 + 20, y);
-    y += 14;
-    doc.text(`Dirección: ${emisor.direccion}`, 40, y);
-    doc.text(`Dirección: ${receptor.direccion}`, W / 2 + 20, y);
-    y += 14;
-    doc.text(`CP ${emisor.cp} · ${emisor.ciudad}`, 40, y);
-    doc.text(`CP ${receptor.cp} · ${receptor.ciudad}`, W / 2 + 20, y);
-    y += 14;
-    doc.text(`NIF: ${emisor.nif}`, 40, y);
-    doc.text(`NIF: ${receptor.nif}`, W / 2 + 20, y);
-    y += 14;
-    doc.text(`Tel: ${emisor.telefono}`, 40, y);
-    doc.text(`Tel: ${receptor.telefono}`, W / 2 + 20, y);
-    y += 14;
-    doc.text(`Email: ${emisor.email}`, 40, y);
-    doc.text(`Email: ${receptor.email}`, W / 2 + 20, y);
-
-    y += 30;
+    const startY = (canvas.height * W) / canvas.width + 20;
     autoTable(doc, {
-      startY: y,
+      startY,
       head: [["Descripción", "Unidades", "Precio Unit. (€)", "Precio (€)"]],
       body: lineas.map((l) => [
         l.descripcion,
-        l.unidades,
+        l.unidades.toString(),
         l.precioUnitario.toFixed(2),
         (l.unidades * l.precioUnitario).toFixed(2),
       ]),
-      styles: { halign: "center", fontSize: 10 },
+      theme: "grid",
       headStyles: { fillColor: [230, 230, 230] },
       margin: { left: 40, right: 40 },
     });
 
     const finalY = (doc as any).lastAutoTable.finalY + 20;
-    doc.text(`Base imponible:`, W - 200, finalY);
-    doc.text(`${base.toFixed(2)} €`, W - 80, finalY, { align: "right" });
-    doc.text(`IVA (${vat}%):`, W - 200, finalY + 14);
-    doc.text(`${ivaImport.toFixed(2)} €`, W - 80, finalY + 14, { align: "right" });
-    doc.setFontSize(14);
-    doc.text(`Total:`, W - 200, finalY + 30);
-    doc.text(`${total.toFixed(2)} €`, W - 80, finalY + 30, { align: "right" });
-
-    let y2 = finalY + 60;
     doc.setFontSize(10);
-    doc.text(`Comentarios: ${comentarios}`, 40, y2);
-    doc.text(`IBAN: ${iban}`, 40, y2 + 14);
+    doc.text(`Base imponible: ${base.toFixed(2)} €`, W - 150, finalY);
+    doc.text(`IVA (${vat}%): ${ivaImport.toFixed(2)} €`, W - 150, finalY + 15);
+    doc.setFontSize(14).text(`Total: ${total.toFixed(2)} €`, W - 150, finalY + 35);
+
+    doc.setFontSize(10).text(`Comentarios: ${comentarios}`, 40, finalY + 60);
+    doc.text(`IBAN: ${iban}`, 40, finalY + 75);
 
     doc.save("factura-electronica.pdf");
+  };
+
+  // Facturae XML
+  const generarFacturae = () => {
+    const data: InvoiceData = {
+      issuerName: emisor.nombre,
+      issuerNIF: emisor.nif,
+      issuerAddress: emisor.direccion,
+      issuerPostalCode: emisor.cp,
+      issuerCity: emisor.ciudad,
+      issuerPhone: emisor.telefono,
+      issuerEmail: emisor.email,
+      receiverName: receptor.nombre,
+      receiverNIF: receptor.nif,
+      receiverAddress: receptor.direccion,
+      receiverPostalCode: receptor.cp,
+      receiverCity: receptor.ciudad,
+      receiverPhone: receptor.telefono,
+      receiverEmail: receptor.email,
+      invoiceDate: new Date().toISOString().split("T")[0],
+      invoiceNumber: "2024-0001",
+      dueDate: new Date(Date.now() + 86400000).toISOString().split("T")[0],
+      lines: lineas.map((l) => ({
+        description: l.descripcion,
+        quantity: l.unidades,
+        unitPrice: l.precioUnitario,
+      })),
+      vatRate: vat,
+      paymentComments: comentarios,
+      paymentIBAN: iban,
+    };
+
+    const xml = buildFacturaeXML(data);
+    const blob = new Blob([xml], { type: "application/xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `facturae-${data.invoiceNumber}.xml`;
+    a.click();
   };
 
   return (
@@ -159,7 +164,7 @@ export default function NuevaFacturaElectronicaPage() {
       >
         <h1 className="text-2xl font-bold">Nueva Factura Electrónica</h1>
 
-        {/* Emisor / Receptor */}
+        {/* EMISOR / RECEPTOR */}
         <div className="grid grid-cols-2 gap-6">
           {/* EMISOR */}
           <div className="space-y-2">
@@ -172,9 +177,7 @@ export default function NuevaFacturaElectronicaPage() {
             <label>Dirección</label>
             <input
               value={emisor.direccion}
-              onChange={(e) =>
-                setEmisor({ ...emisor, direccion: e.target.value })
-              }
+              onChange={(e) => setEmisor({ ...emisor, direccion: e.target.value })}
               className="w-full border rounded px-3 py-2"
             />
             <div className="flex gap-2">
@@ -187,9 +190,7 @@ export default function NuevaFacturaElectronicaPage() {
               <input
                 placeholder="Ciudad"
                 value={emisor.ciudad}
-                onChange={(e) =>
-                  setEmisor({ ...emisor, ciudad: e.target.value })
-                }
+                onChange={(e) => setEmisor({ ...emisor, ciudad: e.target.value })}
                 className="w-1/2 border rounded px-3 py-2"
               />
             </div>
@@ -202,9 +203,7 @@ export default function NuevaFacturaElectronicaPage() {
             <label>Teléfono</label>
             <input
               value={emisor.telefono}
-              onChange={(e) =>
-                setEmisor({ ...emisor, telefono: e.target.value })
-              }
+              onChange={(e) => setEmisor({ ...emisor, telefono: e.target.value })}
               className="w-full border rounded px-3 py-2"
             />
             <label>Email</label>
@@ -221,34 +220,26 @@ export default function NuevaFacturaElectronicaPage() {
             <label>Nombre Receptor</label>
             <input
               value={receptor.nombre}
-              onChange={(e) =>
-                setReceptor({ ...receptor, nombre: e.target.value })
-              }
+              onChange={(e) => setReceptor({ ...receptor, nombre: e.target.value })}
               className="w-full border rounded px-3 py-2"
             />
             <label>Dirección</label>
             <input
               value={receptor.direccion}
-              onChange={(e) =>
-                setReceptor({ ...receptor, direccion: e.target.value })
-              }
+              onChange={(e) => setReceptor({ ...receptor, direccion: e.target.value })}
               className="w-full border rounded px-3 py-2"
             />
             <div className="flex gap-2">
               <input
                 placeholder="CP"
                 value={receptor.cp}
-                onChange={(e) =>
-                  setReceptor({ ...receptor, cp: e.target.value })
-                }
+                onChange={(e) => setReceptor({ ...receptor, cp: e.target.value })}
                 className="w-1/2 border rounded px-3 py-2"
               />
               <input
                 placeholder="Ciudad"
                 value={receptor.ciudad}
-                onChange={(e) =>
-                  setReceptor({ ...receptor, ciudad: e.target.value })
-                }
+                onChange={(e) => setReceptor({ ...receptor, ciudad: e.target.value })}
                 className="w-1/2 border rounded px-3 py-2"
               />
             </div>
@@ -261,18 +252,14 @@ export default function NuevaFacturaElectronicaPage() {
             <label>Teléfono</label>
             <input
               value={receptor.telefono}
-              onChange={(e) =>
-                setReceptor({ ...receptor, telefono: e.target.value })
-              }
+              onChange={(e) => setReceptor({ ...receptor, telefono: e.target.value })}
               className="w-full border rounded px-3 py-2"
             />
             <label>Email</label>
             <input
               type="email"
               value={receptor.email}
-              onChange={(e) =>
-                setReceptor({ ...receptor, email: e.target.value })
-              }
+              onChange={(e) => setReceptor({ ...receptor, email: e.target.value })}
               className="w-full border rounded px-3 py-2"
             />
           </div>
@@ -383,6 +370,12 @@ export default function NuevaFacturaElectronicaPage() {
           className="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
         >
           Exportar PDF
+        </button>
+        <button
+          onClick={generarFacturae}
+          className="px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+        >
+          Generar Facturae
         </button>
       </div>
     </div>
