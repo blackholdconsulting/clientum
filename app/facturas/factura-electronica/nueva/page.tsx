@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { sendFacturaToAEAT } from "@/lib/sendToAEAT";
 
 export default function NuevaFacturaElectronica() {
   const [emisor, setEmisor] = useState({ nombre: "", nif: "" });
@@ -16,22 +15,32 @@ export default function NuevaFacturaElectronica() {
       setEstado("Enviando...");
       const total = base + (base * iva) / 100;
 
-      await sendFacturaToAEAT({
-        issuerName: emisor.nombre,
-        issuerNIF: emisor.nif,
-        receiverName: receptor.nombre,
-        receiverNIF: receptor.nif,
-        invoiceNumber: "FAC-001",
-        invoiceDate: new Date().toISOString().slice(0, 10),
-        concept: concepto,
-        baseAmount: base,
-        vat: iva,
-        totalAmount: total,
+      const res = await fetch("/api/factura-electronica", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          issuerName: emisor.nombre,
+          issuerNIF: emisor.nif,
+          receiverName: receptor.nombre,
+          receiverNIF: receptor.nif,
+          invoiceNumber: "FAC-001",
+          invoiceDate: new Date().toISOString().slice(0, 10),
+          concept: concepto,
+          baseAmount: base,
+          vat: iva,
+          totalAmount: total,
+        }),
       });
 
-      setEstado("Factura enviada correctamente ✅");
-    } catch (error) {
-      console.error(error);
+      const json = await res.json();
+
+      if (json.success) {
+        setEstado("Factura enviada correctamente ✅");
+      } else {
+        throw new Error(json.error || "Error desconocido");
+      }
+    } catch (error: any) {
+      console.error("Error:", error.message);
       setEstado("Error al enviar la factura ❌");
     }
   };
@@ -87,11 +96,15 @@ export default function NuevaFacturaElectronica() {
         />
         <button
           onClick={enviar}
-          className="bg-indigo-600 text-white px-4 py-2 rounded"
+          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
         >
           Enviar a AEAT
         </button>
-        {estado && <p className="mt-4">{estado}</p>}
+        {estado && (
+          <p className={`mt-4 ${estado.includes("Error") ? "text-red-500" : "text-green-600"}`}>
+            {estado}
+          </p>
+        )}
       </div>
     </div>
   );
