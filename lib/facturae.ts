@@ -9,10 +9,14 @@ export interface InvoiceParty {
   ciudad?: string;
 }
 
+// ✅ Flexibilidad en nombres de campos
 export interface InvoiceLine {
-  descripcion: string;
-  cantidad: number;
-  precioUnitario: number;
+  descripcion?: string;
+  description?: string;
+  cantidad?: number;
+  qty?: number;
+  precioUnitario?: number;
+  unitPrice?: number;
 }
 
 export interface InvoiceData {
@@ -33,12 +37,12 @@ export interface InvoiceData {
   fecha?: string;
   vencimiento?: string;
 
-  // Nuevos campos para compatibilidad
+  // Nuevos campos
   emisor?: InvoiceParty;
   receptor?: InvoiceParty;
-  lineas?: InvoiceLine[];   // ✅ Nuevo campo
-  iva?: number;             // ✅ Nuevo campo
-  irpf?: number;            // ✅ Nuevo campo
+  lineas?: InvoiceLine[];
+  iva?: number;
+  irpf?: number;
 }
 
 export function generateFacturaeXML(data: InvoiceData): string {
@@ -49,9 +53,13 @@ export function generateFacturaeXML(data: InvoiceData): string {
   const receiverName = data.receptor?.nombre || data.receiverName;
   const receiverNIF = data.receptor?.nif || data.receptor?.cif || data.receiverNIF;
 
-  // Calcular totales a partir de las líneas
+  // Calcular subtotal con flexibilidad en nombres
   const subtotal = data.lineas
-    ? data.lineas.reduce((acc, l) => acc + l.precioUnitario * l.cantidad, 0)
+    ? data.lineas.reduce((acc, l) => {
+        const qty = l.cantidad ?? l.qty ?? 1;
+        const price = l.precioUnitario ?? l.unitPrice ?? 0;
+        return acc + price * qty;
+      }, 0)
     : data.baseAmount;
 
   const iva = data.iva ?? data.vat;
@@ -94,12 +102,16 @@ export function generateFacturaeXML(data: InvoiceData): string {
           InvoiceIssueData: { IssueDate: data.invoiceDate || data.fecha },
           Items: {
             InvoiceLine: data.lineas
-              ? data.lineas.map((l) => ({
-                  ItemDescription: l.descripcion,
-                  Quantity: l.cantidad,
-                  UnitPriceWithoutTax: l.precioUnitario,
-                  TotalCost: l.precioUnitario * l.cantidad,
-                }))
+              ? data.lineas.map((l) => {
+                  const qty = l.cantidad ?? l.qty ?? 1;
+                  const price = l.precioUnitario ?? l.unitPrice ?? 0;
+                  return {
+                    ItemDescription: l.descripcion || l.description || "",
+                    Quantity: qty,
+                    UnitPriceWithoutTax: price,
+                    TotalCost: price * qty,
+                  };
+                })
               : {
                   ItemDescription: data.concept,
                   Quantity: 1,
