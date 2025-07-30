@@ -21,6 +21,7 @@ export default function NuevaFacturaElectronicaPage() {
     ciudad: "",
     nif: "",
     email: "",
+    telefono: "",
   });
   const [receptor, setReceptor] = useState({
     nombre: "",
@@ -29,6 +30,7 @@ export default function NuevaFacturaElectronicaPage() {
     ciudad: "",
     nif: "",
     email: "",
+    telefono: "",
   });
   const [lineas, setLineas] = useState<Linea[]>([
     { descripcion: "", unidades: 1, precioUnitario: 0 },
@@ -47,14 +49,9 @@ export default function NuevaFacturaElectronicaPage() {
   const removeLinea = (i: number) =>
     setLineas(lineas.filter((_, idx) => idx !== i));
 
-  // Exportar CSV (opcional)
+  // CSV
   const exportCSV = () => {
-    const headers = [
-      "Descripción",
-      "Unidades",
-      "Precio Unit. (€)",
-      "Precio (€)",
-    ];
+    const headers = ["Descripción", "Unidades", "Precio Unit. (€)", "Precio (€)"];
     const rows = lineas.map((l) => [
       l.descripcion,
       l.unidades.toString(),
@@ -77,146 +74,138 @@ export default function NuevaFacturaElectronicaPage() {
     a.click();
   };
 
-  // Exportar PDF con jsPDF + autoTable
+  // PDF
   const exportPDF = async () => {
     const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const pageWidth = doc.internal.pageSize.getWidth();
-
-    // Título
+    const W = doc.internal.pageSize.getWidth();
     doc.setFontSize(20);
-    doc.text("FACTURA", pageWidth - 80, 40, { align: "right" });
-
+    doc.text("FACTURA", W - 80, 40, { align: "right" });
     doc.setFontSize(10);
-    const lineHeight = 14;
     let y = 60;
-
-    // Fechas (fijas o configurables si lo deseas)
     doc.text(`Fecha de factura: ${new Date().toLocaleDateString()}`, 40, y);
-    y += lineHeight;
+    y += 14;
     doc.text(`Número de factura: 2024-0001`, 40, y);
-    y += lineHeight;
-    doc.text(`Fecha de vencimiento: ${new Date(Date.now() + 86400000).toLocaleDateString()}`, 40, y);
+    y += 14;
+    doc.text(
+      `Fecha de vencimiento: ${new Date(Date.now() + 86400000).toLocaleDateString()}`,
+      40,
+      y
+    );
+    y += 20;
+    doc.line(40, y, W - 40, y);
+    y += 20;
 
-    // Línea horizontal
-    doc.setLineWidth(0.5);
-    doc.line(40, y + 6, pageWidth - 40, y + 6);
-
-    // Emisor / Receptor
-    y += 30;
+    // Emisor/Receptor
     doc.setFontSize(12);
     doc.text("Emisor:", 40, y);
-    doc.text("Receptor:", pageWidth / 2 + 20, y);
+    doc.text("Receptor:", W / 2 + 20, y);
     doc.setFontSize(10);
-    y += lineHeight;
+    y += 14;
     doc.text(emisor.nombre, 40, y);
-    doc.text(receptor.nombre, pageWidth / 2 + 20, y);
-    y += lineHeight;
+    doc.text(receptor.nombre, W / 2 + 20, y);
+    y += 14;
     doc.text(`Dirección: ${emisor.direccion}`, 40, y);
-    doc.text(`Dirección: ${receptor.direccion}`, pageWidth / 2 + 20, y);
-    y += lineHeight;
+    doc.text(`Dirección: ${receptor.direccion}`, W / 2 + 20, y);
+    y += 14;
     doc.text(`CP ${emisor.cp} · ${emisor.ciudad}`, 40, y);
-    doc.text(`CP ${receptor.cp} · ${receptor.ciudad}`, pageWidth / 2 + 20, y);
-    y += lineHeight;
+    doc.text(`CP ${receptor.cp} · ${receptor.ciudad}`, W / 2 + 20, y);
+    y += 14;
     doc.text(`NIF: ${emisor.nif}`, 40, y);
-    doc.text(`NIF: ${receptor.nif}`, pageWidth / 2 + 20, y);
-    y += lineHeight;
+    doc.text(`NIF: ${receptor.nif}`, W / 2 + 20, y);
+    y += 14;
+    doc.text(`Tel: ${emisor.telefono}`, 40, y);
+    doc.text(`Tel: ${receptor.telefono}`, W / 2 + 20, y);
+    y += 14;
     doc.text(`Email: ${emisor.email}`, 40, y);
-    doc.text(`Email: ${receptor.email}`, pageWidth / 2 + 20, y);
+    doc.text(`Email: ${receptor.email}`, W / 2 + 20, y);
 
-    // Tabla de líneas
     y += 30;
-    const tableColumns = [
-      { header: "Descripción", dataKey: "descripcion" },
-      { header: "Unidades", dataKey: "unidades" },
-      { header: "Precio Unit. (€)", dataKey: "precioUnitario" },
-      { header: "Precio (€)", dataKey: "precio" },
-    ];
-    const tableData = lineas.map((l) => ({
-      descripcion: l.descripcion,
-      unidades: l.unidades,
-      precioUnitario: l.precioUnitario.toFixed(2),
-      precio: (l.unidades * l.precioUnitario).toFixed(2),
-    }));
-
     autoTable(doc, {
       startY: y,
-      head: [tableColumns.map((c) => c.header)],
-      body: tableData.map((row) => Object.values(row)),
+      head: [["Descripción", "Unidades", "Precio Unit. (€)", "Precio (€)"]],
+      body: lineas.map((l) => [
+        l.descripcion,
+        l.unidades,
+        l.precioUnitario.toFixed(2),
+        (l.unidades * l.precioUnitario).toFixed(2),
+      ]),
       styles: { halign: "center", fontSize: 10 },
       headStyles: { fillColor: [230, 230, 230] },
       margin: { left: 40, right: 40 },
     });
 
-    // Totales
-    y = (doc as any).lastAutoTable.finalY + 20;
-    doc.text(`Base imponible:`, pageWidth - 200, y);
-    doc.text(`${base.toFixed(2)} €`, pageWidth - 80, y, { align: "right" });
-    y += lineHeight;
-    doc.text(`IVA (${vat}%):`, pageWidth - 200, y);
-    doc.text(`${ivaImport.toFixed(2)} €`, pageWidth - 80, y, { align: "right" });
-    y += lineHeight;
+    const finalY = (doc as any).lastAutoTable.finalY + 20;
+    doc.text(`Base imponible:`, W - 200, finalY);
+    doc.text(`${base.toFixed(2)} €`, W - 80, finalY, { align: "right" });
+    doc.text(`IVA (${vat}%):`, W - 200, finalY + 14);
+    doc.text(`${ivaImport.toFixed(2)} €`, W - 80, finalY + 14, { align: "right" });
     doc.setFontSize(14);
-    doc.text(`Total:`, pageWidth - 200, y);
-    doc.text(`${total.toFixed(2)} €`, pageWidth - 80, y, { align: "right" });
+    doc.text(`Total:`, W - 200, finalY + 30);
+    doc.text(`${total.toFixed(2)} €`, W - 80, finalY + 30, { align: "right" });
 
-    // Comentarios + IBAN
-    y += 30;
+    let y2 = finalY + 60;
     doc.setFontSize(10);
-    doc.text(`Comentarios: ${comentarios}`, 40, y);
-    y += lineHeight;
-    doc.text(`IBAN: ${iban}`, 40, y);
+    doc.text(`Comentarios: ${comentarios}`, 40, y2);
+    doc.text(`IBAN: ${iban}`, 40, y2 + 14);
 
     doc.save("factura-electronica.pdf");
   };
 
   return (
     <div className="py-8 px-4">
-      <div ref={contRef} className="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-lg space-y-6">
+      <div
+        ref={contRef}
+        className="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-lg space-y-6"
+      >
         <h1 className="text-2xl font-bold">Nueva Factura Electrónica</h1>
 
         {/* Emisor / Receptor */}
-        <div className="grid grid-cols-2 gap-4">
-          {/** EMISOR */}
+        <div className="grid grid-cols-2 gap-6">
+          {/* EMISOR */}
           <div className="space-y-2">
             <label>Nombre Emisor</label>
             <input
-              type="text"
               value={emisor.nombre}
               onChange={(e) => setEmisor({ ...emisor, nombre: e.target.value })}
               className="w-full border rounded px-3 py-2"
-              placeholder="Mi empresa S.L."
             />
             <label>Dirección</label>
             <input
-              type="text"
               value={emisor.direccion}
-              onChange={(e) => setEmisor({ ...emisor, direccion: e.target.value })}
+              onChange={(e) =>
+                setEmisor({ ...emisor, direccion: e.target.value })
+              }
               className="w-full border rounded px-3 py-2"
-              placeholder="Calle Falsa 123"
             />
             <div className="flex gap-2">
               <input
-                type="text"
+                placeholder="CP"
                 value={emisor.cp}
                 onChange={(e) => setEmisor({ ...emisor, cp: e.target.value })}
                 className="w-1/2 border rounded px-3 py-2"
-                placeholder="CP"
               />
               <input
-                type="text"
-                value={emisor.ciudad}
-                onChange={(e) => setEmisor({ ...emisor, ciudad: e.target.value })}
-                className="w-1/2 border rounded px-3 py-2"
                 placeholder="Ciudad"
+                value={emisor.ciudad}
+                onChange={(e) =>
+                  setEmisor({ ...emisor, ciudad: e.target.value })
+                }
+                className="w-1/2 border rounded px-3 py-2"
               />
             </div>
             <label>NIF</label>
             <input
-              type="text"
               value={emisor.nif}
               onChange={(e) => setEmisor({ ...emisor, nif: e.target.value })}
               className="w-full border rounded px-3 py-2"
-              placeholder="B12345678"
+            />
+            <label>Teléfono</label>
+            <input
+              value={emisor.telefono}
+              onChange={(e) =>
+                setEmisor({ ...emisor, telefono: e.target.value })
+              }
+              className="w-full border rounded px-3 py-2"
             />
             <label>Email</label>
             <input
@@ -224,59 +213,67 @@ export default function NuevaFacturaElectronicaPage() {
               value={emisor.email}
               onChange={(e) => setEmisor({ ...emisor, email: e.target.value })}
               className="w-full border rounded px-3 py-2"
-              placeholder="info@empresa.es"
             />
           </div>
 
-          {/** RECEPTOR */}
+          {/* RECEPTOR */}
           <div className="space-y-2">
             <label>Nombre Receptor</label>
             <input
-              type="text"
               value={receptor.nombre}
-              onChange={(e) => setReceptor({ ...receptor, nombre: e.target.value })}
+              onChange={(e) =>
+                setReceptor({ ...receptor, nombre: e.target.value })
+              }
               className="w-full border rounded px-3 py-2"
-              placeholder="Cliente S.A."
             />
             <label>Dirección</label>
             <input
-              type="text"
               value={receptor.direccion}
-              onChange={(e) => setReceptor({ ...receptor, direccion: e.target.value })}
+              onChange={(e) =>
+                setReceptor({ ...receptor, direccion: e.target.value })
+              }
               className="w-full border rounded px-3 py-2"
-              placeholder="Av. Siempre Viva 742"
             />
             <div className="flex gap-2">
               <input
-                type="text"
-                value={receptor.cp}
-                onChange={(e) => setReceptor({ ...receptor, cp: e.target.value })}
-                className="w-1/2 border rounded px-3 py-2"
                 placeholder="CP"
+                value={receptor.cp}
+                onChange={(e) =>
+                  setReceptor({ ...receptor, cp: e.target.value })
+                }
+                className="w-1/2 border rounded px-3 py-2"
               />
               <input
-                type="text"
-                value={receptor.ciudad}
-                onChange={(e) => setReceptor({ ...receptor, ciudad: e.target.value })}
-                className="w-1/2 border rounded px-3 py-2"
                 placeholder="Ciudad"
+                value={receptor.ciudad}
+                onChange={(e) =>
+                  setReceptor({ ...receptor, ciudad: e.target.value })
+                }
+                className="w-1/2 border rounded px-3 py-2"
               />
             </div>
             <label>NIF</label>
             <input
-              type="text"
               value={receptor.nif}
               onChange={(e) => setReceptor({ ...receptor, nif: e.target.value })}
               className="w-full border rounded px-3 py-2"
-              placeholder="A87654321"
+            />
+            <label>Teléfono</label>
+            <input
+              value={receptor.telefono}
+              onChange={(e) =>
+                setReceptor({ ...receptor, telefono: e.target.value })
+              }
+              className="w-full border rounded px-3 py-2"
             />
             <label>Email</label>
             <input
               type="email"
               value={receptor.email}
-              onChange={(e) => setReceptor({ ...receptor, email: e.target.value })}
+              onChange={(e) =>
+                setReceptor({ ...receptor, email: e.target.value })
+              }
               className="w-full border rounded px-3 py-2"
-              placeholder="contacto@cliente.es"
             />
           </div>
         </div>
@@ -287,35 +284,34 @@ export default function NuevaFacturaElectronicaPage() {
           {lineas.map((l, i) => (
             <div key={i} className="flex gap-2 items-center mb-2">
               <input
-                type="text"
                 placeholder="Descripción"
                 value={l.descripcion}
                 onChange={(e) => {
-                  const nuevos = [...lineas];
-                  nuevos[i].descripcion = e.target.value;
-                  setLineas(nuevos);
+                  const arr = [...lineas];
+                  arr[i].descripcion = e.target.value;
+                  setLineas(arr);
                 }}
                 className="flex-1 border rounded px-3 py-2"
               />
               <input
                 type="number"
-                className="w-20 border rounded px-2 py-2 text-center"
                 value={l.unidades}
                 onChange={(e) => {
-                  const nuevos = [...lineas];
-                  nuevos[i].unidades = parseInt(e.target.value) || 0;
-                  setLineas(nuevos);
+                  const arr = [...lineas];
+                  arr[i].unidades = +e.target.value;
+                  setLineas(arr);
                 }}
+                className="w-20 border rounded px-2 py-2 text-center"
               />
               <input
                 type="number"
-                className="w-24 border rounded px-2 py-2 text-center"
                 value={l.precioUnitario}
                 onChange={(e) => {
-                  const nuevos = [...lineas];
-                  nuevos[i].precioUnitario = parseFloat(e.target.value) || 0;
-                  setLineas(nuevos);
+                  const arr = [...lineas];
+                  arr[i].precioUnitario = +e.target.value;
+                  setLineas(arr);
                 }}
+                className="w-24 border rounded px-2 py-2 text-center"
               />
               <button
                 onClick={() => removeLinea(i)}
@@ -335,13 +331,13 @@ export default function NuevaFacturaElectronicaPage() {
           <label>IVA (%)</label>
           <input
             type="number"
-            className="w-24 border rounded px-2 py-2 ml-2"
             value={vat}
-            onChange={(e) => setVat(parseFloat(e.target.value) || 0)}
+            onChange={(e) => setVat(+e.target.value)}
+            className="w-24 border rounded px-2 py-2 ml-2"
           />
         </div>
 
-        {/* Totales + Comentarios/IBAN */}
+        {/* Totales */}
         <div className="bg-gray-50 p-4 rounded mt-6">
           <div className="flex justify-end space-x-8">
             <div>Base imponible:</div>
@@ -357,27 +353,24 @@ export default function NuevaFacturaElectronicaPage() {
           </div>
         </div>
 
+        {/* Comentarios e IBAN */}
         <div className="space-y-2">
           <label>Comentarios</label>
           <input
-            type="text"
             value={comentarios}
             onChange={(e) => setComentarios(e.target.value)}
             className="w-full border rounded px-3 py-2"
-            placeholder="Pago por transferencia"
           />
           <label>IBAN</label>
           <input
-            type="text"
             value={iban}
             onChange={(e) => setIban(e.target.value)}
             className="w-full border rounded px-3 py-2"
-            placeholder="ESXXXXXXXXXXXXXXX9"
           />
         </div>
       </div>
 
-      {/* Botones de acción */}
+      {/* Botones */}
       <div className="flex justify-center gap-4 mt-6">
         <button
           onClick={exportCSV}
