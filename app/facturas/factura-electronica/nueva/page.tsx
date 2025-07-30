@@ -1,13 +1,19 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
-import { sendFacturaToAEAT } from "@/lib/sendToAEAT";
+
+type FormState = {
+  issuerName: string;
+  issuerNIF: string;
+  receiverName: string;
+  receiverNIF: string;
+  concept: string;
+  amount: string;
+  vat: string;
+};
 
 export default function NuevaFacturaElectronicaPage() {
-  const router = useRouter();
-
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FormState>({
     issuerName: "",
     issuerNIF: "",
     receiverName: "",
@@ -31,44 +37,28 @@ export default function NuevaFacturaElectronicaPage() {
     setMessage(null);
 
     try {
-      // aquí tendrías que obtener certBuffer y keyBuffer según usuario
-      const certBuffer = await fetch("/api/certs/certificate.pem").then(r =>
-        r.arrayBuffer()
-      );
-      const keyBuffer = await fetch("/api/certs/private-key.pem").then(r =>
-        r.arrayBuffer()
-      );
-
-      const xml = `
-        <Invoice>
-          <Issuer>
-            <Name>${form.issuerName}</Name>
-            <NIF>${form.issuerNIF}</NIF>
-          </Issuer>
-          <Receiver>
-            <Name>${form.receiverName}</Name>
-            <NIF>${form.receiverNIF}</NIF>
-          </Receiver>
-          <Items>
-            <Item>
-              <Concept>${form.concept}</Concept>
-              <Amount>${form.amount}</Amount>
-            </Item>
-          </Items>
-          <VAT>${form.vat}</VAT>
-        </Invoice>
-      `;
-
-      const respuesta = await sendFacturaToAEAT(
-        xml,
-        Buffer.from(certBuffer),
-        Buffer.from(keyBuffer)
-      );
-
-      setMessage("✅ Envío OK: " + respuesta);
+      const res = await fetch("/api/factura-electronica", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const { success, error } = await res.json();
+      if (success) {
+        setMessage("✅ Factura enviada correctamente.");
+        setForm({
+          issuerName: "",
+          issuerNIF: "",
+          receiverName: "",
+          receiverNIF: "",
+          concept: "",
+          amount: "",
+          vat: "21",
+        });
+      } else {
+        throw new Error(error || "Error desconocido");
+      }
     } catch (err: any) {
-      console.error(err);
-      setMessage("❌ Error: " + err.message);
+      setMessage("❌ " + err.message);
     } finally {
       setLoading(false);
     }
@@ -82,95 +72,81 @@ export default function NuevaFacturaElectronicaPage() {
 
       <form
         onSubmit={handleSubmit}
-        className="bg-white shadow-md rounded-lg p-6 grid grid-cols-1 gap-6"
+        className="bg-white shadow rounded-lg p-6 grid gap-6"
       >
-        {/* Emisor */}
-        <section>
-          <h2 className="text-xl font-medium mb-4">Emisor</h2>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <input
-              type="text"
-              name="issuerName"
-              value={form.issuerName}
-              onChange={handleChange}
-              placeholder="Nombre Emisor"
-              className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-              required
-            />
-            <input
-              type="text"
-              name="issuerNIF"
-              value={form.issuerNIF}
-              onChange={handleChange}
-              placeholder="NIF Emisor"
-              className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-              required
-            />
-          </div>
-        </section>
+        {/* EMISOR */}
+        <div className="grid sm:grid-cols-2 gap-4">
+          <input
+            name="issuerName"
+            value={form.issuerName}
+            onChange={handleChange}
+            placeholder="Nombre Emisor"
+            className="w-full border rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500"
+            required
+          />
+          <input
+            name="issuerNIF"
+            value={form.issuerNIF}
+            onChange={handleChange}
+            placeholder="NIF Emisor"
+            className="w-full border rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500"
+            required
+          />
+        </div>
 
-        {/* Receptor */}
-        <section>
-          <h2 className="text-xl font-medium mb-4">Receptor</h2>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <input
-              type="text"
-              name="receiverName"
-              value={form.receiverName}
-              onChange={handleChange}
-              placeholder="Nombre Receptor"
-              className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-              required
-            />
-            <input
-              type="text"
-              name="receiverNIF"
-              value={form.receiverNIF}
-              onChange={handleChange}
-              placeholder="NIF Receptor"
-              className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-              required
-            />
-          </div>
-        </section>
+        {/* RECEPTOR */}
+        <div className="grid sm:grid-cols-2 gap-4">
+          <input
+            name="receiverName"
+            value={form.receiverName}
+            onChange={handleChange}
+            placeholder="Nombre Receptor"
+            className="w-full border rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500"
+            required
+          />
+          <input
+            name="receiverNIF"
+            value={form.receiverNIF}
+            onChange={handleChange}
+            placeholder="NIF Receptor"
+            className="w-full border rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500"
+            required
+          />
+        </div>
 
-        {/* Concepto y monto */}
-        <section>
-          <h2 className="text-xl font-medium mb-4">Detalles</h2>
-          <div className="grid sm:grid-cols-3 gap-4">
-            <input
-              type="text"
-              name="concept"
-              value={form.concept}
-              onChange={handleChange}
-              placeholder="Concepto"
-              className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-              required
-            />
-            <input
-              type="number"
-              step="0.01"
-              name="amount"
-              value={form.amount}
-              onChange={handleChange}
-              placeholder="Importe (€)"
-              className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-              required
-            />
-            <input
-              type="number"
-              step="0.01"
-              name="vat"
-              value={form.vat}
-              onChange={handleChange}
-              placeholder="IVA (%)"
-              className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-              required
-            />
-          </div>
-        </section>
+        {/* DETALLES */}
+        <div className="grid sm:grid-cols-3 gap-4">
+          <input
+            name="concept"
+            value={form.concept}
+            onChange={handleChange}
+            placeholder="Concepto"
+            className="w-full border rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500"
+            required
+          />
+          <input
+            name="amount"
+            type="number"
+            step="0.01"
+            value={form.amount}
+            onChange={handleChange}
+            placeholder="Importe (€)"
+            className="w-full border rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500"
+            required
+          />
+          <input
+            name="vat"
+            type="number"
+            step="0.01"
+            value={form.vat}
+            onChange={handleChange}
+            placeholder="IVA (%)"
+            className="w-full border rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500"
+            required
+          />
+        </div>
 
-        {/* Botón de envío */}
+        {/* BOTÓN */}
         <button
           type="submit"
           disabled={loading}
@@ -179,7 +155,7 @@ export default function NuevaFacturaElectronicaPage() {
           {loading ? "Enviando..." : "Enviar a AEAT"}
         </button>
 
-        {/* Mensaje resultado */}
+        {/* MENSAJE */}
         {message && (
           <p
             className={`mt-4 text-sm ${
