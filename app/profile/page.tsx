@@ -1,4 +1,3 @@
-// app/profile/page.tsx
 "use client";
 
 import { useState, ChangeEvent } from "react";
@@ -16,6 +15,8 @@ export default function ProfilePage() {
     idioma: "Español",
   });
 
+  const [loading, setLoading] = useState(false);
+
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
@@ -31,7 +32,23 @@ export default function ProfilePage() {
 
   const handleSave = () => {
     console.log("Guardando perfil:", form, photoFile);
-    // aquí tu lógica de guardado…
+  };
+
+  const handleUploadCert = async (e: React.FormEvent<HTMLFormElement>, type: string) => {
+    e.preventDefault();
+    const fileInput = (e.currentTarget.elements.namedItem("file") as HTMLInputElement);
+    if (!fileInput.files?.length) return;
+
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+    formData.append("type", type);
+
+    setLoading(true);
+    const res = await fetch("/api/certs/upload", { method: "POST", body: formData });
+    setLoading(false);
+
+    if (res.ok) alert("Subida completada ✅");
+    else alert("Error al subir ❌");
   };
 
   return (
@@ -134,6 +151,33 @@ export default function ProfilePage() {
                 <option>Alemán</option>
               </select>
             </div>
+          </div>
+
+          {/* Certificados */}
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Certificados Digitales</h3>
+
+            <form onSubmit={(e) => handleUploadCert(e, "certificate")} className="mb-4">
+              <label className="block mb-1">Certificado (.pem)</label>
+              <input type="file" name="file" accept=".pem" className="mb-2" />
+              <button
+                disabled={loading}
+                className="bg-blue-600 text-white px-4 py-2 rounded"
+              >
+                Subir Certificado
+              </button>
+            </form>
+
+            <form onSubmit={(e) => handleUploadCert(e, "private-key")}>
+              <label className="block mb-1">Clave privada (.pem)</label>
+              <input type="file" name="file" accept=".pem" className="mb-2" />
+              <button
+                disabled={loading}
+                className="bg-blue-600 text-white px-4 py-2 rounded"
+              >
+                Subir Clave Privada
+              </button>
+            </form>
           </div>
 
           {/* Secciones adicionales */}

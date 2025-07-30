@@ -1,46 +1,31 @@
-// app/api/certs/upload/route.ts
-import { NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
-import forge from "node-forge";
+import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  // Inicializa el cliente de Supabase para Route Handlers
   const supabase = createRouteHandlerClient({ cookies });
+  const formData = await req.formData();
+  const file = formData.get("file") as File;
+  const type = formData.get("type") as string; // "certificate" o "private-key"
 
-  try {
-    const formData = await req.formData();
-    const file = formData.get("file") as Blob | null;
-    if (!file) {
-      return NextResponse.json({ error: "No se subió ningún archivo" }, { status: 400 });
-    }
-
-    // Lee el contenido del fichero
-    const arrayBuffer = await file.arrayBuffer();
-    const der = new Uint8Array(arrayBuffer);
-
-    // Aquí iría tu lógica con forge, p.ej. parsear el certificado:
-    const asn1 = forge.asn1.fromDer(forge.util.createBuffer(der));
-    const cert = forge.pki.certificateFromAsn1(asn1);
-
-    // Guarda el certificado en Supabase (ajusta tu tabla y columnas)
-    const { error } = await supabase
-      .from("certs")
-      .insert([
-        {
-          serial: cert.serialNumber,
-          issuer: cert.issuer.attributes.map((a) => `${a.name}=${a.value}`).join(","),
-          pem: forge.pki.certificateToPem(cert),
-        },
-      ]);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  if (!file || !type) {
+    return NextResponse.json({ error: "Archivo o tipo faltante" }, { status: 400 });
   }
-}
 
+  const user = await supabase.auth.getUser();
+  if (!user.data.user) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const filePath = `${type}/${user.data.user.id}.pem`;
+  const { error } = await supabase.storage.from("certs").upload(filePath, file, {
+    upsert: true,
+    contentType: "application/x-pem-file",
+  });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
+}
