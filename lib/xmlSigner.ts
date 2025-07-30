@@ -1,24 +1,25 @@
 import { SignedXml } from "xml-crypto";
-import { DOMParser } from "xmldom";
+import fs from "fs";
+import path from "path";
 
-export function signXMLFacturae(xmlFactura: string, certBuffer: Buffer, keyBuffer: Buffer): string {
+export function signXMLForUser(xmlFactura: string): string {
+  // Ruta de los certificados dentro de /certs
+  const certPath = path.join(process.cwd(), "certs", "certificate.pem");
+  const keyPath  = path.join(process.cwd(), "certs", "private-key.pem");
+
+  // Leemos los ficheros
+  const certBuffer = fs.readFileSync(certPath);
+  const privateKey = fs.readFileSync(keyPath).toString();
+
+  // Preparar firma
   const sig = new SignedXml();
-  sig.signingKey = keyBuffer;
-
-  sig.addReference("//*[local-name(.)='Facturae']", [
-    "http://www.w3.org/2000/09/xmldsig#enveloped-signature",
-  ]);
-
+  sig.addReference("/*"); // Ajusta el XPath según el esquema de Facturae
+  sig.signingKey = privateKey;
   sig.keyInfoProvider = {
-<<<<<<< HEAD
-    getKeyInfo: () => `<X509Data>${publicCert}</X509Data>`,
-=======
-    getKeyInfo: () => `<X509Data><X509Certificate>${certBuffer.toString()}</X509Certificate></X509Data>`,
->>>>>>> b54d036 (feat: integración AEAT con firma y envío automático)
+    getKeyInfo: () =>
+      `<X509Data><X509Certificate>${certBuffer.toString()}</X509Certificate></X509Data>`,
   };
 
-  const doc = new DOMParser().parseFromString(xmlFactura);
-  sig.computeSignature(doc);
-
+  sig.computeSignature(xmlFactura);
   return sig.getSignedXml();
 }
