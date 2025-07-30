@@ -1,73 +1,24 @@
-<<<<<<< HEAD
+import soap from "soap";
 import fs from "fs";
 import path from "path";
-=======
->>>>>>> b54d036 (feat: integración AEAT con firma y envío automático)
-import soap from "soap";
 import { signXMLFacturae } from "./xmlSigner";
 
-export async function sendFacturaToAEAT(
-  xmlFactura: string,
-  certBuffer: Buffer,
-  keyBuffer: Buffer
-): Promise<string> {
-  try {
-<<<<<<< HEAD
-    const xml = generateFacturaeXML(invoiceData);
-    const signedXML = signFacturaeXML(xml);
+export async function sendFacturaToAEAT(xmlFactura: string, certBuffer: Buffer, keyBuffer: Buffer): Promise<string> {
+  // 1️⃣ Firma el XML
+  const signedXml = signXMLFacturae(xmlFactura);
 
-    const wsdlUrl = "https://prewww1.aeat.es/wselivfact/ws/fe/wsdl/Facturae.wsdl";
+  // 2️⃣ Crea cliente SOAP apuntando al WSDL de preproducción AEAT
+  const wsdlUrl =
+    "https://prewww1.aeat.es/static_files/common/internet/dep/explotacion/ws/ClienteWSAEAT_OPC.html?OPC=/static_files/common/internet/dep/aplicaciones/es/aeat/tikeV1.0/cont/ws/opciones.js";
+  const client = await soap.createClientAsync(wsdlUrl);
 
-    const client = await soap.createClientAsync(wsdlUrl, {
-      wsdl_options: {
-        cert: fs.readFileSync(path.resolve("certs/certificate.crt")),
-        key: fs.readFileSync(path.resolve("certs/private.key")),
-        rejectUnauthorized: false,
-      },
-    });
+  // 3️⃣ Configura SSL con los buffers de certificado y clave
+  client.setSecurity(
+    new soap.ClientSSLSecurity(certBuffer, keyBuffer, { strictSSL: false })
+  );
 
-    const args = { facturae: signedXML };
-    const [result] = await client.EnviarFacturaeAsync(args);
+  // 4️⃣ Llama al método SOAP (ajusta el nombre si es distinto)
+  const [result] = await client.AltaFacturaAsync({ xml: signedXml });
 
-    console.log("Respuesta AEAT:", result);
-    return result;
-=======
-    // Firmar XML con certificado del usuario
-    const signedXml = signXMLFacturae(xmlFactura, certBuffer, keyBuffer);
-
-    // Cliente SOAP
-    const wsdlUrl =
-      "https://prewww1.aeat.es/wlpl/SSII-FACT/ws/fe/SuministroFactEmitidas.wsdl";
-    const client = await soap.createClientAsync(wsdlUrl);
-
-    // Seguridad SSL usando buffers
-    client.setSecurity(new soap.ClientSSLSecurity(certBuffer, keyBuffer, { strictSSL: false }));
-
-    // Enviar factura
-    const [result] = await client.SuministroFactEmitidasAsync({
-      SuministroLRFacturasEmitidas: {
-        Cabecera: {
-          IDVersionSii: "1.1",
-          Titular: {
-            NombreRazon: "Nombre Empresa",
-            NIF: "B12345678",
-          },
-        },
-        RegistroLRFacturasEmitidas: [
-          {
-            PeriodoLiquidacion: {
-              Ejercicio: "2025",
-              Periodo: "07",
-            },
-            FacturaExpedida: signedXml,
-          },
-        ],
-      },
-    });
-
-    return JSON.stringify(result);
->>>>>>> b54d036 (feat: integración AEAT con firma y envío automático)
-  } catch (error: any) {
-    throw new Error(error.message);
-  }
+  return JSON.stringify(result);
 }
