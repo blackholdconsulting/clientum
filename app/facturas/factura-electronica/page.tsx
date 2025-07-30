@@ -1,4 +1,4 @@
-import { generateFacturaeXML as buildFacturaeXML } from "../../lib/facturae";
+import { generateFacturaeXML } from "../../../lib/facturae";
 
 export default function FacturasPage() {
   const crearFactura = () => {
