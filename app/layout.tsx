@@ -75,7 +75,10 @@ export default async function RootLayout({
                 🚀 Negocio
               </Link>
               <div className="pl-4 space-y-1">
-                <Link href="/negocio/tareas" className={linkClass("/negocio/tareas")}>
+                <Link
+                  href="/negocio/tareas"
+                  className={linkClass("/negocio/tareas")}
+                >
                   📝 Mis tareas
                 </Link>
                 <Link
@@ -85,18 +88,22 @@ export default async function RootLayout({
                   📁 Proyectos
                 </Link>
                 <Link
-                  href="/negocio/analisis-de-la-competencia"
-                  className={linkClass(
-                    "/negocio/analisis-de-la-competencia"
-                  )}
+                  href="/negocio/plan-futuro"
+                  className={linkClass("/negocio/plan-futuro")}
                 >
-                  📊 Análisis de la competencia
+                  🗺️ Plan Futuro
                 </Link>
                 <Link
                   href="/negocio/estudio-de-mercado"
                   className={linkClass("/negocio/estudio-de-mercado")}
                 >
                   🔎 Estudio de mercado
+                </Link>
+                <Link
+                  href="/negocio/analisis-competencia"
+                  className={linkClass("/negocio/analisis-competencia")}
+                >
+                  📊 Análisis de competencia
                 </Link>
                 <Link
                   href="/negocio/continuar-proyecto"
@@ -114,6 +121,10 @@ export default async function RootLayout({
             <Link href="/tesoreria" className={linkClass("/tesoreria")}>
               🏦 Tesorería
             </Link>
+            {/* Gastos */}
+            <Link href="/gastos" className={linkClass("/gastos")}>
+              💸 Gastos
+            </Link>
 
             <Link href="/contabilidad" className={linkClass("/contabilidad")}>
               📈 Contabilidad
@@ -128,34 +139,15 @@ export default async function RootLayout({
             </Link>
           </nav>
 
-          <div className="px-4 mt-auto border-t pt-2 space-y-1">
-            <div className="text-xs font-semibold">Ayuda y soporte</div>
-            <Link href="/help/academia" className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
-              📘 Academia Clientum
+          <div className="p-4 border-t flex items-center">
+            <Link
+              href="/mi-cuenta"
+              className="flex items-center space-x-2 text-sm hover:underline"
+            >
+              <div className="h-8 w-8 bg-gray-200 rounded-full" />
+              <span>Mi cuenta</span>
             </Link>
-            <Link href="/help/tutoriales" className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
-              🎥 Tutoriales
-            </Link>
-            <Link href="/help/votar-mejoras" className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
-              👍 Votar mejoras
-            </Link>
-            <Link href="/help/novedades" className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
-              🆕 Novedades
-            </Link>
-            <Link href="/help/soporte" className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
-              🛠️ Soporte
-            </Link>
-            <Link href="/help/contacto" className="block py-1 px-2 text-sm hover:bg-gray-100 rounded">
-              💬 Contáctanos
-            </Link>
-
-            <div className="mt-3">
-              <Link href="/profile" className="flex items-center py-2 px-3 text-sm hover:bg-gray-100 rounded">
-                <div className="h-8 w-8 bg-gray-200 rounded-full mr-2" />
-                Mi cuenta
-              </Link>
-              <UserMenu />
-            </div>
+            <UserMenu />
           </div>
         </aside>
 
