@@ -56,6 +56,12 @@ export default async function RootLayout({
                 >
                   Histórico
                 </Link>
+                <Link
+                  href="/facturas/factura-electronica"
+                  className={linkClass("/facturas/factura-electronica")}
+                >
+                  📤 Factura Electrónica
+                </Link>
               </div>
             </div>
 
