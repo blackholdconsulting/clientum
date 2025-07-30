@@ -1,13 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
-import html2canvas from "html2canvas";
+import { useState } from "react";
 import { jsPDF } from "jspdf";
-import autoTable, { UserOptions } from "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import axios from "axios";
-
-// Si tienes el logo en público puedes cargarlo así:
-// import logoDataUrl from "/public/logo.png";
 
 interface Linea {
   descripcion: string;
@@ -38,73 +34,70 @@ export default function NuevaFacturaElectronicaPage() {
   const removeLinea = (i: number) =>
     setLineas(lineas.filter((_, idx) => idx !== i));
 
-  // Exportar PDF con formato tipo Holded/Declarando
-  const exportPDF = async () => {
+  // Exportar PDF con formato Holded/Declarando
+  const exportPDF = () => {
     const doc = new jsPDF("p", "pt", "a4");
     const pageWidth = doc.internal.pageSize.getWidth();
 
-    // 1) Cabecera: Logo + Título
-    // Si tienes logoDataUrl (base64 o import), úsalo aquí:
-    // doc.addImage(logoDataUrl, "PNG", 40, 40, 120, 40);
+    // 1) Cabecera
     doc.setFontSize(20);
     doc.setFont("helvetica", "bold");
     doc.text("FACTURA", pageWidth - 60, 50, { align: "right" });
 
-    // 2) Datos de factura (fecha, nº y vencimiento)
-    const leftColX = 40;
+    // 2) Datos de factura
+    const leftX = 40;
     let y = 80;
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text(`Fecha de factura: ${new Date().toLocaleDateString()}`, leftColX, y);
-    doc.text(`Número de factura: 2024-0001`, leftColX, y + 14);
-    doc.text(`Fecha de vencimiento: ${new Date(Date.now() + 86400000).toLocaleDateString()}`, leftColX, y + 28);
+    doc.text(`Fecha de factura: ${new Date().toLocaleDateString()}`, leftX, y);
+    doc.text(`Número de factura: 2024-0001`, leftX, y + 14);
+    doc.text(
+      `Fecha de vencimiento: ${new Date(Date.now() + 86400000).toLocaleDateString()}`,
+      leftX,
+      y + 28
+    );
 
     // 3) Emisor / Receptor
     const midX = pageWidth / 2;
     y += 50;
     doc.setDrawColor(200);
     doc.setLineWidth(0.5);
-    doc.line(leftColX, y, pageWidth - 40, y);
+    doc.line(leftX, y, pageWidth - 40, y);
 
     y += 16;
     doc.setFont("helvetica", "bold");
-    doc.text("Emisor:", leftColX, y);
+    doc.text("Emisor:", leftX, y);
     doc.text("Receptor:", midX, y);
-
     doc.setFont("helvetica", "normal");
+
     y += 14;
-    doc.text(emisorName || "Mi empresa S.L.", leftColX, y);
+    doc.text(emisorName || "Mi empresa S.L.", leftX, y);
     doc.text(receptorName || "Cliente S.A.", midX, y);
 
     y += 14;
-    doc.text(`NIF: ${emisorNIF || "B12345678"}`, leftColX, y);
+    doc.text(`NIF: ${emisorNIF || "B12345678"}`, leftX, y);
     doc.text(`NIF: ${receptorNIF || "A87654321"}`, midX, y);
 
     // 4) Tabla de líneas
-    y += 20;
-    const tableColumns = [
-      { header: "Descripción", dataKey: "descripcion" },
-      { header: "Unidades", dataKey: "unidades" },
-      { header: "Precio Unit. (€)", dataKey: "precioUnitario" },
-      { header: "Precio (€)", dataKey: "subtotal" },
-    ];
-    const tableData = lineas.map((l) => ({
-      descripcion: l.descripcion,
-      unidades: l.unidades,
-      precioUnitario: l.precioUnitario.toFixed(2),
-      subtotal: (l.unidades * l.precioUnitario).toFixed(2),
-    }));
+    y += 28;
+    const tableHead = [["Descripción", "Unidades", "Precio Unit. (€)", "Precio (€)"]];
+    const tableBody = lineas.map((l) => [
+      l.descripcion,
+      l.unidades.toString(),
+      l.precioUnitario.toFixed(2),
+      (l.unidades * l.precioUnitario).toFixed(2),
+    ]);
 
-    (autoTable as UserOptions)(doc, {
+    autoTable(doc, {
       startY: y,
-      head: [tableColumns.map((c) => c.header)],
-      body: tableData.map((row) => Object.values(row)),
+      head: tableHead,
+      body: tableBody,
       styles: { fontSize: 10, cellPadding: 4 },
       headStyles: { fillColor: [240, 240, 240], textColor: 30, halign: "center" },
       columnStyles: { 0: { cellWidth: 200 }, 1: { cellWidth: 60 }, 2: { cellWidth: 80 }, 3: { cellWidth: 80 } },
     });
 
-    // 5) Resumen al final
+    // 5) Resumen
     const finalY = (doc as any).lastAutoTable.finalY + 20;
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
@@ -112,26 +105,25 @@ export default function NuevaFacturaElectronicaPage() {
     doc.text(`${base.toFixed(2)} €`, pageWidth - 80, finalY, { align: "right" });
 
     doc.setFont("helvetica", "normal");
-    doc.text(`IVA (${vat} %):`, pageWidth - 200, finalY + 14);
+    doc.text(`IVA (${vat}%):`, pageWidth - 200, finalY + 14);
     doc.text(`${ivaImport.toFixed(2)} €`, pageWidth - 80, finalY + 14, { align: "right" });
 
     doc.setFont("helvetica", "bold");
     doc.text(`Total:`, pageWidth - 200, finalY + 30);
     doc.text(`${total.toFixed(2)} €`, pageWidth - 80, finalY + 30, { align: "right" });
 
-    // 6) Comentarios / Pie
+    // 6) Pie de comentarios
     doc.setFontSize(9);
     doc.text(
       `Comentarios: Pago por transferencia: ESXXXXXXXXXXXXXXX9`,
-      40,
+      leftX,
       finalY + 60
     );
 
-    // Guardar
     doc.save("factura-electronica.pdf");
   };
 
-  // Envío a AEAT (igual que antes)
+  // Envío a AEAT
   const enviarAEAT = async () => {
     try {
       await axios.post("/api/factura-electronica", {
@@ -154,7 +146,7 @@ export default function NuevaFacturaElectronicaPage() {
       <div className="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-lg space-y-6">
         <h1 className="text-2xl font-bold">Nueva Factura Electrónica</h1>
 
-        {/* Formulario resumido */}
+        {/* Emisor/Receptor */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <input
             placeholder="Nombre Emisor"
@@ -232,7 +224,7 @@ export default function NuevaFacturaElectronicaPage() {
           + Añadir línea
         </button>
 
-        {/* IVA y resumen instantáneo */}
+        {/* IVA y resumen */}
         <div className="w-32 mb-4">
           <label className="block text-sm">IVA (%)</label>
           <input
@@ -250,7 +242,7 @@ export default function NuevaFacturaElectronicaPage() {
         </div>
       </div>
 
-      {/* Acciones */}
+      {/* Botones */}
       <div className="flex justify-center gap-4 mt-6">
         <button
           onClick={exportPDF}
@@ -268,4 +260,3 @@ export default function NuevaFacturaElectronicaPage() {
     </div>
   );
 }
-
