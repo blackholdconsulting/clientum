@@ -1,9 +1,9 @@
-import { SignedXml } from "xml-crypto";
 import fs from "fs";
 import path from "path";
+import { SignedXml } from "xml-crypto";
 
 export function signXMLFacturae(xmlFactura: string): string {
-  // Rutas de tus certificados en /certs
+  // Ajusta estas rutas si tu carpeta de certs cambia
   const certPath = path.join(process.cwd(), "certs", "certificate.pem");
   const keyPath  = path.join(process.cwd(), "certs", "private-key.pem");
 
@@ -11,7 +11,7 @@ export function signXMLFacturae(xmlFactura: string): string {
   const privateKey = fs.readFileSync(keyPath, "utf8");
 
   const sig = new SignedXml();
-  sig.addReference("/*"); // Ajusta el XPath si necesitas firmar otro nodo
+  sig.addReference("/*"); // firma todo el documento
   sig.signingKey = privateKey;
   sig.keyInfoProvider = {
     getKeyInfo: () =>
