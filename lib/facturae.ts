@@ -9,7 +9,6 @@ export interface InvoiceParty {
   ciudad?: string;
 }
 
-// ✅ Flexibilidad en nombres de campos
 export interface InvoiceLine {
   descripcion?: string;
   description?: string;
@@ -20,24 +19,23 @@ export interface InvoiceLine {
 }
 
 export interface InvoiceData {
-  issuerName: string;
-  issuerNIF: string;
-  receiverName: string;
-  receiverNIF: string;
-  invoiceNumber: string;
-  invoiceDate: string;
-  concept: string;
-  baseAmount: number;
-  vat: number;
-  totalAmount: number;
+  issuerName?: string;    // ✅ ahora opcional
+  issuerNIF?: string;     // ✅ ahora opcional
+  receiverName?: string;  // ✅ ahora opcional
+  receiverNIF?: string;   // ✅ ahora opcional
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  concept?: string;
+  baseAmount?: number;
+  vat?: number;
+  totalAmount?: number;
 
-  // Campos opcionales
+  // Opcionales adicionales
   serie?: string;
   numero?: string;
   fecha?: string;
   vencimiento?: string;
 
-  // Nuevos campos
   emisor?: InvoiceParty;
   receptor?: InvoiceParty;
   lineas?: InvoiceLine[];
@@ -48,21 +46,20 @@ export interface InvoiceData {
 export function generateFacturaeXML(data: InvoiceData): string {
   const builder = new Builder({ headless: true });
 
-  const issuerName = data.emisor?.nombre || data.issuerName;
-  const issuerNIF = data.emisor?.nif || data.emisor?.cif || data.issuerNIF;
-  const receiverName = data.receptor?.nombre || data.receiverName;
-  const receiverNIF = data.receptor?.nif || data.receptor?.cif || data.receiverNIF;
+  const issuerName = data.emisor?.nombre || data.issuerName || "";
+  const issuerNIF = data.emisor?.nif || data.emisor?.cif || data.issuerNIF || "";
+  const receiverName = data.receptor?.nombre || data.receiverName || "";
+  const receiverNIF = data.receptor?.nif || data.receptor?.cif || data.receiverNIF || "";
 
-  // Calcular subtotal con flexibilidad en nombres
   const subtotal = data.lineas
     ? data.lineas.reduce((acc, l) => {
         const qty = l.cantidad ?? l.qty ?? 1;
         const price = l.precioUnitario ?? l.unitPrice ?? 0;
         return acc + price * qty;
       }, 0)
-    : data.baseAmount;
+    : data.baseAmount || 0;
 
-  const iva = data.iva ?? data.vat;
+  const iva = data.iva ?? data.vat ?? 0;
   const totalIVA = (subtotal * iva) / 100;
   const totalAmount = subtotal + totalIVA - (data.irpf ?? 0);
 
@@ -99,7 +96,7 @@ export function generateFacturaeXML(data: InvoiceData): string {
             InvoiceDocumentType: "FC",
             InvoiceClass: "OO",
           },
-          InvoiceIssueData: { IssueDate: data.invoiceDate || data.fecha },
+          InvoiceIssueData: { IssueDate: data.invoiceDate || data.fecha || "" },
           Items: {
             InvoiceLine: data.lineas
               ? data.lineas.map((l) => {
@@ -113,10 +110,10 @@ export function generateFacturaeXML(data: InvoiceData): string {
                   };
                 })
               : {
-                  ItemDescription: data.concept,
+                  ItemDescription: data.concept || "",
                   Quantity: 1,
-                  UnitPriceWithoutTax: data.baseAmount,
-                  TotalCost: data.baseAmount,
+                  UnitPriceWithoutTax: data.baseAmount || 0,
+                  TotalCost: data.baseAmount || 0,
                 },
           },
           InvoiceTotals: {
