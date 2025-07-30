@@ -4,8 +4,6 @@ import { useState, useRef } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import axios from "axios";
-import { buildFacturaeXML, FacturaeData } from "@/lib/facturae";
 
 interface Linea {
   descripcion: string;
@@ -81,9 +79,8 @@ export default function NuevaFacturaElectronicaPage() {
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const W = doc.internal.pageSize.getWidth();
     doc.setFontSize(20);
-    doc.text("FACTURA ELECTRÓNICA", W - 40, 40, { align: "right" });
+    doc.text("FACTURA", W - 80, 40, { align: "right" });
     doc.setFontSize(10);
-
     let y = 60;
     doc.text(`Fecha de factura: ${new Date().toLocaleDateString()}`, 40, y);
     y += 14;
@@ -94,12 +91,11 @@ export default function NuevaFacturaElectronicaPage() {
       40,
       y
     );
-
     y += 20;
     doc.line(40, y, W - 40, y);
     y += 20;
 
-    // Emisor / Receptor
+    // Emisor/Receptor
     doc.setFontSize(12);
     doc.text("Emisor:", 40, y);
     doc.text("Receptor:", W / 2 + 20, y);
@@ -129,7 +125,7 @@ export default function NuevaFacturaElectronicaPage() {
       head: [["Descripción", "Unidades", "Precio Unit. (€)", "Precio (€)"]],
       body: lineas.map((l) => [
         l.descripcion,
-        l.unidades,
+        l.unidades.toString(),
         l.precioUnitario.toFixed(2),
         (l.unidades * l.precioUnitario).toFixed(2),
       ]),
@@ -140,12 +136,12 @@ export default function NuevaFacturaElectronicaPage() {
 
     const finalY = (doc as any).lastAutoTable.finalY + 20;
     doc.text(`Base imponible:`, W - 200, finalY);
-    doc.text(`${base.toFixed(2)} €`, W - 40, finalY, { align: "right" });
+    doc.text(`${base.toFixed(2)} €`, W - 80, finalY, { align: "right" });
     doc.text(`IVA (${vat}%):`, W - 200, finalY + 14);
-    doc.text(`${ivaImport.toFixed(2)} €`, W - 40, finalY + 14, { align: "right" });
+    doc.text(`${ivaImport.toFixed(2)} €`, W - 80, finalY + 14, { align: "right" });
     doc.setFontSize(14);
     doc.text(`Total:`, W - 200, finalY + 30);
-    doc.text(`${total.toFixed(2)} €`, W - 40, finalY + 30, { align: "right" });
+    doc.text(`${total.toFixed(2)} €`, W - 80, finalY + 30, { align: "right" });
 
     let y2 = finalY + 60;
     doc.setFontSize(10);
@@ -155,44 +151,47 @@ export default function NuevaFacturaElectronicaPage() {
     doc.save("factura-electronica.pdf");
   };
 
-  // === NUEVA FUNCIÓN: Envío a AEAT (Facturae) ===
+  // Nueva función: enviar factura a la AEAT
   const enviarFacturae = async () => {
-    // Mapea tu estado a la interfaz FacturaeData
-    const data: FacturaeData = {
-      issuerName: emisor.nombre,
-      issuerNIF: emisor.nif,
-      receiverName: receptor.nombre,
-      receiverNIF: receptor.nif,
-      issuerAddress: emisor.direccion,
-      issuerPostalCode: emisor.cp,
-      issuerCity: emisor.ciudad,
-      issuerEmail: emisor.email,
-      issuerPhone: emisor.telefono,
-      receiverAddress: receptor.direccion,
-      receiverPostalCode: receptor.cp,
-      receiverCity: receptor.ciudad,
-      receiverEmail: receptor.email,
-      receiverPhone: receptor.telefono,
-      invoiceDate: new Date().toISOString().split("T")[0],
-      invoiceNumber: "2024-0001",
-      dueDate: new Date(Date.now() + 86400000).toISOString().split("T")[0],
-      lines: lineas.map((l) => ({
-        description: l.descripcion,
-        quantity: l.unidades,
-        unitPrice: l.precioUnitario,
-      })),
-      taxRate: vat,
-      comments: comentarios,
-      IBAN: iban,
-    };
-
     try {
-      const xml = buildFacturaeXML(data);
-      const resp = await axios.post("/api/factura-electronica", { xml });
-      if (resp.data.success) {
-        alert("Factura electrónica enviada correctamente.");
+      const invoiceData = {
+        issuerName: emisor.nombre,
+        issuerNIF: emisor.nif,
+        issuerAddress: emisor.direccion,
+        issuerCity: emisor.ciudad,
+        issuerPostalCode: emisor.cp,
+        issuerPhone: emisor.telefono,
+        issuerEmail: emisor.email,
+        receiverName: receptor.nombre,
+        receiverNIF: receptor.nif,
+        receiverAddress: receptor.direccion,
+        receiverCity: receptor.ciudad,
+        receiverPostalCode: receptor.cp,
+        receiverPhone: receptor.telefono,
+        receiverEmail: receptor.email,
+        invoiceNumber: "2024-0001",
+        invoiceDate: new Date().toISOString(),
+        dueDate: new Date(Date.now() + 86400000).toISOString(),
+        lines: lineas.map((l) => ({
+          description: l.descripcion,
+          quantity: l.unidades,
+          unitPrice: l.precioUnitario,
+        })),
+        VATRate: vat,
+        comments: comentarios,
+        IBAN: iban,
+      };
+
+      const res = await fetch("/api/factura-electronica", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(invoiceData),
+      });
+      const json = await res.json();
+      if (json.success) {
+        alert("Factura electrónica enviada correctamente a la AEAT.");
       } else {
-        alert("Error al enviar factura: " + resp.data.error);
+        alert("Error al enviar a la AEAT: " + json.error);
       }
     } catch (err: any) {
       console.error(err);
@@ -206,10 +205,13 @@ export default function NuevaFacturaElectronicaPage() {
         ref={contRef}
         className="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-lg space-y-6"
       >
-        {/* … aquí va todo el formulario igual que antes … */}
+        <h1 className="text-2xl font-bold">Nueva Factura Electrónica</h1>
+
+        {/* ... resto del formulario (emisor, receptor, líneas, IVA, totales, comentarios) ... */}
+
       </div>
 
-      {/* Botones al pie */}
+      {/* Botones */}
       <div className="flex justify-center gap-4 mt-6">
         <button
           onClick={exportCSV}
@@ -227,10 +229,9 @@ export default function NuevaFacturaElectronicaPage() {
           onClick={enviarFacturae}
           className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700"
         >
-          Enviar Facturae
+          Enviar a AEAT
         </button>
       </div>
     </div>
   );
 }
-
