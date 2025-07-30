@@ -4,6 +4,8 @@ export interface InvoiceParty {
   nombre: string;
   nif: string;
   direccion?: string;
+  cp?: string;       // ✅ Nuevo campo
+  ciudad?: string;   // ✅ Nuevo campo
 }
 
 export interface InvoiceData {
@@ -18,13 +20,13 @@ export interface InvoiceData {
   vat: number;
   totalAmount: number;
 
-  // ✅ Campos opcionales para compatibilidad
+  // ✅ Campos opcionales
   serie?: string;
   numero?: string;
   fecha?: string;
   vencimiento?: string;
 
-  // ✅ Nuevos campos para código existente
+  // ✅ Nuevos campos para compatibilidad
   emisor?: InvoiceParty;
   receptor?: InvoiceParty;
 }
@@ -32,7 +34,6 @@ export interface InvoiceData {
 export function generateFacturaeXML(data: InvoiceData): string {
   const builder = new Builder({ headless: true });
 
-  // Si se usan los objetos emisor/receptor, tomar esos valores
   const issuerName = data.emisor?.nombre || data.issuerName;
   const issuerNIF = data.emisor?.nif || data.issuerNIF;
   const receiverName = data.receptor?.nombre || data.receiverName;
@@ -101,6 +102,5 @@ export function generateFacturaeXML(data: InvoiceData): string {
   return builder.buildObject(xmlObj);
 }
 
-// ✅ Alias para compatibilidad con código existente
 export { generateFacturaeXML as buildFacturaeXML };
 export type { InvoiceData as FacturaeData };
