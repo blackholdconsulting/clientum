@@ -4,12 +4,23 @@ import { cookies } from "next/headers";
 import { signXMLFacturae } from "@/lib/xmlSigner";
 
 export async function POST(request: NextRequest) {
-  // Inicializa Supabase
   const supabase = createRouteHandlerClient({ cookies });
-  const { data: session } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session?.user) return NextResponse.redirect("/auth/login");
 
   const { xml } = (await request.json()) as { xml: string };
-  const signed = signXMLFacturae(xml);
-  return NextResponse.json({ signed });
+
+  let signed: string;
+  try {
+    signed = signXMLFacturae(xml);
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, error: "Error al firmar XML: " + err.message },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ success: true, signed });
 }
