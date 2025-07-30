@@ -1,5 +1,11 @@
 import { Builder } from "xml2js";
 
+export interface InvoiceParty {
+  nombre: string;
+  nif: string;
+  direccion?: string;
+}
+
 export interface InvoiceData {
   issuerName: string;
   issuerNIF: string;
@@ -12,15 +18,25 @@ export interface InvoiceData {
   vat: number;
   totalAmount: number;
 
-  // ✅ Campos opcionales para compatibilidad con FacturaeData
+  // ✅ Campos opcionales para compatibilidad
   serie?: string;
   numero?: string;
   fecha?: string;
   vencimiento?: string;
+
+  // ✅ Nuevos campos para código existente
+  emisor?: InvoiceParty;
+  receptor?: InvoiceParty;
 }
 
 export function generateFacturaeXML(data: InvoiceData): string {
   const builder = new Builder({ headless: true });
+
+  // Si se usan los objetos emisor/receptor, tomar esos valores
+  const issuerName = data.emisor?.nombre || data.issuerName;
+  const issuerNIF = data.emisor?.nif || data.issuerNIF;
+  const receiverName = data.receptor?.nombre || data.receiverName;
+  const receiverNIF = data.receptor?.nif || data.receiverNIF;
 
   const xmlObj = {
     Facturae: {
@@ -34,17 +50,17 @@ export function generateFacturaeXML(data: InvoiceData): string {
           TaxIdentification: {
             PersonTypeCode: "J",
             ResidenceTypeCode: "R",
-            TaxIdentificationNumber: data.issuerNIF,
+            TaxIdentificationNumber: issuerNIF,
           },
-          LegalEntity: { CorporateName: data.issuerName },
+          LegalEntity: { CorporateName: issuerName },
         },
         BuyerParty: {
           TaxIdentification: {
             PersonTypeCode: "J",
             ResidenceTypeCode: "R",
-            TaxIdentificationNumber: data.receiverNIF,
+            TaxIdentificationNumber: receiverNIF,
           },
-          LegalEntity: { CorporateName: data.receiverName },
+          LegalEntity: { CorporateName: receiverName },
         },
       },
       Invoices: {
@@ -85,6 +101,6 @@ export function generateFacturaeXML(data: InvoiceData): string {
   return builder.buildObject(xmlObj);
 }
 
-// ✅ Alias para compatibilidad con código antiguo
+// ✅ Alias para compatibilidad con código existente
 export { generateFacturaeXML as buildFacturaeXML };
 export type { InvoiceData as FacturaeData };
