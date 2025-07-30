@@ -78,5 +78,3 @@ export function generateFacturaeXML(data: InvoiceData): string {
 
   return builder.buildObject(xmlObj);
 }
-
-}
