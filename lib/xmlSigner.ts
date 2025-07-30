@@ -9,7 +9,7 @@ export function signFacturaeXML(xml: string): string {
   sig.addReference("//*[local-name(.)='Facturae']");
   sig.signingKey = privateKey;
   sig.keyInfoProvider = {
-    getKeyInfo: () => `<X509Data>${publicCert}</X509Data>`
+    getKeyInfo: () => `<X509Data>${publicCert}</X509Data>`,
   };
 
   sig.computeSignature(xml);
