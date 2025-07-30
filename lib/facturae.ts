@@ -21,25 +21,25 @@ export function generateFacturaeXML(data: InvoiceData): string {
       FileHeader: {
         SchemaVersion: "3.2.2",
         Modality: "I",
-        InvoiceIssuerType: "EM"
+        InvoiceIssuerType: "EM",
       },
       Parties: {
         SellerParty: {
           TaxIdentification: {
             PersonTypeCode: "J",
             ResidenceTypeCode: "R",
-            TaxIdentificationNumber: data.issuerNIF
+            TaxIdentificationNumber: data.issuerNIF,
           },
-          LegalEntity: { CorporateName: data.issuerName }
+          LegalEntity: { CorporateName: data.issuerName },
         },
         BuyerParty: {
           TaxIdentification: {
             PersonTypeCode: "J",
             ResidenceTypeCode: "R",
-            TaxIdentificationNumber: data.receiverNIF
+            TaxIdentificationNumber: data.receiverNIF,
           },
-          LegalEntity: { CorporateName: data.receiverName }
-        }
+          LegalEntity: { CorporateName: data.receiverName },
+        },
       },
       Invoices: {
         Invoice: {
@@ -47,7 +47,7 @@ export function generateFacturaeXML(data: InvoiceData): string {
             InvoiceNumber: data.invoiceNumber,
             InvoiceSeriesCode: "",
             InvoiceDocumentType: "FC",
-            InvoiceClass: "OO"
+            InvoiceClass: "OO",
           },
           InvoiceIssueData: { IssueDate: data.invoiceDate },
           Items: {
@@ -61,20 +61,22 @@ export function generateFacturaeXML(data: InvoiceData): string {
                   TaxTypeCode: "01",
                   TaxRate: data.vat,
                   TaxableBase: { TotalAmount: data.baseAmount },
-                  TaxAmount: { TotalAmount: (data.baseAmount * data.vat) / 100 }
-                }
-              }
-            }
+                  TaxAmount: { TotalAmount: (data.baseAmount * data.vat) / 100 },
+                },
+              },
+            },
           },
           InvoiceTotals: {
             TotalGrossAmount: data.baseAmount,
             TotalTaxOutputs: (data.baseAmount * data.vat) / 100,
-            InvoiceTotal: data.totalAmount
-          }
-        }
-      }
-    }
+            InvoiceTotal: data.totalAmount,
+          },
+        },
+      },
+    },
   };
 
   return builder.buildObject(xmlObj);
+}
+
 }
