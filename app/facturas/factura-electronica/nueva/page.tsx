@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 
 interface Linea {
   descripcion: string;
@@ -11,51 +12,45 @@ interface Linea {
 }
 
 export default function NuevaFacturaElectronicaPage() {
-  const [emisorNombre, setEmisorNombre] = useState("");
-  const [emisorNIF, setEmisorNIF] = useState("");
-  const [receptorNombre, setReceptorNombre] = useState("");
-  const [receptorNIF, setReceptorNIF] = useState("");
+  const [emisorNombre, setEmisorNombre] = useState("Mi empresa S.L.");
+  const [emisorNIF, setEmisorNIF] = useState("B12345678");
+  const [receptorNombre, setReceptorNombre] = useState("Cliente S.A.");
+  const [receptorNIF, setReceptorNIF] = useState("A87654321");
   const [lineas, setLineas] = useState<Linea[]>([
     { descripcion: "", unidades: 1, precioUnitario: 0 },
   ]);
   const [vat, setVat] = useState(21);
-
   const contRef = useRef<HTMLDivElement>(null);
 
-  // Cálculos
-  const base = lineas.reduce(
-    (sum, l) => sum + l.unidades * l.precioUnitario,
-    0
-  );
-  const ivaImport = (base * vat) / 100;
-  const total = base + ivaImport;
+  // cálculos
+  const base = lineas.reduce((sum, l) => sum + l.unidades * l.precioUnitario, 0);
+  const ivaImport = +(base * vat / 100).toFixed(2);
+  const total = +(base + ivaImport).toFixed(2);
 
-  // Añadir/quitar líneas
   const addLinea = () =>
     setLineas([...lineas, { descripcion: "", unidades: 1, precioUnitario: 0 }]);
   const removeLinea = (i: number) =>
     setLineas(lineas.filter((_, idx) => idx !== i));
 
-  // Exportar CSV
+  // Exportar CSV (opcional)
   const exportCSV = () => {
-    const BOM = "\uFEFF";
-    const headers = ['Descripción','Unidades','Precio Unit. (€)','Precio (€)'];
     const rows = lineas.map(l => [
       l.descripcion,
       l.unidades.toString(),
       l.precioUnitario.toFixed(2),
       (l.unidades * l.precioUnitario).toFixed(2),
     ]);
-
-    let csv = BOM + headers.join(";") + "\n";
-    for (const row of rows) {
-      csv += row.map(cell => `"${cell}"`).join(";") + "\n";
-    }
-    csv += "\n";
-    csv += `BASE IMPONIBLE;${base.toFixed(2)}\n`;
-    csv += `IVA (${vat} %);${ivaImport.toFixed(2)}\n`;
-    csv += `TOTAL;${total.toFixed(2)}\n`;
-
+    const header = ["Descripción", "Unidades", "Precio Unitario (€)", "Precio (€)"];
+    const footer = [
+      [],
+      ["BASE IMPONIBLE:", "", "", base.toFixed(2)],
+      [`IVA (${vat} %):`, "", "", ivaImport.toFixed(2)],
+      ["TOTAL:", "", "", total.toFixed(2)],
+    ];
+    const csv =
+      [header, ...rows, ...footer]
+        .map(r => r.map(cell => `"${cell}"`).join(","))
+        .join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -67,12 +62,66 @@ export default function NuevaFacturaElectronicaPage() {
 
   // Exportar PDF
   const exportPDF = async () => {
-    if (!contRef.current) return;
-    const canvas = await html2canvas(contRef.current, { scale: 2 });
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF({ unit: "px", format: [canvas.width, canvas.height] });
-    pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
-    pdf.save("factura-electronica.pdf");
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // 1) Logo
+    const img = new Image();
+    img.src = "/logo.png"; // pon aquí la ruta a tu logo en /public
+    await new Promise(r => (img.onload = r));
+    doc.addImage(img, "PNG", 40, 30, 100, 30);
+
+    // 2) Cabecera título + fechas
+    doc.setFontSize(18);
+    doc.text("Factura Electrónica", pageWidth - 150, 50, { align: "right" });
+    doc.setFontSize(10);
+    const hoy = new Date().toLocaleDateString();
+    doc.text(`Fecha: ${hoy}`, pageWidth - 150, 70, { align: "right" });
+    doc.text(`Nº factura: 2024-001`, pageWidth - 150, 85, { align: "right" });
+
+    // 3) Datos emisor/receptor
+    doc.setFontSize(11);
+    doc.text("Emisor:", 40, 110);
+    doc.text(`${emisorNombre}`, 40, 125);
+    doc.text(`NIF: ${emisorNIF}`, 40, 140);
+
+    doc.text("Receptor:", pageWidth / 2 + 20, 110);
+    doc.text(`${receptorNombre}`, pageWidth / 2 + 20, 125);
+    doc.text(`NIF: ${receptorNIF}`, pageWidth / 2 + 20, 140);
+
+    // 4) Tabla de líneas
+    autoTable(doc, {
+      startY: 160,
+      head: [["Descripción", "Unidades", "P. Unit (€)", "Precio (€)"]],
+      body: lineas.map(l => [
+        l.descripcion,
+        l.unidades.toString(),
+        l.precioUnitario.toFixed(2),
+        (l.unidades * l.precioUnitario).toFixed(2),
+      ]),
+      theme: "grid",
+      styles: { cellPadding: 4, fontSize: 10 },
+      headStyles: { fillColor: [30, 144, 255], textColor: 255 },
+    });
+
+    // 5) Totales al pie de tabla
+    const finalY = (doc as any).lastAutoTable.finalY + 20;
+    doc.setFontSize(11);
+    doc.text(`Base imponible:`, pageWidth - 200, finalY);
+    doc.text(base.toFixed(2) + " €", pageWidth - 40, finalY, { align: "right" });
+    doc.text(`IVA (${vat} %):`, pageWidth - 200, finalY + 15);
+    doc.text(ivaImport.toFixed(2) + " €", pageWidth - 40, finalY + 15, { align: "right" });
+    doc.setFontSize(13);
+    doc.text(`Total:`, pageWidth - 200, finalY + 35);
+    doc.text(total.toFixed(2) + " €", pageWidth - 40, finalY + 35, { align: "right" });
+
+    // 6) Comentarios / pie
+    doc.setFontSize(9);
+    doc.text("Comentarios:", 40, finalY + 70);
+    doc.text("Pago por transferencia: ESXXXXXXXXXXXXXX9", 40, finalY + 85);
+
+    // Guardar
+    doc.save("factura-electronica.pdf");
   };
 
   return (
@@ -81,163 +130,112 @@ export default function NuevaFacturaElectronicaPage() {
         ref={contRef}
         className="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-lg space-y-6"
       >
-        <h1 className="text-2xl font-bold text-gray-800">
-          Nueva Factura Electrónica
-        </h1>
+        <h1 className="text-2xl font-bold">Nueva Factura Electrónica</h1>
 
-        {/* Datos Emisor / Receptor */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-600">
-              Nombre Emisor
-            </label>
-            <input
-              value={emisorNombre}
-              onChange={e => setEmisorNombre(e.target.value)}
-              className="mt-1 block w-full border rounded px-3 py-2"
-              placeholder="Ej. Mi empresa S.L."
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-600">
-              NIF Emisor
-            </label>
-            <input
-              value={emisorNIF}
-              onChange={e => setEmisorNIF(e.target.value)}
-              className="mt-1 block w-full border rounded px-3 py-2"
-              placeholder="B12345678"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-600">
-              Nombre Receptor
-            </label>
-            <input
-              value={receptorNombre}
-              onChange={e => setReceptorNombre(e.target.value)}
-              className="mt-1 block w-full border rounded px-3 py-2"
-              placeholder="Ej. Cliente S.A."
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-600">
-              NIF Receptor
-            </label>
-            <input
-              value={receptorNIF}
-              onChange={e => setReceptorNIF(e.target.value)}
-              className="mt-1 block w-full border rounded px-3 py-2"
-              placeholder="A87654321"
-            />
-          </div>
-        </div>
-
-        {/* Líneas */}
-        <div>
-          <h2 className="text-lg font-medium text-gray-700 mb-2">
-            Conceptos
-          </h2>
-          <div className="space-y-3">
-            {lineas.map((l, i) => (
-              <div key={i} className="flex gap-2 items-end">
-                <input
-                  value={l.descripcion}
-                  onChange={e => {
-                    const v = [...lineas];
-                    v[i].descripcion = e.target.value;
-                    setLineas(v);
-                  }}
-                  className="flex-1 border rounded px-3 py-2"
-                  placeholder="Descripción"
-                />
-                <input
-                  type="number"
-                  value={l.unidades}
-                  onChange={e => {
-                    const v = [...lineas];
-                    v[i].unidades = Number(e.target.value);
-                    setLineas(v);
-                  }}
-                  className="w-20 border rounded px-3 py-2"
-                  placeholder="Unidades"
-                />
-                <input
-                  type="number"
-                  value={l.precioUnitario}
-                  onChange={e => {
-                    const v = [...lineas];
-                    v[i].precioUnitario = Number(e.target.value);
-                    setLineas(v);
-                  }}
-                  className="w-32 border rounded px-3 py-2"
-                  placeholder="€/Ud."
-                />
-                <button
-                  onClick={() => removeLinea(i)}
-                  className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={addLinea}
-              className="mt-2 text-indigo-600 hover:underline"
-            >
-              + Añadir línea
-            </button>
-          </div>
-        </div>
-
-        {/* IVA */}
-        <div className="max-w-xs">
-          <label className="block text-sm font-medium text-gray-600">
-            IVA (%)
-          </label>
+        <div className="grid grid-cols-2 gap-4">
           <input
-            type="number"
-            value={vat}
-            onChange={e => setVat(Number(e.target.value))}
-            className="mt-1 block w-full border rounded px-3 py-2"
+            className="border rounded px-3 py-2"
+            value={emisorNombre}
+            onChange={e => setEmisorNombre(e.target.value)}
+            placeholder="Nombre Emisor"
+          />
+          <input
+            className="border rounded px-3 py-2"
+            value={emisorNIF}
+            onChange={e => setEmisorNIF(e.target.value)}
+            placeholder="NIF Emisor"
+          />
+          <input
+            className="border rounded px-3 py-2"
+            value={receptorNombre}
+            onChange={e => setReceptorNombre(e.target.value)}
+            placeholder="Nombre Receptor"
+          />
+          <input
+            className="border rounded px-3 py-2"
+            value={receptorNIF}
+            onChange={e => setReceptorNIF(e.target.value)}
+            placeholder="NIF Receptor"
           />
         </div>
 
-        {/* Resumen */}
-        <div className="bg-gray-50 p-4 rounded flex flex-col items-end space-y-1 text-gray-800">
-          <div>
-            <span className="font-medium">Base imponible:</span>{" "}
-            {base.toFixed(2)} €
+        <h2 className="font-semibold">Conceptos</h2>
+        {lineas.map((l, i) => (
+          <div key={i} className="flex gap-2 items-center">
+            <input
+              className="flex-1 border rounded px-3 py-2"
+              placeholder="Descripción"
+              value={l.descripcion}
+              onChange={e => {
+                const arr = [...lineas];
+                arr[i].descripcion = e.target.value;
+                setLineas(arr);
+              }}
+            />
+            <input
+              type="number"
+              className="w-20 border rounded px-2 py-2"
+              value={l.unidades}
+              onChange={e => {
+                const arr = [...lineas];
+                arr[i].unidades = +e.target.value;
+                setLineas(arr);
+              }}
+            />
+            <input
+              type="number"
+              className="w-28 border rounded px-2 py-2"
+              value={l.precioUnitario}
+              onChange={e => {
+                const arr = [...lineas];
+                arr[i].precioUnitario = +e.target.value;
+                setLineas(arr);
+              }}
+            />
+            <button
+              onClick={() => removeLinea(i)}
+              className="bg-red-500 text-white px-3 py-1 rounded"
+            >
+              ✕
+            </button>
           </div>
-          <div>
-            <span className="font-medium">IVA ({vat}%):</span>{" "}
-            {ivaImport.toFixed(2)} €
-          </div>
-          <div className="text-xl font-bold">
-            Total: {total.toFixed(2)} €
-          </div>
+        ))}
+        <button
+          onClick={addLinea}
+          className="text-indigo-600 hover:underline"
+        >
+          + Añadir línea
+        </button>
+
+        <div className="flex items-center gap-4">
+          <label className="font-medium">IVA (%)</label>
+          <input
+            type="number"
+            className="w-20 border rounded px-2 py-2"
+            value={vat}
+            onChange={e => setVat(+e.target.value)}
+          />
         </div>
 
+        <div className="bg-gray-100 p-4 rounded text-right">
+          <div>Base imponible: <strong>{base.toFixed(2)} €</strong></div>
+          <div>IVA ({vat}%): <strong>{ivaImport.toFixed(2)} €</strong></div>
+          <div className="mt-2 text-lg">Total: <strong>{total.toFixed(2)} €</strong></div>
+        </div>
       </div>
 
-      {/* Botones de exportación */}
-      <div className="max-w-3xl mx-auto mt-6 flex gap-4">
+      <div className="mt-6 flex justify-center gap-4">
         <button
           onClick={exportCSV}
-          className="flex-1 bg-white border border-indigo-600 text-indigo-600 px-4 py-2 rounded hover:bg-indigo-50"
+          className="px-6 py-2 border border-indigo-600 text-indigo-600 rounded hover:bg-indigo-50"
         >
           Exportar CSV
         </button>
         <button
           onClick={exportPDF}
-          className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+          className="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
         >
           Exportar PDF
-        </button>
-        <button
-          className="flex-1 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-        >
-          Enviar a AEAT
         </button>
       </div>
     </div>
