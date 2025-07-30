@@ -2,10 +2,11 @@ import { Builder } from "xml2js";
 
 export interface InvoiceParty {
   nombre: string;
-  nif: string;
+  nif?: string;
+  cif?: string;        // ✅ Nuevo campo
   direccion?: string;
-  cp?: string;       // ✅ Nuevo campo
-  ciudad?: string;   // ✅ Nuevo campo
+  cp?: string;
+  ciudad?: string;
 }
 
 export interface InvoiceData {
@@ -20,13 +21,13 @@ export interface InvoiceData {
   vat: number;
   totalAmount: number;
 
-  // ✅ Campos opcionales
+  // Campos opcionales
   serie?: string;
   numero?: string;
   fecha?: string;
   vencimiento?: string;
 
-  // ✅ Nuevos campos para compatibilidad
+  // Nuevos campos para compatibilidad
   emisor?: InvoiceParty;
   receptor?: InvoiceParty;
 }
@@ -35,9 +36,9 @@ export function generateFacturaeXML(data: InvoiceData): string {
   const builder = new Builder({ headless: true });
 
   const issuerName = data.emisor?.nombre || data.issuerName;
-  const issuerNIF = data.emisor?.nif || data.issuerNIF;
+  const issuerNIF = data.emisor?.nif || data.emisor?.cif || data.issuerNIF;
   const receiverName = data.receptor?.nombre || data.receiverName;
-  const receiverNIF = data.receptor?.nif || data.receiverNIF;
+  const receiverNIF = data.receptor?.nif || data.receptor?.cif || data.receiverNIF;
 
   const xmlObj = {
     Facturae: {
