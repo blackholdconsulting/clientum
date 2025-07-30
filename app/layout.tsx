@@ -48,13 +48,13 @@ export default async function RootLayout({
               </Link>
               <div className="pl-4 space-y-1">
                 <Link href="/facturas" className={linkClass("/facturas")}>
-                  Listado
+                  Crear Factura
                 </Link>
                 <Link
                   href="/facturas/historico"
                   className={linkClass("/facturas/historico")}
                 >
-                  Histórico
+                  Histórico Facturas
                 </Link>
                 <Link
                   href="/facturas/factura-electronica"
