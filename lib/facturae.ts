@@ -78,3 +78,9 @@ export function generateFacturaeXML(data: InvoiceData): string {
 
   return builder.buildObject(xmlObj);
 }
+
+// ✅ Alias para compatibilidad con código existente
+export { generateFacturaeXML as buildFacturaeXML };
+export type { InvoiceData as FacturaeData };
+
+}
