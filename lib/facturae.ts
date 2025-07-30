@@ -3,10 +3,16 @@ import { Builder } from "xml2js";
 export interface InvoiceParty {
   nombre: string;
   nif?: string;
-  cif?: string;        // ✅ Nuevo campo
+  cif?: string;
   direccion?: string;
   cp?: string;
   ciudad?: string;
+}
+
+export interface InvoiceLine {
+  descripcion: string;
+  cantidad: number;
+  precioUnitario: number;
 }
 
 export interface InvoiceData {
@@ -30,6 +36,9 @@ export interface InvoiceData {
   // Nuevos campos para compatibilidad
   emisor?: InvoiceParty;
   receptor?: InvoiceParty;
+  lineas?: InvoiceLine[];   // ✅ Nuevo campo
+  iva?: number;             // ✅ Nuevo campo
+  irpf?: number;            // ✅ Nuevo campo
 }
 
 export function generateFacturaeXML(data: InvoiceData): string {
@@ -39,6 +48,15 @@ export function generateFacturaeXML(data: InvoiceData): string {
   const issuerNIF = data.emisor?.nif || data.emisor?.cif || data.issuerNIF;
   const receiverName = data.receptor?.nombre || data.receiverName;
   const receiverNIF = data.receptor?.nif || data.receptor?.cif || data.receiverNIF;
+
+  // Calcular totales a partir de las líneas
+  const subtotal = data.lineas
+    ? data.lineas.reduce((acc, l) => acc + l.precioUnitario * l.cantidad, 0)
+    : data.baseAmount;
+
+  const iva = data.iva ?? data.vat;
+  const totalIVA = (subtotal * iva) / 100;
+  const totalAmount = subtotal + totalIVA - (data.irpf ?? 0);
 
   const xmlObj = {
     Facturae: {
@@ -75,25 +93,24 @@ export function generateFacturaeXML(data: InvoiceData): string {
           },
           InvoiceIssueData: { IssueDate: data.invoiceDate || data.fecha },
           Items: {
-            InvoiceLine: {
-              ItemDescription: data.concept,
-              Quantity: 1,
-              UnitPriceWithoutTax: data.baseAmount,
-              TotalCost: data.baseAmount,
-              TaxesOutputs: {
-                Tax: {
-                  TaxTypeCode: "01",
-                  TaxRate: data.vat,
-                  TaxableBase: { TotalAmount: data.baseAmount },
-                  TaxAmount: { TotalAmount: (data.baseAmount * data.vat) / 100 },
+            InvoiceLine: data.lineas
+              ? data.lineas.map((l) => ({
+                  ItemDescription: l.descripcion,
+                  Quantity: l.cantidad,
+                  UnitPriceWithoutTax: l.precioUnitario,
+                  TotalCost: l.precioUnitario * l.cantidad,
+                }))
+              : {
+                  ItemDescription: data.concept,
+                  Quantity: 1,
+                  UnitPriceWithoutTax: data.baseAmount,
+                  TotalCost: data.baseAmount,
                 },
-              },
-            },
           },
           InvoiceTotals: {
-            TotalGrossAmount: data.baseAmount,
-            TotalTaxOutputs: (data.baseAmount * data.vat) / 100,
-            InvoiceTotal: data.totalAmount,
+            TotalGrossAmount: subtotal,
+            TotalTaxOutputs: totalIVA,
+            InvoiceTotal: totalAmount,
           },
         },
       },
