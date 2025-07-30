@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { buildFacturaeXML, InvoiceData } from "@/lib/facturae";
 
 interface Linea {
   descripcion: string;
@@ -76,79 +77,74 @@ export default function NuevaFacturaElectronicaPage() {
 
   // PDF
   const exportPDF = async () => {
+    if (!contRef.current) return;
+    const canvas = await html2canvas(contRef.current, { scale: 2, useCORS: true });
+    const imgData = canvas.toDataURL("image/png");
+
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const W = doc.internal.pageSize.getWidth();
-    doc.setFontSize(20);
-    doc.text("FACTURA", W - 80, 40, { align: "right" });
-    doc.setFontSize(10);
-    let y = 60;
-    doc.text(`Fecha de factura: ${new Date().toLocaleDateString()}`, 40, y);
-    y += 14;
-    doc.text(`Número de factura: 2024-0001`, 40, y);
-    y += 14;
-    doc.text(
-      `Fecha de vencimiento: ${new Date(Date.now() + 86400000).toLocaleDateString()}`,
-      40,
-      y
-    );
-    y += 20;
-    doc.line(40, y, W - 40, y);
-    y += 20;
+    doc.addImage(imgData, "PNG", 0, 0, W, (canvas.height * W) / canvas.width);
 
-    // Emisor/Receptor
-    doc.setFontSize(12);
-    doc.text("Emisor:", 40, y);
-    doc.text("Receptor:", W / 2 + 20, y);
-    doc.setFontSize(10);
-    y += 14;
-    doc.text(emisor.nombre, 40, y);
-    doc.text(receptor.nombre, W / 2 + 20, y);
-    y += 14;
-    doc.text(`Dirección: ${emisor.direccion}`, 40, y);
-    doc.text(`Dirección: ${receptor.direccion}`, W / 2 + 20, y);
-    y += 14;
-    doc.text(`CP ${emisor.cp} · ${emisor.ciudad}`, 40, y);
-    doc.text(`CP ${receptor.cp} · ${receptor.ciudad}`, W / 2 + 20, y);
-    y += 14;
-    doc.text(`NIF: ${emisor.nif}`, 40, y);
-    doc.text(`NIF: ${receptor.nif}`, W / 2 + 20, y);
-    y += 14;
-    doc.text(`Tel: ${emisor.telefono}`, 40, y);
-    doc.text(`Tel: ${receptor.telefono}`, W / 2 + 20, y);
-    y += 14;
-    doc.text(`Email: ${emisor.email}`, 40, y);
-    doc.text(`Email: ${receptor.email}`, W / 2 + 20, y);
-
-    y += 30;
+    const startY = (canvas.height * W) / canvas.width + 20;
     autoTable(doc, {
-      startY: y,
+      startY,
       head: [["Descripción", "Unidades", "Precio Unit. (€)", "Precio (€)"]],
       body: lineas.map((l) => [
         l.descripcion,
-        l.unidades,
+        l.unidades.toString(),
         l.precioUnitario.toFixed(2),
         (l.unidades * l.precioUnitario).toFixed(2),
       ]),
-      styles: { halign: "center", fontSize: 10 },
+      theme: "grid",
       headStyles: { fillColor: [230, 230, 230] },
       margin: { left: 40, right: 40 },
     });
 
     const finalY = (doc as any).lastAutoTable.finalY + 20;
-    doc.text(`Base imponible:`, W - 200, finalY);
-    doc.text(`${base.toFixed(2)} €`, W - 80, finalY, { align: "right" });
-    doc.text(`IVA (${vat}%):`, W - 200, finalY + 14);
-    doc.text(`${ivaImport.toFixed(2)} €`, W - 80, finalY + 14, { align: "right" });
-    doc.setFontSize(14);
-    doc.text(`Total:`, W - 200, finalY + 30);
-    doc.text(`${total.toFixed(2)} €`, W - 80, finalY + 30, { align: "right" });
-
-    let y2 = finalY + 60;
     doc.setFontSize(10);
-    doc.text(`Comentarios: ${comentarios}`, 40, y2);
-    doc.text(`IBAN: ${iban}`, 40, y2 + 14);
+    doc.text(`Base imponible: ${base.toFixed(2)} €`, W - 150, finalY);
+    doc.text(`IVA (${vat}%): ${ivaImport.toFixed(2)} €`, W - 150, finalY + 15);
+    doc.setFontSize(14).text(`Total: ${total.toFixed(2)} €`, W - 150, finalY + 35);
+
+    doc.setFontSize(10).text(`Comentarios: ${comentarios}`, 40, finalY + 60);
+    doc.text(`IBAN: ${iban}`, 40, finalY + 75);
 
     doc.save("factura-electronica.pdf");
+  };
+
+  // Enviar Facturae a AEAT
+  const enviarAEAT = async () => {
+    const invoiceData: InvoiceData = {
+      issuerName: emisor.nombre,
+      issuerNif: emisor.nif,
+      issuerPostalCode: emisor.cp,
+      receiverName: receptor.nombre,
+      receiverNif: receptor.nif,
+      receiverPostalCode: receptor.cp,
+      invoiceDate: new Date().toISOString().split("T")[0],
+      invoiceNumber: "2024-0001",
+      dueDate: new Date(Date.now() + 86400000).toISOString().split("T")[0],
+      lines: lineas.map((l) => ({
+        description: l.descripcion,
+        quantity: l.unidades,
+        unitPrice: l.precioUnitario,
+      })),
+      vatRate: vat,
+      paymentComments: comentarios,
+      paymentIBAN: iban,
+    };
+    const xml = buildFacturaeXML(invoiceData);
+    const res = await fetch("/api/factura-electronica", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ xml }),
+    });
+    if (res.ok) {
+      alert("Factura enviada a AEAT");
+    } else {
+      const err = await res.json();
+      alert("Error al enviar: " + err.error);
+    }
   };
 
   return (
@@ -159,7 +155,7 @@ export default function NuevaFacturaElectronicaPage() {
       >
         <h1 className="text-2xl font-bold">Nueva Factura Electrónica</h1>
 
-        {/* Emisor / Receptor */}
+        {/* EMISOR / RECEPTOR */}
         <div className="grid grid-cols-2 gap-6">
           {/* EMISOR */}
           <div className="space-y-2">
@@ -383,6 +379,12 @@ export default function NuevaFacturaElectronicaPage() {
           className="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
         >
           Exportar PDF
+        </button>
+        <button
+          onClick={enviarAEAT}
+          className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+        >
+          Enviar a AEAT
         </button>
       </div>
     </div>
