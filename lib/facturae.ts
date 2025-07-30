@@ -11,6 +11,12 @@ export interface InvoiceData {
   baseAmount: number;
   vat: number;
   totalAmount: number;
+
+  // ✅ Campos opcionales para compatibilidad con FacturaeData
+  serie?: string;
+  numero?: string;
+  fecha?: string;
+  vencimiento?: string;
 }
 
 export function generateFacturaeXML(data: InvoiceData): string {
@@ -44,12 +50,12 @@ export function generateFacturaeXML(data: InvoiceData): string {
       Invoices: {
         Invoice: {
           InvoiceHeader: {
-            InvoiceNumber: data.invoiceNumber,
-            InvoiceSeriesCode: "",
+            InvoiceNumber: data.invoiceNumber || data.numero || "0001",
+            InvoiceSeriesCode: data.serie || "",
             InvoiceDocumentType: "FC",
             InvoiceClass: "OO",
           },
-          InvoiceIssueData: { IssueDate: data.invoiceDate },
+          InvoiceIssueData: { IssueDate: data.invoiceDate || data.fecha },
           Items: {
             InvoiceLine: {
               ItemDescription: data.concept,
@@ -79,6 +85,6 @@ export function generateFacturaeXML(data: InvoiceData): string {
   return builder.buildObject(xmlObj);
 }
 
-// ✅ Alias para compatibilidad
+// ✅ Alias para compatibilidad con código antiguo
 export { generateFacturaeXML as buildFacturaeXML };
 export type { InvoiceData as FacturaeData };
