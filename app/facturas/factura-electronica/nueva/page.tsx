@@ -33,11 +33,10 @@ export default function NuevaFacturaElectronica() {
       });
 
       const json = await res.json();
-
       if (json.success) {
         setEstado("Factura enviada correctamente ✅");
       } else {
-        throw new Error(json.error || "Error desconocido");
+        throw new Error(json.error);
       }
     } catch (error: any) {
       console.error("Error:", error.message);
@@ -48,7 +47,6 @@ export default function NuevaFacturaElectronica() {
   return (
     <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">Nueva Factura Electrónica</h1>
-
       <div className="space-y-4">
         <input
           placeholder="Nombre Emisor"
@@ -101,7 +99,11 @@ export default function NuevaFacturaElectronica() {
           Enviar a AEAT
         </button>
         {estado && (
-          <p className={`mt-4 ${estado.includes("Error") ? "text-red-500" : "text-green-600"}`}>
+          <p
+            className={`mt-4 ${
+              estado.includes("Error") ? "text-red-500" : "text-green-600"
+            }`}
+          >
             {estado}
           </p>
         )}
