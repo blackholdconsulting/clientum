@@ -2,8 +2,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DatePicker } from "@/components/DatePicker"; // tu componente de fecha
-import { fetchVentas } from "@/lib/api";              // tu llamada a API
 import { CSVLink } from "react-csv";
 
 interface Venta {
@@ -17,24 +15,25 @@ interface Venta {
 }
 
 export default function LibroVentasPage() {
-  const [desde, setDesde] = useState<string>("");
-  const [hasta, setHasta] = useState<string>("");
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
   const [datos, setDatos] = useState<Venta[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (desde && hasta) {
       setLoading(true);
-      fetchVentas({ desde, hasta }).then((res) => {
-        setDatos(res);
-        setLoading(false);
-      });
+      // TODO: reemplazar por tu llamada real a API o hook
+      fetch(`/api/gastos/ventas?desde=${desde}&hasta=${hasta}`)
+        .then((res) => res.json())
+        .then((res: Venta[]) => setDatos(res))
+        .finally(() => setLoading(false));
     }
   }, [desde, hasta]);
 
-  const sumBase = datos.reduce((sum, v) => sum + v.base, 0);
-  const sumIva = datos.reduce((sum, v) => sum + v.iva, 0);
-  const sumTotal = datos.reduce((sum, v) => sum + v.total, 0);
+  const sumBase = datos.reduce((s, v) => s + v.base, 0);
+  const sumIva = datos.reduce((s, v) => s + v.iva, 0);
+  const sumTotal = datos.reduce((s, v) => s + v.total, 0);
 
   return (
     <div className="p-6 space-y-6">
@@ -44,12 +43,23 @@ export default function LibroVentasPage() {
       <div className="flex items-end space-x-4">
         <div>
           <label className="block text-sm">Desde</label>
-          <DatePicker value={desde} onChange={setDesde} />
+          <input
+            type="date"
+            value={desde}
+            onChange={(e) => setDesde(e.target.value)}
+            className="border rounded px-2 py-1 text-sm"
+          />
         </div>
         <div>
           <label className="block text-sm">Hasta</label>
-          <DatePicker value={hasta} onChange={setHasta} />
+          <input
+            type="date"
+            value={hasta}
+            onChange={(e) => setHasta(e.target.value)}
+            className="border rounded px-2 py-1 text-sm"
+          />
         </div>
+
         <CSVLink
           data={datos}
           filename={`ventas_${desde}_${hasta}.csv`}
@@ -57,6 +67,7 @@ export default function LibroVentasPage() {
         >
           Exportar CSV
         </CSVLink>
+
         <button
           onClick={() =>
             window.open(
@@ -87,7 +98,7 @@ export default function LibroVentasPage() {
             {loading ? (
               <tr>
                 <td colSpan={6} className="p-4 text-center">
-                  Cargando...
+                  Cargando…
                 </td>
               </tr>
             ) : datos.length === 0 ? (
@@ -105,9 +116,13 @@ export default function LibroVentasPage() {
                   <td className="px-4 py-2">{v.fecha}</td>
                   <td className="px-4 py-2">{v.cliente}</td>
                   <td className="px-4 py-2">{v.numeroFactura}</td>
-                  <td className="px-4 py-2 text-right">{v.base.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">
+                    {v.base.toFixed(2)}
+                  </td>
                   <td className="px-4 py-2 text-right">{v.iva.toFixed(2)}</td>
-                  <td className="px-4 py-2 text-right">{v.total.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">
+                    {v.total.toFixed(2)}
+                  </td>
                 </tr>
               ))
             )}
