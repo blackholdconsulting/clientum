@@ -1,4 +1,3 @@
-// File: /app/facturas/page.tsx
 "use client";
 
 import { useState, ChangeEvent } from "react";
