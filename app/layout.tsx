@@ -30,11 +30,12 @@ export default async function RootLayout({
   return (
     <html lang="es">
       <body className="bg-gray-50 text-gray-800 flex h-screen overflow-hidden">
+        {/* Sidebar */}
         <aside className="w-64 bg-white border-r shadow flex flex-col">
-          {/* Logo / Título */}
+          {/* Logo / App Title */}
           <div className="p-6 font-bold text-xl text-indigo-600">Clientum</div>
 
-          {/* Navegación principal */}
+          {/* Main Navigation */}
           <nav className="flex-1 overflow-y-auto px-4 space-y-1 text-sm">
             <Link href="/dashboard" className={linkClass("/dashboard")}>
               📊 Dashboard
@@ -90,24 +91,28 @@ export default async function RootLayout({
                   📁 Proyectos
                 </Link>
                 <Link
-                  href="/negocio/analisis-de-la-competencia"
-                  className={linkClass(
-                    "/negocio/analisis-de-la-competencia"
-                  )}
+                  href="/negocio/plan-futuro"
+                  className={linkClass("/negocio/plan-futuro")}
                 >
-                  📊 Análisis de la competencia
+                  🗺️ Plan Futuro
                 </Link>
                 <Link
                   href="/negocio/estudio-de-mercado"
                   className={linkClass("/negocio/estudio-de-mercado")}
                 >
-                  🔎 Estudio de mercado
+                  🔎 Estudio de Mercado
+                </Link>
+                <Link
+                  href="/negocio/analisis-competencia"
+                  className={linkClass("/negocio/analisis-competencia")}
+                >
+                  📊 Análisis de Competencia
                 </Link>
                 <Link
                   href="/negocio/continuar-proyecto"
                   className={linkClass("/negocio/continuar-proyecto")}
                 >
-                  ▶️ Continuar proyecto
+                  ▶️ Continuar Proyecto
                 </Link>
               </div>
             </div>
@@ -130,64 +135,67 @@ export default async function RootLayout({
             <Link href="/RR.HH" className={linkClass("/RR.HH")}>
               👩‍💼 RRHH
             </Link>
+
+            {/* Ayuda y Soporte */}
+            <div>
+              <Link href="/help" className={linkClass("/help")}>
+                🆘 Ayuda y Soporte
+              </Link>
+              <div className="pl-4 space-y-1">
+                <Link
+                  href="/help/academia"
+                  className={linkClass("/help/academia")}
+                >
+                  📘 Academia Clientum
+                </Link>
+                <Link
+                  href="/help/tutoriales"
+                  className={linkClass("/help/tutoriales")}
+                >
+                  🎥 Tutoriales
+                </Link>
+                <Link
+                  href="/help/votar-mejoras"
+                  className={linkClass("/help/votar-mejoras")}
+                >
+                  👍 Votar mejoras
+                </Link>
+                <Link
+                  href="/help/novedades"
+                  className={linkClass("/help/novedades")}
+                >
+                  🆕 Novedades
+                </Link>
+                <Link
+                  href="/help/soporte"
+                  className={linkClass("/help/soporte")}
+                >
+                  🛠️ Soporte
+                </Link>
+                <Link
+                  href="/help/contacto"
+                  className={linkClass("/help/contacto")}
+                >
+                  💬 Contáctanos
+                </Link>
+              </div>
+            </div>
           </nav>
 
-          {/* Ayuda y soporte */}
+          {/* Pie: Mi perfil y menú de usuario */}
           <div className="px-4 mt-auto border-t pt-2 space-y-1">
-            <div className="text-xs font-semibold">Ayuda y soporte</div>
             <Link
-              href="/help/academia"
-              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+              href="/profile"
+              className="flex items-center py-2 px-3 text-sm hover:bg-gray-100 rounded"
             >
-              📘 Academia Clientum
+              <div className="h-8 w-8 bg-gray-200 rounded-full mr-2" />
+              Mi perfil
             </Link>
-            <Link
-              href="/help/tutoriales"
-              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              🎥 Tutoriales
-            </Link>
-            <Link
-              href="/help/votar-mejoras"
-              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              👍 Votar mejoras
-            </Link>
-            <Link
-              href="/help/novedades"
-              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              🆕 Novedades
-            </Link>
-            <Link
-              href="/help/soporte"
-              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              🛠️ Soporte
-            </Link>
-            <Link
-              href="/help/contacto"
-              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
-            >
-              💬 Contáctanos
-            </Link>
-
-            {/* Perfil y cierre de sesión */}
-            <div className="mt-3">
-              {/* Enlace estático "Mi cuenta" (corrige href a /perfil) */}
-              <Link
-                href="/perfil"
-                className="flex items-center py-2 px-3 text-sm hover:bg-gray-100 rounded"
-              >
-                <div className="h-8 w-8 bg-gray-200 rounded-full mr-2" />
-                Mi cuenta
-              </Link>
-              {/* Desplegable con Firma Digital, Configuración y Logout */}
-              <UserMenu />
-            </div>
+            <UserMenu />
           </div>
         </aside>
 
+        {/* Main Content */}
         <main className="flex-1 p-8 overflow-y-auto bg-gray-100">
           {children}
         </main>
