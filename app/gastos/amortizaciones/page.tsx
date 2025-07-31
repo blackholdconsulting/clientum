@@ -63,6 +63,7 @@ export default function LibroAmortizacionesPage() {
             className="border rounded px-2 py-1 text-sm"
           />
         </div>
+
         <CSVLink
           data={datos}
           filename={`amortizaciones_${hasta}.csv`}
@@ -132,8 +133,9 @@ export default function LibroAmortizacionesPage() {
                 </td>
                 <td className="px-4 py-2 text-right">{sumCuota.toFixed(2)}</td>
                 <td className="px-4 py-2 text-right">
-                  {sumAcumulada.toFixed(2)}
+                  {sumCuota.toFixed(2)}
                 </td>
+                <td className="px-4 py-2 text-right">{sumAcumulada.toFixed(2)}</td>
               </tr>
             </tfoot>
           )}
