@@ -2,8 +2,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DatePicker } from "@/components/DatePicker";
-import { fetchCompras } from "@/lib/api";
 import { CSVLink } from "react-csv";
 
 interface Compra {
@@ -17,18 +15,19 @@ interface Compra {
 }
 
 export default function LibroComprasPage() {
-  const [desde, setDesde] = useState<string>("");
-  const [hasta, setHasta] = useState<string>("");
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
   const [datos, setDatos] = useState<Compra[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (desde && hasta) {
       setLoading(true);
-      fetchCompras({ desde, hasta }).then((res) => {
-        setDatos(res);
-        setLoading(false);
-      });
+      // TODO: ajustar tu endpoint real
+      fetch(`/api/gastos/compras?desde=${desde}&hasta=${hasta}`)
+        .then((r) => r.json())
+        .then((res: Compra[]) => setDatos(res))
+        .finally(() => setLoading(false));
     }
   }, [desde, hasta]);
 
@@ -40,16 +39,26 @@ export default function LibroComprasPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">📕 Libro de Compras y Gastos</h1>
 
-      {/* Filtros y export */}
       <div className="flex items-end space-x-4">
         <div>
           <label className="block text-sm">Desde</label>
-          <DatePicker value={desde} onChange={setDesde} />
+          <input
+            type="date"
+            value={desde}
+            onChange={(e) => setDesde(e.target.value)}
+            className="border rounded px-2 py-1 text-sm"
+          />
         </div>
         <div>
           <label className="block text-sm">Hasta</label>
-          <DatePicker value={hasta} onChange={setHasta} />
+          <input
+            type="date"
+            value={hasta}
+            onChange={(e) => setHasta(e.target.value)}
+            className="border rounded px-2 py-1 text-sm"
+          />
         </div>
+
         <CSVLink
           data={datos}
           filename={`compras_${desde}_${hasta}.csv`}
@@ -57,6 +66,7 @@ export default function LibroComprasPage() {
         >
           Exportar CSV
         </CSVLink>
+
         <button
           onClick={() =>
             window.open(
@@ -70,7 +80,6 @@ export default function LibroComprasPage() {
         </button>
       </div>
 
-      {/* Tabla */}
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white shadow rounded-lg text-sm">
           <thead className="bg-gray-100">
@@ -87,7 +96,7 @@ export default function LibroComprasPage() {
             {loading ? (
               <tr>
                 <td colSpan={6} className="p-4 text-center">
-                  Cargando...
+                  Cargando…
                 </td>
               </tr>
             ) : datos.length === 0 ? (
@@ -105,9 +114,13 @@ export default function LibroComprasPage() {
                   <td className="px-4 py-2">{c.fecha}</td>
                   <td className="px-4 py-2">{c.proveedor}</td>
                   <td className="px-4 py-2">{c.numeroFactura}</td>
-                  <td className="px-4 py-2 text-right">{c.base.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">
+                    {c.base.toFixed(2)}
+                  </td>
                   <td className="px-4 py-2 text-right">{c.iva.toFixed(2)}</td>
-                  <td className="px-4 py-2 text-right">{c.total.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">
+                    {c.total.toFixed(2)}
+                  </td>
                 </tr>
               ))
             )}
