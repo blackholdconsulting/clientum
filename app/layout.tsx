@@ -3,6 +3,7 @@ import "./globals.css";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { ReactNode } from "react";
+import UserMenu from "../components/UserMenu";
 
 export const metadata = {
   title: "Clientum",
@@ -116,23 +117,18 @@ export default async function RootLayout({
             <Link href="/impuestos" className={linkClass("/impuestos")}>
               ⚖️ Impuestos
             </Link>
-
             <Link href="/tesoreria" className={linkClass("/tesoreria")}>
               🏦 Tesorería
             </Link>
-
             <Link href="/gastos" className={linkClass("/gastos")}>
               💸 Gastos
             </Link>
-
             <Link href="/contabilidad" className={linkClass("/contabilidad")}>
               📈 Contabilidad
             </Link>
-
             <Link href="/chat" className={linkClass("/chat")}>
               💬 Chat IA
             </Link>
-
             <Link href="/RR.HH" className={linkClass("/RR.HH")}>
               👥 RRHH
             </Link>
@@ -143,10 +139,7 @@ export default async function RootLayout({
                 🆘 Ayuda y Soporte
               </Link>
               <div className="pl-4 space-y-1">
-                <Link
-                  href="/help/chat"
-                  className={linkClass("/help/chat")}
-                >
+                <Link href="/help/chat" className={linkClass("/help/chat")}>
                   💬 Chat
                 </Link>
                 <Link
@@ -178,24 +171,8 @@ export default async function RootLayout({
           </nav>
 
           {/* Perfil y Cerrar Sesión */}
-          <div className="p-4 border-t">
-            <Link
-              href="/perfil"
-              className="flex items-center space-x-2 text-sm hover:underline"
-            >
-              <img
-                src="/avatar.png"
-                alt="Avatar"
-                className="h-8 w-8 rounded-full bg-gray-200"
-              />
-              <span className="font-medium">Mi perfil</span>
-            </Link>
-            <Link
-              href="/logout"
-              className="mt-2 block text-sm text-red-500 hover:underline"
-            >
-              Cerrar sesión
-            </Link>
+          <div className="p-4 border-t flex justify-center">
+            <UserMenu />
           </div>
         </aside>
 
