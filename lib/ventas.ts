@@ -25,7 +25,6 @@ export async function registraVenta({
   base: number;
   iva: number;
 }) {
-  // Obtiene sesión
   const {
     data: { session },
     error: sessErr,
@@ -33,8 +32,6 @@ export async function registraVenta({
   if (sessErr || !session?.user.id) {
     throw new Error("Usuario no autenticado");
   }
-
-  // Inserta
   const { error } = await supabase
     .from("ventas")
     .insert({
@@ -45,8 +42,5 @@ export async function registraVenta({
       base,
       iva,
     });
-
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 }
