@@ -26,29 +26,29 @@ export default function LibroVentasPage() {
   const [datos, setDatos] = useState<Venta[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Form state
+  // Formulario
   const [fecha, setFecha] = useState("");
   const [clienteId, setClienteId] = useState("");
   const [numero, setNumero] = useState("");
   const [base, setBase] = useState<number | "">("");
   const [ivaPct, setIvaPct] = useState<number>(21);
 
-  // Fechas filtro
+  // Filtros
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
 
-  // Carga lista de clientes para el select
+  // Carga clientes
   useEffect(() => {
     supabase
       .from("clientes")
       .select("id, nombre")
       .order("nombre")
-      .then(({ data, error }) => {
+      .then(({ data }) => {
         if (data) setClientes(data);
       });
   }, []);
 
-  // Refresca el listado según rango
+  // Funcion para traer ventas
   const fetchVentas = () => {
     if (!desde || !hasta) return;
     setLoading(true);
@@ -73,38 +73,35 @@ export default function LibroVentasPage() {
           .order("fecha", { ascending: true })
       )
       .then(({ data, error }) => {
-        if (!error) setDatos((data ?? []) as unknown as Venta[]);
+        if (!error) {
+          setDatos((data ?? []) as unknown as Venta[]);
+        }
       })
       .finally(() => setLoading(false));
   };
 
   useEffect(fetchVentas, [desde, hasta]);
 
-  // Manejador de alta de factura
+  // Alta de factura
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!fecha || !clienteId || !numero || !base) {
-      alert("Rellena todos los campos del formulario");
+    if (!fecha || !clienteId || !numero || base === "") {
+      alert("Rellena todos los campos");
       return;
     }
     setLoading(true);
-    const iva = +( (base * ivaPct) / 100 ).toFixed(2);
-    await supabase.auth
-      .getSession()
-      .then(({ data }) => data.session?.user.id)
-      .then((uid) =>
-        supabase
-          .from("ventas")
-          .insert({
-            user_id: uid,
-            fecha,
-            cliente_id: clienteId,
-            numero_factura: numero,
-            base,
-            iva,
-          })
-      );
-    // limpia y refresca
+    const iva = +( (base as number) * ivaPct / 100 ).toFixed(2);
+    const uid = (await supabase.auth.getSession()).data.session?.user.id;
+    await supabase
+      .from("ventas")
+      .insert({
+        user_id: uid,
+        fecha,
+        cliente_id: clienteId,
+        numero_factura: numero,
+        base: base as number,
+        iva,
+      });
     setFecha("");
     setClienteId("");
     setNumero("");
@@ -122,7 +119,7 @@ export default function LibroVentasPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">📒 Libro de Ventas e Ingresos</h1>
 
-      {/* --- Formulario de nueva factura --- */}
+      {/* Formulario de alta */}
       <form
         onSubmit={handleSubmit}
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 bg-white p-4 rounded shadow"
@@ -154,7 +151,7 @@ export default function LibroVentasPage() {
           </select>
         </div>
         <div>
-          <label className="block text-sm">Factura Nº</label>
+          <label className="block text-sm">Nº Factura</label>
           <input
             type="text"
             value={numero}
@@ -193,21 +190,26 @@ export default function LibroVentasPage() {
         </button>
       </form>
 
-      {/* --- Filtros de rango --- */}
+      {/* Filtros de rango */}
       <div className="flex items-end space-x-4">
-        {[["Desde", desde, setDesde], ["Hasta", hasta, setHasta]].map(
-          ([label, val, setter]) => (
-            <div key={label}>
-              <label className="block text-sm">{label}</label>
-              <input
-                type="date"
-                value={val as string}
-                onChange={(e) => (setter as any)(e.target.value)}
-                className="border rounded px-2 py-1 text-sm"
-              />
-            </div>
-          )
-        )}
+        <div>
+          <label className="block text-sm">Desde</label>
+          <input
+            type="date"
+            value={desde}
+            onChange={(e) => setDesde(e.target.value)}
+            className="border rounded px-2 py-1 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-sm">Hasta</label>
+          <input
+            type="date"
+            value={hasta}
+            onChange={(e) => setHasta(e.target.value)}
+            className="border rounded px-2 py-1 text-sm"
+          />
+        </div>
         <button
           onClick={fetchVentas}
           className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm"
@@ -216,7 +218,29 @@ export default function LibroVentasPage() {
         </button>
       </div>
 
-      {/* --- Tabla de resultados --- */}
+      {/* Export */}
+      <div className="flex space-x-4">
+        <CSVLink
+          data={datos.map(v => ({ ...v, cliente: v.cliente[0]?.nombre ?? "" }))}
+          filename={`ventas_${desde}_${hasta}.csv`}
+          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+        >
+          Exportar CSV
+        </CSVLink>
+        <button
+          onClick={() =>
+            window.open(
+              `/gastos/ventas/export.pdf?desde=${desde}&hasta=${hasta}`,
+              "_blank"
+            )
+          }
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+        >
+          Exportar PDF
+        </button>
+      </div>
+
+      {/* Tabla */}
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white shadow rounded-lg text-sm">
           <thead className="bg-gray-100">
@@ -252,15 +276,9 @@ export default function LibroVentasPage() {
                       {v.numero_factura}
                     </Link>
                   </td>
-                  <td className="px-4 py-2 text-right">
-                    {v.base.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    {v.iva.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    {v.total.toFixed(2)}
-                  </td>
+                  <td className="px-4 py-2 text-right">{v.base.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">{v.iva.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">{v.total.toFixed(2)}</td>
                 </tr>
               ))
             )}
@@ -272,13 +290,13 @@ export default function LibroVentasPage() {
                   Totales:
                 </td>
                 <td className="px-4 py-2 text-right">
-                  {datos.reduce((s, v) => s + v.base, 0).toFixed(2)}
+                  {sumBase.toFixed(2)}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  {datos.reduce((s, v) => s + v.iva, 0).toFixed(2)}
+                  {sumIva.toFixed(2)}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  {datos.reduce((s, v) => s + v.total, 0).toFixed(2)}
+                  {sumTotal.toFixed(2)}
                 </td>
               </tr>
             </tfoot>
