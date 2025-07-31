@@ -16,10 +16,10 @@ interface Compra {
 }
 
 export default function LibroComprasPage() {
-  const [desde, setDesde] = useState<string>("");
-  const [hasta, setHasta] = useState<string>("");
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
   const [datos, setDatos] = useState<Compra[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!desde || !hasta) return;
@@ -30,7 +30,7 @@ export default function LibroComprasPage() {
       .then(({ data }) => data.session?.user.id)
       .then((uid) =>
         supabase
-          .from<Compra>("compras")
+          .from("compras")
           .select(`
             id,
             proveedores(nombre) as proveedor,
@@ -47,7 +47,7 @@ export default function LibroComprasPage() {
       )
       .then(({ data, error }) => {
         if (error) console.error(error);
-        else setDatos(data ?? []);
+        else setDatos(data as Compra[]);
       })
       .finally(() => setLoading(false));
   }, [desde, hasta]);
@@ -60,7 +60,6 @@ export default function LibroComprasPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">📕 Libro de Compras y Gastos</h1>
 
-      {/* Filtros y export */}
       <div className="flex items-end space-x-4">
         <div>
           <label className="block text-sm">Desde</label>
@@ -101,7 +100,6 @@ export default function LibroComprasPage() {
         </button>
       </div>
 
-      {/* Tabla */}
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white shadow rounded-lg text-sm">
           <thead className="bg-gray-100">
