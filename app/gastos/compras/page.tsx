@@ -7,8 +7,8 @@ import { CSVLink } from "react-csv";
 
 interface Compra {
   id: string;
+  proveedor_id: string;
   fecha: string;
-  proveedor: string;
   numero_factura: string;
   base: number;
   iva: number;
@@ -31,35 +31,32 @@ export default function LibroComprasPage() {
       .then((uid) =>
         supabase
           .from("compras")
-          .select(`
-            id,
-            proveedores(nombre) as proveedor,
-            fecha,
-            numero_factura,
-            base,
-            iva,
-            total
-          `)
+          .select("id, proveedor_id, fecha, numero_factura, base, iva, total")
           .eq("user_id", uid)
           .gte("fecha", desde)
           .lte("fecha", hasta)
           .order("fecha", { ascending: true })
       )
       .then(({ data, error }) => {
-        if (error) console.error(error);
-        else setDatos(data as Compra[]);
+        if (error) {
+          console.error(error);
+          setDatos([]);
+        } else {
+          setDatos(data ?? []);
+        }
       })
       .finally(() => setLoading(false));
   }, [desde, hasta]);
 
-  const sumBase  = datos.reduce((s, v) => s + v.base, 0);
-  const sumIva   = datos.reduce((s, v) => s + v.iva, 0);
-  const sumTotal = datos.reduce((s, v) => s + v.total, 0);
+  const sumBase  = datos.reduce((s, c) => s + c.base, 0);
+  const sumIva   = datos.reduce((s, c) => s + c.iva, 0);
+  const sumTotal = datos.reduce((s, c) => s + c.total, 0);
 
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">📕 Libro de Compras y Gastos</h1>
 
+      {/* Filtros y export */}
       <div className="flex items-end space-x-4">
         <div>
           <label className="block text-sm">Desde</label>
@@ -100,12 +97,14 @@ export default function LibroComprasPage() {
         </button>
       </div>
 
+      {/* Tabla */}
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white shadow rounded-lg text-sm">
           <thead className="bg-gray-100">
             <tr>
+              <th className="px-4 py-2 text-left">ID</th>
+              <th className="px-4 py-2 text-left">Proveedor ID</th>
               <th className="px-4 py-2 text-left">Fecha</th>
-              <th className="px-4 py-2 text-left">Proveedor</th>
               <th className="px-4 py-2 text-left">Factura</th>
               <th className="px-4 py-2 text-right">Base</th>
               <th className="px-4 py-2 text-right">IVA</th>
@@ -115,13 +114,13 @@ export default function LibroComprasPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="p-4 text-center">
+                <td colSpan={7} className="p-4 text-center">
                   Cargando…
                 </td>
               </tr>
             ) : datos.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-4 text-center">
+                <td colSpan={7} className="p-4 text-center">
                   No hay datos
                 </td>
               </tr>
@@ -131,8 +130,9 @@ export default function LibroComprasPage() {
                   key={c.id}
                   className="border-t even:bg-gray-50 hover:bg-gray-50"
                 >
+                  <td className="px-4 py-2">{c.id}</td>
+                  <td className="px-4 py-2">{c.proveedor_id}</td>
                   <td className="px-4 py-2">{c.fecha}</td>
-                  <td className="px-4 py-2">{c.proveedor}</td>
                   <td className="px-4 py-2">{c.numero_factura}</td>
                   <td className="px-4 py-2 text-right">
                     {c.base.toFixed(2)}
@@ -150,12 +150,18 @@ export default function LibroComprasPage() {
           {datos.length > 0 && (
             <tfoot className="bg-gray-100 font-semibold">
               <tr>
-                <td colSpan={3} className="px-4 py-2 text-right">
+                <td colSpan={4} className="px-4 py-2 text-right">
                   Totales:
                 </td>
-                <td className="px-4 py-2 text-right">{sumBase.toFixed(2)}</td>
-                <td className="px-4 py-2 text-right">{sumIva.toFixed(2)}</td>
-                <td className="px-4 py-2 text-right">{sumTotal.toFixed(2)}</td>
+                <td className="px-4 py-2 text-right">
+                  {sumBase.toFixed(2)}
+                </td>
+                <td className="px-4 py-2 text-right">
+                  {sumIva.toFixed(2)}
+                </td>
+                <td className="px-4 py-2 text-right">
+                  {sumTotal.toFixed(2)}
+                </td>
               </tr>
             </tfoot>
           )}
