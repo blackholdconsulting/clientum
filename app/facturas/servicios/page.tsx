@@ -16,12 +16,12 @@ export default function ServiciosPage() {
   const [precio, setPrecio] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // Carga servicios del usuario
+  // Carga los servicios del usuario
   const load = async () => {
     const { data, error } = await supabase
       .from("servicios")
       .select("id,nombre,precio");
-    if (error) console.error(error);
+    if (error) console.error("Load servicios:", error.message);
     else setServicios(data as Servicio[]);
   };
 
@@ -29,26 +29,52 @@ export default function ServiciosPage() {
     load();
   }, []);
 
-  // Añadir nuevo servicio
+  // Añade un servicio, incluyendo user_id
   const addServicio = async () => {
-    if (!nombre || precio <= 0) return alert("Nombre y precio válidos");
+    if (!nombre.trim() || precio <= 0) {
+      return alert("Debes indicar un nombre y un precio mayor que 0");
+    }
     setLoading(true);
-    const { error } = await supabase
+
+    // 1) Obtén el user_id actual
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser();
+    if (userErr || !user) {
+      alert("No se pudo identificar al usuario.");
+      setLoading(false);
+      return;
+    }
+
+    // 2) Inserta con user_id
+    const { error: insertErr } = await supabase
       .from("servicios")
-      .insert({ nombre, precio });
-    if (error) console.error(error);
-    else {
+      .insert([
+        {
+          user_id: user.id,
+          nombre,
+          precio,
+        },
+      ]);
+    if (insertErr) {
+      console.error("Insert servicio:", insertErr.message);
+      alert("Error al guardar servicio: " + insertErr.message);
+    } else {
+      // reset y recarga
       setNombre("");
       setPrecio(0);
-      load();
+      await load();
     }
+
     setLoading(false);
   };
 
-  // Borrar servicio
+  // Borra un servicio
   const delServicio = async (id: string) => {
-    await supabase.from("servicios").delete().eq("id", id);
-    load();
+    const { error } = await supabase.from("servicios").delete().eq("id", id);
+    if (error) console.error("Delete servicio:", error.message);
+    else load();
   };
 
   return (
@@ -58,23 +84,24 @@ export default function ServiciosPage() {
       {/* Formulario añadir */}
       <div className="grid grid-cols-3 gap-2 mb-6">
         <input
-          className="border rounded px-2 py-1 col-span-2"
+          type="text"
           placeholder="Nombre servicio"
+          className="border rounded px-2 py-1 col-span-2"
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
         />
         <input
-          className="border rounded px-2 py-1"
-          placeholder="Precio"
           type="number"
+          placeholder="Precio"
           step="0.01"
+          className="border rounded px-2 py-1"
           value={precio}
-          onChange={(e) => setPrecio(+e.target.value)}
+          onChange={(e) => setPrecio(Number(e.target.value))}
         />
         <button
-          className="col-span-3 bg-blue-600 text-white rounded px-4 py-2 hover:bg-blue-700"
           onClick={addServicio}
           disabled={loading}
+          className="col-span-3 bg-blue-600 text-white rounded px-4 py-2 hover:bg-blue-700"
         >
           {loading ? "Añadiendo…" : "Añadir servicio"}
         </button>
@@ -91,8 +118,8 @@ export default function ServiciosPage() {
               {s.nombre} — €{s.precio.toFixed(2)}
             </span>
             <button
-              className="text-red-600 hover:underline"
               onClick={() => delServicio(s.id)}
+              className="text-red-600 hover:underline"
             >
               Eliminar
             </button>
