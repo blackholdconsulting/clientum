@@ -2,8 +2,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DatePicker } from "@/components/DatePicker";
-import { fetchAmortizaciones } from "@/lib/api";
 import { CSVLink } from "react-csv";
 
 interface Amort {
@@ -16,17 +14,18 @@ interface Amort {
 }
 
 export default function LibroAmortizacionesPage() {
-  const [hasta, setHasta] = useState<string>("");
+  const [hasta, setHasta] = useState("");
   const [datos, setDatos] = useState<Amort[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (hasta) {
       setLoading(true);
-      fetchAmortizaciones({ hasta }).then((res) => {
-        setDatos(res);
-        setLoading(false);
-      });
+      // TODO: ajustar tu endpoint real
+      fetch(`/api/gastos/amortizaciones?hasta=${hasta}`)
+        .then((r) => r.json())
+        .then((res: Amort[]) => setDatos(res))
+        .finally(() => setLoading(false));
     }
   }, [hasta]);
 
@@ -38,12 +37,17 @@ export default function LibroAmortizacionesPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">📗 Libro de Amortizaciones</h1>
 
-      {/* Filtro y export */}
       <div className="flex items-end space-x-4">
         <div>
           <label className="block text-sm">Hasta</label>
-          <DatePicker value={hasta} onChange={setHasta} />
+          <input
+            type="date"
+            value={hasta}
+            onChange={(e) => setHasta(e.target.value)}
+            className="border rounded px-2 py-1 text-sm"
+          />
         </div>
+
         <CSVLink
           data={datos}
           filename={`amortizaciones_${hasta}.csv`}
@@ -51,9 +55,13 @@ export default function LibroAmortizacionesPage() {
         >
           Exportar CSV
         </CSVLink>
+
         <button
           onClick={() =>
-            window.open(`/gastos/amortizaciones/export.pdf?hasta=${hasta}`)
+            window.open(
+              `/gastos/amortizaciones/export.pdf?hasta=${hasta}`,
+              "_blank"
+            )
           }
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
         >
@@ -61,7 +69,6 @@ export default function LibroAmortizacionesPage() {
         </button>
       </div>
 
-      {/* Tabla */}
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white shadow rounded-lg text-sm">
           <thead className="bg-gray-100">
@@ -77,7 +84,7 @@ export default function LibroAmortizacionesPage() {
             {loading ? (
               <tr>
                 <td colSpan={5} className="p-4 text-center">
-                  Cargando...
+                  Cargando…
                 </td>
               </tr>
             ) : datos.length === 0 ? (
@@ -94,9 +101,7 @@ export default function LibroAmortizacionesPage() {
                 >
                   <td className="px-4 py-2">{a.activo}</td>
                   <td className="px-4 py-2">{a.fecha}</td>
-                  <td className="px-4 py-2 text-right">
-                    {a.base.toFixed(2)}
-                  </td>
+                  <td className="px-4 py-2 text-right">{a.base.toFixed(2)}</td>
                   <td className="px-4 py-2 text-right">
                     {a.amortAcumulada.toFixed(2)}
                   </td>
