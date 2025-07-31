@@ -90,28 +90,24 @@ export default async function RootLayout({
                   📁 Proyectos
                 </Link>
                 <Link
-                  href="/negocio/plan-futuro"
-                  className={linkClass("/negocio/plan-futuro")}
+                  href="/negocio/analisis-de-la-competencia"
+                  className={linkClass(
+                    "/negocio/analisis-de-la-competencia"
+                  )}
                 >
-                  🗺️ Plan Futuro
+                  📊 Análisis de la competencia
                 </Link>
                 <Link
                   href="/negocio/estudio-de-mercado"
                   className={linkClass("/negocio/estudio-de-mercado")}
                 >
-                  🔎 Estudio de Mercado
-                </Link>
-                <Link
-                  href="/negocio/analisis-competencia"
-                  className={linkClass("/negocio/analisis-competencia")}
-                >
-                  📊 Análisis de Competencia
+                  🔎 Estudio de mercado
                 </Link>
                 <Link
                   href="/negocio/continuar-proyecto"
                   className={linkClass("/negocio/continuar-proyecto")}
                 >
-                  ▶️ Continuar Proyecto
+                  ▶️ Continuar proyecto
                 </Link>
               </div>
             </div>
@@ -132,63 +128,63 @@ export default async function RootLayout({
               💬 Chat IA
             </Link>
             <Link href="/RR.HH" className={linkClass("/RR.HH")}>
-              👥 RRHH
+              👩‍💼 RRHH
             </Link>
-
-            {/* Ayuda y Soporte */}
-            <div>
-              <Link href="/help" className={linkClass("/help")}>
-                🆘 Ayuda y Soporte
-              </Link>
-              <div className="pl-4 space-y-1">
-                <Link href="/help/chat" className={linkClass("/help/chat")}>
-                  💬 Chat
-                </Link>
-                <Link
-                  href="/help/contacto"
-                  className={linkClass("/help/contacto")}
-                >
-                  📞 Contacto
-                </Link>
-                <Link
-                  href="/help/feedback"
-                  className={linkClass("/help/feedback")}
-                >
-                  ✉️ Feedback
-                </Link>
-                <Link
-                  href="/help/novedades"
-                  className={linkClass("/help/novedades")}
-                >
-                  📰 Novedades
-                </Link>
-                <Link
-                  href="/help/tutoriales"
-                  className={linkClass("/help/tutoriales")}
-                >
-                  🎓 Tutoriales
-                </Link>
-              </div>
-            </div>
           </nav>
 
-          {/* Perfil y cierre de sesión */}
-          <div className="border-t px-4 py-3">
-            {/* Enlace estático "Mi perfil" */}
+          {/* Ayuda y soporte */}
+          <div className="px-4 mt-auto border-t pt-2 space-y-1">
+            <div className="text-xs font-semibold">Ayuda y soporte</div>
             <Link
-              href="/perfil"
-              className="flex items-center space-x-2 mb-3 hover:bg-gray-100 rounded p-2"
+              href="/help/academia"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
             >
-              <img
-                src="/avatar.png"
-                alt="Avatar"
-                className="h-8 w-8 rounded-full bg-gray-200"
-              />
-              <span className="font-medium">Mi perfil</span>
+              📘 Academia Clientum
+            </Link>
+            <Link
+              href="/help/tutoriales"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              🎥 Tutoriales
+            </Link>
+            <Link
+              href="/help/votar-mejoras"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              👍 Votar mejoras
+            </Link>
+            <Link
+              href="/help/novedades"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              🆕 Novedades
+            </Link>
+            <Link
+              href="/help/soporte"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              🛠️ Soporte
+            </Link>
+            <Link
+              href="/help/contacto"
+              className="block py-1 px-2 text-sm hover:bg-gray-100 rounded"
+            >
+              💬 Contáctanos
             </Link>
 
-            {/* Menú desplegable con opciones adicionales */}
-            <UserMenu />
+            {/* Perfil y cierre de sesión */}
+            <div className="mt-3">
+              {/* Enlace estático "Mi cuenta" (corrige href a /perfil) */}
+              <Link
+                href="/perfil"
+                className="flex items-center py-2 px-3 text-sm hover:bg-gray-100 rounded"
+              >
+                <div className="h-8 w-8 bg-gray-200 rounded-full mr-2" />
+                Mi cuenta
+              </Link>
+              {/* Desplegable con Firma Digital, Configuración y Logout */}
+              <UserMenu />
+            </div>
           </div>
         </aside>
 
