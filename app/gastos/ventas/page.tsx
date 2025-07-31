@@ -16,19 +16,20 @@ interface Venta {
 }
 
 export default function LibroVentasPage() {
-  const [desde, setDesde] = useState("");
-  const [hasta, setHasta] = useState("");
+  const [desde, setDesde] = useState<string>("");
+  const [hasta, setHasta] = useState<string>("");
   const [datos, setDatos] = useState<Venta[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
 
   useEffect(() => {
     if (!desde || !hasta) return;
     setLoading(true);
 
-    // Obtengo user_id de la sesión
+    // 1) obtenemos el user_id de la sesión
     supabase.auth
       .getSession()
       .then(({ data }) => data.session?.user.id)
+      // 2) consultamos la tabla 'ventas' filtrando por user_id y rango de fechas
       .then((uid) =>
         supabase
           .from<Venta>("ventas")
@@ -61,7 +62,7 @@ export default function LibroVentasPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">📒 Libro de Ventas e Ingresos</h1>
 
-      {/* Filtros */}
+      {/* Filtros y export */}
       <div className="flex items-end space-x-4">
         <div>
           <label className="block text-sm">Desde</label>
@@ -89,7 +90,6 @@ export default function LibroVentasPage() {
         >
           Exportar CSV
         </CSVLink>
-
         <button
           onClick={() =>
             window.open(
@@ -131,13 +131,22 @@ export default function LibroVentasPage() {
               </tr>
             ) : (
               datos.map((v) => (
-                <tr key={v.id} className="border-t even:bg-gray-50 hover:bg-gray-50">
+                <tr
+                  key={v.id}
+                  className="border-t even:bg-gray-50 hover:bg-gray-50"
+                >
                   <td className="px-4 py-2">{v.fecha}</td>
                   <td className="px-4 py-2">{v.cliente}</td>
                   <td className="px-4 py-2">{v.numero_factura}</td>
-                  <td className="px-4 py-2 text-right">{v.base.toFixed(2)}</td>
-                  <td className="px-4 py-2 text-right">{v.iva.toFixed(2)}</td>
-                  <td className="px-4 py-2 text-right">{v.total.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">
+                    {v.base.toFixed(2)}
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    {v.iva.toFixed(2)}
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    {v.total.toFixed(2)}
+                  </td>
                 </tr>
               ))
             )}
@@ -145,7 +154,9 @@ export default function LibroVentasPage() {
           {datos.length > 0 && (
             <tfoot className="bg-gray-100 font-semibold">
               <tr>
-                <td colSpan={3} className="px-4 py-2 text-right">Totales:</td>
+                <td colSpan={3} className="px-4 py-2 text-right">
+                  Totales:
+                </td>
                 <td className="px-4 py-2 text-right">{sumBase.toFixed(2)}</td>
                 <td className="px-4 py-2 text-right">{sumIva.toFixed(2)}</td>
                 <td className="px-4 py-2 text-right">{sumTotal.toFixed(2)}</td>
