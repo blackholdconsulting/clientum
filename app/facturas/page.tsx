@@ -1,10 +1,9 @@
 // File: /app/facturas/page.tsx
 "use client";
 
-import { useState, useEffect, ChangeEvent, FormEvent } from "react";
+import { useState, useEffect, ChangeEvent } from "react";
 import { jsPDF } from "jspdf";
 import { supabase } from "@/lib/supabaseClient";
-import { registraVenta } from "@/lib/ventas";
 
 interface Linea {
   descripcion: string;
@@ -18,13 +17,13 @@ interface Cliente {
 }
 
 export default function CrearFacturaPage() {
-  // Cabecera
+  // Datos factura
   const [serie, setSerie] = useState("");
   const [numero, setNumero] = useState("");
   const [fecha, setFecha] = useState("");
   const [vencimiento, setVencimiento] = useState("");
 
-  // Emisor
+  // Emisor (editable)
   const [emisor, setEmisor] = useState({
     nombre: "",
     direccion: "",
@@ -34,7 +33,7 @@ export default function CrearFacturaPage() {
     email: "",
   });
 
-  // Receptor (solo ID; cargaremos nombre luego)
+  // Receptor: solo guardamos ID y lo mostramos con select
   const [receptorId, setReceptorId] = useState("");
   const [clientes, setClientes] = useState<Cliente[]>([]);
 
@@ -46,37 +45,30 @@ export default function CrearFacturaPage() {
   const [irpfPct, setIrpfPct] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // Al montar, carga todos los clientes
+  // Al montar, cargamos clientes
   useEffect(() => {
     supabase
       .from("clientes")
-      .select<Cliente>("id,nombre")
+      .select("id,nombre")
       .then(({ data, error }) => {
         if (error) console.error(error);
-        else setClientes(data || []);
+        else setClientes((data || []) as Cliente[]);
       });
   }, []);
 
-  // Funciones de línea
+  // Funciones para líneas
   const addLinea = () =>
-    setLineas((prev) => [
-      ...prev,
-      { descripcion: "", unidades: 1, precioUnitario: 0 },
-    ]);
+    setLineas((prev) => [...prev, { descripcion: "", unidades: 1, precioUnitario: 0 }]);
   const removeLinea = (idx: number) =>
     setLineas((prev) => prev.filter((_, i) => i !== idx));
-  const onLineaChange = (
-    idx: number,
-    e: ChangeEvent<HTMLInputElement>
-  ) => {
+  const onLineaChange = (idx: number, e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setLineas((prev) =>
       prev.map((l, i) =>
         i === idx
           ? {
               ...l,
-              [name]:
-                name === "descripcion" ? value : parseFloat(value) || 0,
+              [name]: name === "descripcion" ? value : parseFloat(value) || 0,
             }
           : l
       )
@@ -85,25 +77,22 @@ export default function CrearFacturaPage() {
 
   // Cálculo de totales
   const calcularTotales = () => {
-    const base = lineas.reduce(
-      (sum, l) => sum + l.unidades * l.precioUnitario,
-      0
-    );
-    const iva = +(base * ivaPct) / 100;
-    const irpf = +(base * irpfPct) / 100;
+    const base = lineas.reduce((sum, l) => sum + l.unidades * l.precioUnitario, 0);
+    const iva = (base * ivaPct) / 100;
+    const irpf = (base * irpfPct) / 100;
     return { base, iva, irpf, total: base + iva - irpf };
   };
 
-  // Exportar PDF (guarda factura y la registra en ventas)
+  // Exportar a PDF y guardar
   const handleExportPDF = async () => {
     if (!serie || !numero || !receptorId) {
-      alert("Indica Serie, Número y selecciona Receptor.");
+      alert("Completa Serie, Número y selecciona Receptor.");
       return;
     }
     setLoading(true);
     const numeroFactura = `${serie}-${numero}`;
 
-    // Guardar en facturas
+    // 1) Guardar factura en Supabase
     const { error: facErr } = await supabase.from("facturas").insert({
       serie,
       numero,
@@ -118,27 +107,22 @@ export default function CrearFacturaPage() {
       via: "pdf",
     });
     if (facErr) {
-      alert("Error al guardar factura: " + facErr.message);
+      alert("Error al guardar: " + facErr.message);
       setLoading(false);
       return;
     }
 
-    // Registrar en ventas
+    // 2) Registrar en libro de ventas
     const { base, iva } = calcularTotales();
-    try {
-      await registraVenta({
-        fecha,
-        cliente_id: receptorId,
-        numero_factura: numeroFactura,
-        base,
-        iva,
-      });
-    } catch (err: any) {
-      console.error(err);
-      alert("Factura guardada, pero fallo registro ventas: " + err.message);
-    }
+    await supabase.from("ventas").insert({
+      fecha,
+      cliente_id: receptorId,
+      numero_factura: numeroFactura,
+      base,
+      iva,
+    });
 
-    // Generar PDF
+    // 3) Generar PDF
     const cliente = clientes.find((c) => c.id === receptorId);
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     let y = 40;
@@ -147,13 +131,14 @@ export default function CrearFacturaPage() {
     doc.setFontSize(12).text(`Fecha: ${fecha}`, 40, y);
     doc.text(`Vto: ${vencimiento}`, 200, y);
     y += 30;
+
     doc.setFontSize(14).text("Emisor:", 40, y);
     doc.setFontSize(10).text(emisor.nombre, 100, y);
     doc.setFontSize(14).text("Receptor:", 300, y);
     doc.setFontSize(10).text(cliente?.nombre || "", 360, y);
     y += 20;
 
-    // Encabezados de líneas
+    // Encabezados líneas
     doc.setFontSize(10).text("Desc.", 40, y);
     doc.text("Unid.", 240, y);
     doc.text("P.U.", 340, y, { align: "right" });
@@ -165,12 +150,7 @@ export default function CrearFacturaPage() {
       doc.text(l.descripcion, 40, y);
       doc.text(String(l.unidades), 240, y);
       doc.text(l.precioUnitario.toFixed(2), 340, y, { align: "right" });
-      doc.text(
-        (l.unidades * l.precioUnitario).toFixed(2),
-        450,
-        y,
-        { align: "right" }
-      );
+      doc.text((l.unidades * l.precioUnitario).toFixed(2), 450, y, { align: "right" });
       y += 16;
       if (y > 750) {
         doc.addPage();
@@ -194,7 +174,6 @@ export default function CrearFacturaPage() {
   return (
     <div className="p-8 max-w-4xl mx-auto bg-gray-50 space-y-6">
       <h1 className="text-2xl font-bold">Crear Factura</h1>
-
       <form className="space-y-6 bg-white p-8 rounded shadow">
         {/* Serie / Número */}
         <div className="grid grid-cols-2 gap-4">
@@ -238,16 +217,14 @@ export default function CrearFacturaPage() {
           <input
             placeholder="Nombre"
             value={emisor.nombre}
-            onChange={(e) =>
-              setEmisor({ ...emisor, nombre: e.target.value })
-            }
+            onChange={(e) => setEmisor({ ...emisor, nombre: e.target.value })}
             className="w-full border rounded px-3 py-2"
           />
-          {/* ... resto de campos emisor ... */}
+          {/* Resto de campos emisor */}
         </fieldset>
 
         {/* Receptor */}
-        <div>
+        <div>  
           <label className="block text-sm font-semibold">Receptor</label>
           <select
             value={receptorId}
@@ -267,10 +244,7 @@ export default function CrearFacturaPage() {
         <fieldset className="space-y-4">
           <legend className="font-semibold">Líneas</legend>
           {lineas.map((l, i) => (
-            <div
-              key={i}
-              className="grid grid-cols-5 gap-4 items-center"
-            >
+            <div key={i} className="grid grid-cols-5 gap-4 items-center">
               <input
                 name="descripcion"
                 placeholder="Descripción"
@@ -304,11 +278,7 @@ export default function CrearFacturaPage() {
               </button>
             </div>
           ))}
-          <button
-            type="button"
-            onClick={addLinea}
-            className="text-sm text-blue-600"
-          >
+          <button type="button" onClick={addLinea} className="text-sm text-blue-600">
             + Añadir línea
           </button>
         </fieldset>
