@@ -14,9 +14,9 @@ interface Amort {
 }
 
 export default function LibroAmortizacionesPage() {
-  const [hasta, setHasta] = useState<string>("");
+  const [hasta, setHasta] = useState("");
   const [datos, setDatos] = useState<Amort[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!hasta) return;
@@ -27,7 +27,7 @@ export default function LibroAmortizacionesPage() {
       .then(({ data }) => data.session?.user.id)
       .then((uid) =>
         supabase
-          .from<Amort>("amortizaciones")
+          .from("amortizaciones")
           .select(`
             id,
             activos(nombre) as activo,
@@ -41,7 +41,7 @@ export default function LibroAmortizacionesPage() {
       )
       .then(({ data, error }) => {
         if (error) console.error(error);
-        else setDatos(data ?? []);
+        else setDatos(data as Amort[]);
       })
       .finally(() => setLoading(false));
   }, [hasta]);
@@ -53,7 +53,6 @@ export default function LibroAmortizacionesPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">📗 Libro de Amortizaciones</h1>
 
-      {/* Filtro y export */}
       <div className="flex items-end space-x-4">
         <div>
           <label className="block text-sm">Hasta</label>
@@ -64,7 +63,6 @@ export default function LibroAmortizacionesPage() {
             className="border rounded px-2 py-1 text-sm"
           />
         </div>
-
         <CSVLink
           data={datos}
           filename={`amortizaciones_${hasta}.csv`}
@@ -85,7 +83,6 @@ export default function LibroAmortizacionesPage() {
         </button>
       </div>
 
-      {/* Tabla */}
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white shadow rounded-lg text-sm">
           <thead className="bg-gray-100">
