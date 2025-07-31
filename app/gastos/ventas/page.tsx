@@ -37,18 +37,19 @@ export default function LibroVentasPage() {
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
 
-  // Carga clientes
+  // Carga lista de clientes
   useEffect(() => {
     supabase
       .from("clientes")
       .select("id, nombre")
       .order("nombre")
-      .then(({ data }) => {
-        if (data) setClientes(data);
+      .then(({ data, error }) => {
+        if (error) console.error("clientes load error:", error);
+        else setClientes(data || []);
       });
   }, []);
 
-  // Funcion para traer ventas
+  // Función para traer ventas
   const fetchVentas = () => {
     if (!desde || !hasta) return;
     setLoading(true);
@@ -73,44 +74,76 @@ export default function LibroVentasPage() {
           .order("fecha", { ascending: true })
       )
       .then(({ data, error }) => {
-        if (!error) {
-          setDatos((data ?? []) as unknown as Venta[]);
-        }
+        if (error) console.error("fetchVentas error:", error);
+        else setDatos((data ?? []) as unknown as Venta[]);
       })
       .finally(() => setLoading(false));
   };
 
+  // Trae ventas cuando cambien los filtros
   useEffect(fetchVentas, [desde, hasta]);
 
   // Alta de factura
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!fecha || !clienteId || !numero || base === "") {
-      alert("Rellena todos los campos");
+      alert("Rellena todos los campos del formulario");
       return;
     }
     setLoading(true);
-    const iva = +( (base as number) * ivaPct / 100 ).toFixed(2);
-    const uid = (await supabase.auth.getSession()).data.session?.user.id;
-    await supabase
+
+    // Calculamos IVA y total
+    const baseNum = Number(base);
+    const iva = +(baseNum * ivaPct / 100).toFixed(2);
+
+    // Obtenemos user_id
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+    if (sessionError || !session?.user.id) {
+      console.error("No session:", sessionError);
+      setLoading(false);
+      return;
+    }
+
+    // Insertamos y devolvemos la fila
+    const { data: insData, error: insError } = await supabase
       .from("ventas")
       .insert({
-        user_id: uid,
+        user_id: session.user.id,
         fecha,
         cliente_id: clienteId,
         numero_factura: numero,
-        base: base as number,
+        base: baseNum,
         iva,
-      });
-    setFecha("");
-    setClienteId("");
-    setNumero("");
-    setBase("");
-    setIvaPct(21);
-    await fetchVentas();
+      })
+      .select(); // <--- pedimos que nos devuelva la fila insertada
+
+    if (insError) {
+      console.error("insert error:", insError);
+      alert("Error al guardar: " + insError.message);
+    } else if (insData?.length) {
+      // Añadimos manualmente la nueva fila al estado (mapea cliente como array)
+      setDatos((prev) => [
+        ...prev,
+        {
+          ...(insData[0] as any),
+          cliente: clientes.filter((c) => c.id === clienteId).map((c) => ({ nombre: c.nombre })),
+        },
+      ]);
+      // Limpiamos el formulario
+      setFecha("");
+      setClienteId("");
+      setNumero("");
+      setBase("");
+      setIvaPct(21);
+    }
+
     setLoading(false);
   };
 
+  // Sumatorios
   const sumBase  = datos.reduce((s, v) => s + v.base, 0);
   const sumIva   = datos.reduce((s, v) => s + v.iva, 0);
   const sumTotal = datos.reduce((s, v) => s + v.total, 0);
@@ -119,11 +152,12 @@ export default function LibroVentasPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">📒 Libro de Ventas e Ingresos</h1>
 
-      {/* Formulario de alta */}
+      {/* === Formulario de alta === */}
       <form
         onSubmit={handleSubmit}
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 bg-white p-4 rounded shadow"
       >
+        {/* Fecha */}
         <div>
           <label className="block text-sm">Fecha</label>
           <input
@@ -134,6 +168,7 @@ export default function LibroVentasPage() {
             required
           />
         </div>
+        {/* Cliente */}
         <div>
           <label className="block text-sm">Cliente</label>
           <select
@@ -150,6 +185,7 @@ export default function LibroVentasPage() {
             ))}
           </select>
         </div>
+        {/* Nº factura */}
         <div>
           <label className="block text-sm">Nº Factura</label>
           <input
@@ -160,6 +196,7 @@ export default function LibroVentasPage() {
             required
           />
         </div>
+        {/* Base */}
         <div>
           <label className="block text-sm">Base</label>
           <input
@@ -171,6 +208,7 @@ export default function LibroVentasPage() {
             required
           />
         </div>
+        {/* % IVA */}
         <div>
           <label className="block text-sm">% IVA</label>
           <input
@@ -181,6 +219,7 @@ export default function LibroVentasPage() {
             step="0.01"
           />
         </div>
+        {/* Botón */}
         <button
           type="submit"
           disabled={loading}
@@ -190,7 +229,7 @@ export default function LibroVentasPage() {
         </button>
       </form>
 
-      {/* Filtros de rango */}
+      {/* === Filtros de rango === */}
       <div className="flex items-end space-x-4">
         <div>
           <label className="block text-sm">Desde</label>
@@ -218,10 +257,13 @@ export default function LibroVentasPage() {
         </button>
       </div>
 
-      {/* Export */}
+      {/* === Export === */}
       <div className="flex space-x-4">
         <CSVLink
-          data={datos.map(v => ({ ...v, cliente: v.cliente[0]?.nombre ?? "" }))}
+          data={datos.map((v) => ({
+            ...v,
+            cliente: v.cliente[0]?.nombre ?? "",
+          }))}
           filename={`ventas_${desde}_${hasta}.csv`}
           className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
         >
@@ -240,7 +282,7 @@ export default function LibroVentasPage() {
         </button>
       </div>
 
-      {/* Tabla */}
+      {/* === Tabla === */}
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white shadow rounded-lg text-sm">
           <thead className="bg-gray-100">
