@@ -1,6 +1,4 @@
-// File: /app/facturas/page.tsx
 "use client";
-
 import { useState, ChangeEvent, FormEvent } from "react";
 import { jsPDF } from "jspdf";
 import { supabase } from "@/lib/supabaseClient";
@@ -17,9 +15,9 @@ export default function CrearFacturaPage() {
   const [fecha, setFecha] = useState("");
   const [vencimiento, setVencimiento] = useState("");
 
-  // Emisor (solo mostramos nombre fijo; el resto opcional)
+  // Emisor (ahora completamente editable; podrías cargarte por defecto el nombre de la empresa desde supabase)
   const [emisor, setEmisor] = useState({
-    nombre: "Mi Empresa S.L.",
+    nombre: "",     // antes estaba fijo; ahora lo dejamos vacío para personalizar
     direccion: "",
     nif: "",
     cp: "",
@@ -37,7 +35,7 @@ export default function CrearFacturaPage() {
     email: "",
   });
 
-  // Líneas
+  // Líneas de factura
   const [lineas, setLineas] = useState<Linea[]>([
     { descripcion: "", unidades: 1, precioUnitario: 0 },
   ]);
@@ -45,7 +43,6 @@ export default function CrearFacturaPage() {
   // Impuestos
   const [ivaPct, setIvaPct] = useState(21);
   const [irpfPct, setIrpfPct] = useState(0);
-
   const [loading, setLoading] = useState(false);
 
   const addLinea = () =>
@@ -89,28 +86,29 @@ export default function CrearFacturaPage() {
     e.preventDefault();
     setLoading(true);
 
-    // 1) Generar código
     const numero = generarCodigoFactura();
 
-    // 2) Guardar en tabla facturas
-    const { error: facErr } = await supabase.from("facturas").insert({
-      fecha,
-      vencimiento,
-      emisor,
-      receptor,
-      numero_factura: numero,
-      lineas,
-      iva: ivaPct,
-      irpf: irpfPct,
-      via: "verifactu",
-    });
+    // 1) Guardar en facturas
+    const { error: facErr } = await supabase
+      .from("facturas")
+      .insert({
+        fecha,
+        vencimiento,
+        emisor,
+        receptor,
+        numero_factura: numero,
+        lineas,
+        iva: ivaPct,
+        irpf: irpfPct,
+        via: "verifactu",
+      });
     if (facErr) {
-      alert("Error al crear factura: " + facErr.message);
+      alert("Error al guardar factura: " + facErr.message);
       setLoading(false);
       return;
     }
 
-    // 3) Registrar en ventas
+    // 2) Registrar en ventas
     const { base, iva } = calcularTotales();
     try {
       await registraVenta({
@@ -128,8 +126,8 @@ export default function CrearFacturaPage() {
       );
     }
 
-    // 4) Lógica Verifactu (ejemplo)
-    // await fetch("/api/verifactu", { method: "POST", body: JSON.stringify({ numero, /* ... */ }) });
+    // 3) Envío a Verifactu...
+    // await fetch("/api/verifactu", ...)
 
     setLoading(false);
     alert("Verifactu creada: " + numero);
@@ -139,28 +137,29 @@ export default function CrearFacturaPage() {
     e.preventDefault();
     setLoading(true);
 
-    // 1) Generar código
     const numero = generarCodigoFactura();
 
-    // 2) Guardar en tabla facturas
-    const { error: facErr } = await supabase.from("facturas").insert({
-      fecha,
-      vencimiento,
-      emisor,
-      receptor,
-      numero_factura: numero,
-      lineas,
-      iva: ivaPct,
-      irpf: irpfPct,
-      via: "facturae",
-    });
+    // 1) Guardar en facturas
+    const { error: facErr } = await supabase
+      .from("facturas")
+      .insert({
+        fecha,
+        vencimiento,
+        emisor,
+        receptor,
+        numero_factura: numero,
+        lineas,
+        iva: ivaPct,
+        irpf: irpfPct,
+        via: "facturae",
+      });
     if (facErr) {
-      alert("Error al crear factura: " + facErr.message);
+      alert("Error al guardar factura: " + facErr.message);
       setLoading(false);
       return;
     }
 
-    // 3) Registrar en ventas
+    // 2) Registrar en ventas
     const { base, iva } = calcularTotales();
     try {
       await registraVenta({
@@ -178,9 +177,9 @@ export default function CrearFacturaPage() {
       );
     }
 
-    // 4) Lógica Facturae (ejemplo)
-    // const xml = buildFacturaeXML({ numero, /* ... */ });
-    // await fetch("/api/facturae", { method: "POST", body: xml });
+    // 3) Generar y enviar Facturae...
+    // const xml = buildFacturaeXML({ numero, ... });
+    // await fetch("/api/facturae", ...)
 
     setLoading(false);
     alert("Facturae generada: " + numero);
@@ -191,7 +190,7 @@ export default function CrearFacturaPage() {
       <h1 className="text-2xl font-bold">Crear Factura</h1>
 
       <form className="space-y-6 bg-white p-8 rounded shadow">
-        {/* Fecha */}
+        {/* Cabecera */}
         <div className="grid grid-cols-2 gap-4">
           <input
             type="date"
@@ -213,9 +212,12 @@ export default function CrearFacturaPage() {
         <fieldset className="space-y-2">
           <legend className="font-semibold">Emisor</legend>
           <input
+            placeholder="Nombre"
             value={emisor.nombre}
-            readOnly
-            className="w-full border rounded px-3 py-2 bg-gray-100"
+            onChange={(e) =>
+              setEmisor({ ...emisor, nombre: e.target.value })
+            }
+            className="w-full border rounded px-3 py-2"
           />
           <input
             placeholder="Dirección"
@@ -270,7 +272,8 @@ export default function CrearFacturaPage() {
             onChange={(e) =>
               setReceptor({ ...receptor, nombre: e.target.value })
             }
-            className="w-full border rounded px-3 py-2"          />
+            className="w-full border rounded px-3 py-2"
+          />
           <input
             placeholder="Dirección"
             value={receptor.direccion}
@@ -377,8 +380,7 @@ export default function CrearFacturaPage() {
               type="number"
               value={irpfPct}
               onChange={(e) => setIrpfPct(+e.target.value)}
-              className="mt-1 w-full border rounded px-3 py-2"
-            />
+              className="mt-1 w-full border rounded px-3 py-2"            />
           </div>
           <div className="col-span-2 flex space-x-4 justify-end">
             <button
