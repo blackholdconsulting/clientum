@@ -9,11 +9,11 @@ import { CSVLink } from "react-csv";
 interface Venta {
   id: string;
   fecha: string;
-  cliente: string;
   numero_factura: string;
   base: number;
   iva: number;
   total: number;
+  cliente: { nombre: string }[];  // ahora viene como array de objetos
 }
 
 export default function LibroVentasPage() {
@@ -51,16 +51,16 @@ export default function LibroVentasPage() {
           console.error(error);
           setDatos([]);
         } else {
-          // data comes back as array of objects with a `cliente` field
-          setDatos(data ?? []);
+          // casteamos como unknown para evitar errores ParserError
+          setDatos((data ?? []) as unknown as Venta[]);
         }
       })
       .finally(() => setLoading(false));
   }, [desde, hasta]);
 
-  const sumBase  = datos.reduce((sum, v) => sum + v.base, 0);
-  const sumIva   = datos.reduce((sum, v) => sum + v.iva, 0);
-  const sumTotal = datos.reduce((sum, v) => sum + v.total, 0);
+  const sumBase  = datos.reduce((s, v) => s + v.base, 0);
+  const sumIva   = datos.reduce((s, v) => s + v.iva, 0);
+  const sumTotal = datos.reduce((s, v) => s + v.total, 0);
 
   return (
     <div className="p-6 space-y-6">
@@ -88,7 +88,10 @@ export default function LibroVentasPage() {
         </div>
 
         <CSVLink
-          data={datos}
+          data={datos.map(v => ({
+            ...v,
+            cliente: v.cliente[0]?.nombre ?? ""
+          }))}
           filename={`ventas_${desde}_${hasta}.csv`}
           className="ml-auto px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
         >
@@ -140,7 +143,7 @@ export default function LibroVentasPage() {
                   className="border-t even:bg-gray-50 hover:bg-gray-50"
                 >
                   <td className="px-4 py-2">{v.fecha}</td>
-                  <td className="px-4 py-2">{v.cliente}</td>
+                  <td className="px-4 py-2">{v.cliente[0]?.nombre}</td>
                   <td className="px-4 py-2">
                     <Link
                       href={`/facturas/${v.numero_factura}`}
