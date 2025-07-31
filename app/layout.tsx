@@ -1,4 +1,4 @@
-// File: app/layout.tsx
+// File: /app/layout.tsx
 import "./globals.css";
 import Link from "next/link";
 import { headers } from "next/headers";
@@ -64,6 +64,12 @@ export default async function RootLayout({
                   className={linkClass("/facturas/factura-electronica")}
                 >
                   📤 Factura Electrónica
+                </Link>
+                <Link
+                  href="/facturas/factura-simplificada"
+                  className={linkClass("/facturas/factura-simplificada")}
+                >
+                  🎫 Factura Simplificada
                 </Link>
               </div>
             </div>
