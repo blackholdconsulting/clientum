@@ -8,7 +8,7 @@ import { CSVLink } from "react-csv";
 interface Venta {
   id: string;
   fecha: string;
-  cliente: string;
+  cliente_id: string;
   numero_factura: string;
   base: number;
   iva: number;
@@ -31,23 +31,20 @@ export default function LibroVentasPage() {
       .then((uid) =>
         supabase
           .from("ventas")
-          .select(`
-            id,
-            fecha,
-            clientes(nombre) as cliente,
-            numero_factura,
-            base,
-            iva,
-            total
-          `)
+          .select("id, fecha, cliente_id, numero_factura, base, iva, total")
           .eq("user_id", uid)
           .gte("fecha", desde)
           .lte("fecha", hasta)
           .order("fecha", { ascending: true })
       )
       .then(({ data, error }) => {
-        if (error) console.error(error);
-        else setDatos(data as Venta[]);
+        if (error) {
+          console.error(error);
+          setDatos([]);
+        } else {
+          // Cast via unknown to avoid ParserError<> mismatch
+          setDatos((data ?? []) as unknown as Venta[]);
+        }
       })
       .finally(() => setLoading(false));
   }, [desde, hasta]);
@@ -60,6 +57,7 @@ export default function LibroVentasPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">📒 Libro de Ventas e Ingresos</h1>
 
+      {/* Filtros y export */}
       <div className="flex items-end space-x-4">
         <div>
           <label className="block text-sm">Desde</label>
@@ -100,12 +98,13 @@ export default function LibroVentasPage() {
         </button>
       </div>
 
+      {/* Tabla */}
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white shadow rounded-lg text-sm">
           <thead className="bg-gray-100">
             <tr>
               <th className="px-4 py-2 text-left">Fecha</th>
-              <th className="px-4 py-2 text-left">Cliente</th>
+              <th className="px-4 py-2 text-left">Cliente ID</th>
               <th className="px-4 py-2 text-left">Factura</th>
               <th className="px-4 py-2 text-right">Base</th>
               <th className="px-4 py-2 text-right">IVA</th>
@@ -132,7 +131,7 @@ export default function LibroVentasPage() {
                   className="border-t even:bg-gray-50 hover:bg-gray-50"
                 >
                   <td className="px-4 py-2">{v.fecha}</td>
-                  <td className="px-4 py-2">{v.cliente}</td>
+                  <td className="px-4 py-2">{v.cliente_id}</td>
                   <td className="px-4 py-2">{v.numero_factura}</td>
                   <td className="px-4 py-2 text-right">
                     {v.base.toFixed(2)}
@@ -162,5 +161,5 @@ export default function LibroVentasPage() {
         </table>
       </div>
     </div>
-  );
+);
 }
