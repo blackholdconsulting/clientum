@@ -1,9 +1,8 @@
-// app/layout.tsx
+// File: app/layout.tsx
 import "./globals.css";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { ReactNode } from "react";
-import UserMenu from "../components/UserMenu";
 
 export const metadata = {
   title: "Clientum",
@@ -22,7 +21,6 @@ export default async function RootLayout({
   const path = await getActivePath();
   const isActive = (prefix: string) =>
     path === prefix || path.startsWith(prefix + "/");
-
   const linkClass = (prefix: string) =>
     `block py-2 px-3 rounded hover:bg-indigo-100 ${
       isActive(prefix) ? "bg-indigo-100 font-semibold" : ""
@@ -33,6 +31,7 @@ export default async function RootLayout({
       <body className="bg-gray-50 text-gray-800 flex h-screen overflow-hidden">
         <aside className="w-64 bg-white border-r shadow flex flex-col">
           <div className="p-6 font-bold text-xl text-indigo-600">Clientum</div>
+
           <nav className="flex-1 overflow-y-auto px-4 space-y-1 text-sm">
             <Link href="/dashboard" className={linkClass("/dashboard")}>
               📊 Dashboard
@@ -41,7 +40,7 @@ export default async function RootLayout({
               👥 Clientes
             </Link>
 
-            {/* Facturas + Histórico */}
+            {/* Facturas */}
             <div>
               <Link href="/facturas" className={linkClass("/facturas")}>
                 🧾 Facturas
@@ -97,19 +96,19 @@ export default async function RootLayout({
                   href="/negocio/estudio-de-mercado"
                   className={linkClass("/negocio/estudio-de-mercado")}
                 >
-                  🔎 Estudio de mercado
+                  🔎 Estudio de Mercado
                 </Link>
                 <Link
                   href="/negocio/analisis-competencia"
                   className={linkClass("/negocio/analisis-competencia")}
                 >
-                  📊 Análisis de competencia
+                  📊 Análisis de Competencia
                 </Link>
                 <Link
                   href="/negocio/continuar-proyecto"
                   className={linkClass("/negocio/continuar-proyecto")}
                 >
-                  ▶️ Continuar proyecto
+                  ▶️ Continuar Proyecto
                 </Link>
               </div>
             </div>
@@ -121,7 +120,7 @@ export default async function RootLayout({
             <Link href="/tesoreria" className={linkClass("/tesoreria")}>
               🏦 Tesorería
             </Link>
-            {/* Gastos */}
+
             <Link href="/gastos" className={linkClass("/gastos")}>
               💸 Gastos
             </Link>
@@ -135,19 +134,68 @@ export default async function RootLayout({
             </Link>
 
             <Link href="/RR.HH" className={linkClass("/RR.HH")}>
-              👩‍💼 RRHH
+              👥 RRHH
             </Link>
+
+            {/* Ayuda y Soporte */}
+            <div>
+              <Link href="/help" className={linkClass("/help")}>
+                🆘 Ayuda y Soporte
+              </Link>
+              <div className="pl-4 space-y-1">
+                <Link
+                  href="/help/chat"
+                  className={linkClass("/help/chat")}
+                >
+                  💬 Chat
+                </Link>
+                <Link
+                  href="/help/contacto"
+                  className={linkClass("/help/contacto")}
+                >
+                  📞 Contacto
+                </Link>
+                <Link
+                  href="/help/feedback"
+                  className={linkClass("/help/feedback")}
+                >
+                  ✉️ Feedback
+                </Link>
+                <Link
+                  href="/help/novedades"
+                  className={linkClass("/help/novedades")}
+                >
+                  📰 Novedades
+                </Link>
+                <Link
+                  href="/help/tutoriales"
+                  className={linkClass("/help/tutoriales")}
+                >
+                  🎓 Tutoriales
+                </Link>
+              </div>
+            </div>
           </nav>
 
-          <div className="p-4 border-t flex items-center">
+          {/* Perfil y Cerrar Sesión */}
+          <div className="p-4 border-t">
             <Link
-              href="/mi-cuenta"
+              href="/perfil"
               className="flex items-center space-x-2 text-sm hover:underline"
             >
-              <div className="h-8 w-8 bg-gray-200 rounded-full" />
-              <span>Mi cuenta</span>
+              <img
+                src="/avatar.png"
+                alt="Avatar"
+                className="h-8 w-8 rounded-full bg-gray-200"
+              />
+              <span className="font-medium">Mi perfil</span>
             </Link>
-            <UserMenu />
+            <Link
+              href="/logout"
+              className="mt-2 block text-sm text-red-500 hover:underline"
+            >
+              Cerrar sesión
+            </Link>
           </div>
         </aside>
 
