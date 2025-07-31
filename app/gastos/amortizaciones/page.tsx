@@ -7,7 +7,7 @@ import { CSVLink } from "react-csv";
 
 interface Amort {
   id: string;
-  activo: string;
+  activo_id: string;
   fecha: string;
   cuota: number;
   acumulada: number;
@@ -28,20 +28,18 @@ export default function LibroAmortizacionesPage() {
       .then((uid) =>
         supabase
           .from("amortizaciones")
-          .select(`
-            id,
-            activos(nombre) as activo,
-            fecha,
-            cuota,
-            acumulada
-          `)
+          .select(`id, activo_id, fecha, cuota, acumulada`)
           .eq("user_id", uid)
           .lte("fecha", hasta)
           .order("fecha", { ascending: true })
       )
       .then(({ data, error }) => {
-        if (error) console.error(error);
-        else setDatos(data as Amort[]);
+        if (error) {
+          console.error(error);
+          setDatos([]);
+        } else {
+          setDatos(data || []);
+        }
       })
       .finally(() => setLoading(false));
   }, [hasta]);
@@ -53,6 +51,7 @@ export default function LibroAmortizacionesPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">📗 Libro de Amortizaciones</h1>
 
+      {/* Filtro y export */}
       <div className="flex items-end space-x-4">
         <div>
           <label className="block text-sm">Hasta</label>
@@ -84,11 +83,12 @@ export default function LibroAmortizacionesPage() {
         </button>
       </div>
 
+      {/* Tabla */}
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white shadow rounded-lg text-sm">
           <thead className="bg-gray-100">
             <tr>
-              <th className="px-4 py-2 text-left">Activo</th>
+              <th className="px-4 py-2 text-left">Activo ID</th>
               <th className="px-4 py-2 text-left">Fecha</th>
               <th className="px-4 py-2 text-right">Cuota</th>
               <th className="px-4 py-2 text-right">Acumulada</th>
@@ -113,7 +113,7 @@ export default function LibroAmortizacionesPage() {
                   key={a.id}
                   className="border-t even:bg-gray-50 hover:bg-gray-50"
                 >
-                  <td className="px-4 py-2">{a.activo}</td>
+                  <td className="px-4 py-2">{a.activo_id}</td>
                   <td className="px-4 py-2">{a.fecha}</td>
                   <td className="px-4 py-2 text-right">
                     {a.cuota.toFixed(2)}
@@ -133,9 +133,8 @@ export default function LibroAmortizacionesPage() {
                 </td>
                 <td className="px-4 py-2 text-right">{sumCuota.toFixed(2)}</td>
                 <td className="px-4 py-2 text-right">
-                  {sumCuota.toFixed(2)}
+                  {sumAcumulada.toFixed(2)}
                 </td>
-                <td className="px-4 py-2 text-right">{sumAcumulada.toFixed(2)}</td>
               </tr>
             </tfoot>
           )}
