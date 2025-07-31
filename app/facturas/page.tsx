@@ -34,7 +34,7 @@ export default function CrearFacturaPage() {
     email: "",
   });
 
-  // Receptor: ahora solo guardamos el id del cliente, y en el PDF buscamos su nombre
+  // Receptor (solo ID, carga nombre desde clientes)
   const [receptorId, setReceptorId] = useState("");
   const [clientes, setClientes] = useState<Cliente[]>([]);
 
@@ -46,10 +46,10 @@ export default function CrearFacturaPage() {
   const [irpfPct, setIrpfPct] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // Al montar, carga lista de clientes desde Supabase
+  // Carga lista de clientes al montar
   useEffect(() => {
     supabase
-      .from<Cliente>("clientes")
+      .from<Cliente, Cliente>("clientes")
       .select("id,nombre")
       .then(({ data, error }) => {
         if (error) console.error(error);
@@ -57,40 +57,55 @@ export default function CrearFacturaPage() {
       });
   }, []);
 
+  // Añadir/eliminar/editar líneas
   const addLinea = () =>
     setLineas((prev) => [
       ...prev,
       { descripcion: "", unidades: 1, precioUnitario: 0 },
     ]);
+
   const removeLinea = (idx: number) =>
     setLineas((prev) => prev.filter((_, i) => i !== idx));
-  const onLineaChange = (idx: number, e: ChangeEvent<HTMLInputElement>) => {
+
+  const onLineaChange = (
+    idx: number,
+    e: ChangeEvent<HTMLInputElement>
+  ) => {
     const { name, value } = e.target;
     setLineas((prev) =>
       prev.map((l, i) =>
         i === idx
-          ? { ...l, [name]: name === "descripcion" ? value : parseFloat(value) || 0 }
+          ? {
+              ...l,
+              [name]:
+                name === "descripcion" ? value : parseFloat(value) || 0,
+            }
           : l
       )
     );
   };
 
+  // Calcular base, IVA, IRPF y total
   const calcularTotales = () => {
-    const base = lineas.reduce((sum, l) => sum + l.unidades * l.precioUnitario, 0);
+    const base = lineas.reduce(
+      (sum, l) => sum + l.unidades * l.precioUnitario,
+      0
+    );
     const iva = +(base * ivaPct) / 100;
     const irpf = +(base * irpfPct) / 100;
     return { base, iva, irpf, total: base + iva - irpf };
   };
 
-  // PDF export (guarda en tablas y genera el PDF)
+  // Exportar PDF y guardar en Supabase + ventas
   const handleExportPDF = async () => {
     if (!serie || !numero || !receptorId) {
-      alert("Debe indicar serie, número y seleccionar receptor.");
+      alert("Indica Serie, Número y selecciona Receptor.");
       return;
     }
     setLoading(true);
     const numeroFactura = `${serie}-${numero}`;
-    // 1) Guardar en facturas
+
+    // 1) Guardar factura
     const { error: facErr } = await supabase.from("facturas").insert({
       serie,
       numero,
@@ -105,10 +120,11 @@ export default function CrearFacturaPage() {
       via: "pdf",
     });
     if (facErr) {
-      alert("Error al guardar: " + facErr.message);
+      alert("Error al guardar factura: " + facErr.message);
       setLoading(false);
       return;
     }
+
     // 2) Registrar en ventas
     const { base, iva } = calcularTotales();
     try {
@@ -121,8 +137,9 @@ export default function CrearFacturaPage() {
       });
     } catch (err: any) {
       console.error(err);
-      alert("Error al registrar venta: " + err.message);
+      alert("Factura guardada, pero fallo registro ventas: " + err.message);
     }
+
     // 3) Generar PDF
     const cliente = clientes.find((c) => c.id === receptorId);
     const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -137,7 +154,41 @@ export default function CrearFacturaPage() {
     doc.setFontSize(14).text("Receptor:", 300, y);
     doc.setFontSize(10).text(cliente?.nombre || "", 360, y);
     y += 20;
-    // tabla líneas...
+
+    // Encabezados de líneas
+    doc.setFontSize(10).text("Desc.", 40, y);
+    doc.text("Unid.", 240, y);
+    doc.text("P.U.", 340, y, { align: "right" });
+    doc.text("Importe", 450, y, { align: "right" });
+    y += 16;
+
+    // Detalle de líneas
+    lineas.forEach((l) => {
+      doc.text(l.descripcion, 40, y);
+      doc.text(String(l.unidades), 240, y);
+      doc.text(l.precioUnitario.toFixed(2), 340, y, { align: "right" });
+      doc.text(
+        (l.unidades * l.precioUnitario).toFixed(2),
+        450,
+        y,
+        { align: "right" }
+      );
+      y += 16;
+      if (y > 750) {
+        doc.addPage();
+        y = 40;
+      }
+    });
+
+    // Totales
+    const { base: B, iva: I, total: T } = calcularTotales();
+    y += 20;
+    doc.setFontSize(12).text(`Base: ${B.toFixed(2)} €`, 300, y);
+    y += 16;
+    doc.text(`IVA (${ivaPct}%): ${I.toFixed(2)} €`, 300, y);
+    y += 16;
+    doc.setFontSize(14).text(`TOTAL: ${T.toFixed(2)} €`, 300, y);
+
     doc.save(`factura-${numeroFactura}.pdf`);
     setLoading(false);
   };
@@ -171,15 +222,15 @@ export default function CrearFacturaPage() {
             type="date"
             value={fecha}
             onChange={(e) => setFecha(e.target.value)}
-            className="border rounded px-3 py-2"
             required
+            className="border rounded px-3 py-2"
           />
           <input
             type="date"
             value={vencimiento}
             onChange={(e) => setVencimiento(e.target.value)}
-            className="border rounded px-3 py-2"
             required
+            className="border rounded px-3 py-2"
           />
         </div>
 
@@ -189,13 +240,15 @@ export default function CrearFacturaPage() {
           <input
             placeholder="Nombre"
             value={emisor.nombre}
-            onChange={(e) => setEmisor({ ...emisor, nombre: e.target.value })}
+            onChange={(e) =>
+              setEmisor({ ...emisor, nombre: e.target.value })
+            }
             className="w-full border rounded px-3 py-2"
           />
           {/* … resto de campos emisor … */}
         </fieldset>
 
-        {/* Receptor: dropdown de clientes */}
+        {/* Receptor */}
         <div>
           <label className="block text-sm font-semibold">Receptor</label>
           <select
@@ -281,13 +334,13 @@ export default function CrearFacturaPage() {
           </div>
           <div className="col-span-2 flex space-x-4 justify-end">
             <button
+              type="button"
               onClick={handleExportPDF}
               disabled={loading}
               className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
             >
               {loading ? "Procesando…" : "Exportar PDF"}
             </button>
-            {/* … otros botones si lo deseas … */}
           </div>
         </div>
       </form>
