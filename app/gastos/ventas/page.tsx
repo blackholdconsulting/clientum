@@ -1,14 +1,15 @@
 // File: /app/gastos/ventas/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import { CSVLink } from "react-csv";
 
 interface Venta {
   id: string;
   fecha: string;
   cliente: string;
-  numeroFactura: string;
+  numero_factura: string;
   base: number;
   iva: number;
   total: number;
@@ -21,18 +22,39 @@ export default function LibroVentasPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (desde && hasta) {
-      setLoading(true);
-      // TODO: reemplazar por tu llamada real a API o hook
-      fetch(`/api/gastos/ventas?desde=${desde}&hasta=${hasta}`)
-        .then((res) => res.json())
-        .then((res: Venta[]) => setDatos(res))
-        .finally(() => setLoading(false));
-    }
+    if (!desde || !hasta) return;
+    setLoading(true);
+
+    // Obtengo user_id de la sesión
+    supabase.auth
+      .getSession()
+      .then(({ data }) => data.session?.user.id)
+      .then((uid) =>
+        supabase
+          .from<Venta>("ventas")
+          .select(`
+            id,
+            fecha,
+            clientes(nombre) as cliente,
+            numero_factura,
+            base,
+            iva,
+            total
+          `)
+          .eq("user_id", uid)
+          .gte("fecha", desde)
+          .lte("fecha", hasta)
+          .order("fecha", { ascending: true })
+      )
+      .then(({ data, error }) => {
+        if (error) console.error(error);
+        else setDatos(data ?? []);
+      })
+      .finally(() => setLoading(false));
   }, [desde, hasta]);
 
-  const sumBase = datos.reduce((s, v) => s + v.base, 0);
-  const sumIva = datos.reduce((s, v) => s + v.iva, 0);
+  const sumBase  = datos.reduce((s, v) => s + v.base, 0);
+  const sumIva   = datos.reduce((s, v) => s + v.iva, 0);
   const sumTotal = datos.reduce((s, v) => s + v.total, 0);
 
   return (
@@ -109,20 +131,13 @@ export default function LibroVentasPage() {
               </tr>
             ) : (
               datos.map((v) => (
-                <tr
-                  key={v.id}
-                  className="border-t even:bg-gray-50 hover:bg-gray-50"
-                >
+                <tr key={v.id} className="border-t even:bg-gray-50 hover:bg-gray-50">
                   <td className="px-4 py-2">{v.fecha}</td>
                   <td className="px-4 py-2">{v.cliente}</td>
-                  <td className="px-4 py-2">{v.numeroFactura}</td>
-                  <td className="px-4 py-2 text-right">
-                    {v.base.toFixed(2)}
-                  </td>
+                  <td className="px-4 py-2">{v.numero_factura}</td>
+                  <td className="px-4 py-2 text-right">{v.base.toFixed(2)}</td>
                   <td className="px-4 py-2 text-right">{v.iva.toFixed(2)}</td>
-                  <td className="px-4 py-2 text-right">
-                    {v.total.toFixed(2)}
-                  </td>
+                  <td className="px-4 py-2 text-right">{v.total.toFixed(2)}</td>
                 </tr>
               ))
             )}
@@ -130,9 +145,7 @@ export default function LibroVentasPage() {
           {datos.length > 0 && (
             <tfoot className="bg-gray-100 font-semibold">
               <tr>
-                <td colSpan={3} className="px-4 py-2 text-right">
-                  Totales:
-                </td>
+                <td colSpan={3} className="px-4 py-2 text-right">Totales:</td>
                 <td className="px-4 py-2 text-right">{sumBase.toFixed(2)}</td>
                 <td className="px-4 py-2 text-right">{sumIva.toFixed(2)}</td>
                 <td className="px-4 py-2 text-right">{sumTotal.toFixed(2)}</td>
@@ -142,5 +155,5 @@ export default function LibroVentasPage() {
         </table>
       </div>
     </div>
-);
+  );
 }
