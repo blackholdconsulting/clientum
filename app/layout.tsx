@@ -31,8 +31,10 @@ export default async function RootLayout({
     <html lang="es">
       <body className="bg-gray-50 text-gray-800 flex h-screen overflow-hidden">
         <aside className="w-64 bg-white border-r shadow flex flex-col">
+          {/* Logo / Título */}
           <div className="p-6 font-bold text-xl text-indigo-600">Clientum</div>
 
+          {/* Navegación principal */}
           <nav className="flex-1 overflow-y-auto px-4 space-y-1 text-sm">
             <Link href="/dashboard" className={linkClass("/dashboard")}>
               📊 Dashboard
@@ -170,8 +172,22 @@ export default async function RootLayout({
             </div>
           </nav>
 
-          {/* Perfil y Cerrar Sesión */}
-          <div className="p-4 border-t flex justify-center">
+          {/* Perfil y cierre de sesión */}
+          <div className="border-t px-4 py-3">
+            {/* Enlace estático "Mi perfil" */}
+            <Link
+              href="/perfil"
+              className="flex items-center space-x-2 mb-3 hover:bg-gray-100 rounded p-2"
+            >
+              <img
+                src="/avatar.png"
+                alt="Avatar"
+                className="h-8 w-8 rounded-full bg-gray-200"
+              />
+              <span className="font-medium">Mi perfil</span>
+            </Link>
+
+            {/* Menú desplegable con opciones adicionales */}
             <UserMenu />
           </div>
         </aside>
