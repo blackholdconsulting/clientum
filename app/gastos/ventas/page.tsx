@@ -16,23 +16,21 @@ interface Venta {
 }
 
 export default function LibroVentasPage() {
-  const [desde, setDesde] = useState<string>("");
-  const [hasta, setHasta] = useState<string>("");
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
   const [datos, setDatos] = useState<Venta[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!desde || !hasta) return;
     setLoading(true);
 
-    // 1) obtenemos el user_id de la sesión
     supabase.auth
       .getSession()
       .then(({ data }) => data.session?.user.id)
-      // 2) consultamos la tabla 'ventas' filtrando por user_id y rango de fechas
       .then((uid) =>
         supabase
-          .from<Venta>("ventas")
+          .from("ventas")
           .select(`
             id,
             fecha,
@@ -49,7 +47,7 @@ export default function LibroVentasPage() {
       )
       .then(({ data, error }) => {
         if (error) console.error(error);
-        else setDatos(data ?? []);
+        else setDatos(data as Venta[]);
       })
       .finally(() => setLoading(false));
   }, [desde, hasta]);
@@ -62,7 +60,6 @@ export default function LibroVentasPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">📒 Libro de Ventas e Ingresos</h1>
 
-      {/* Filtros y export */}
       <div className="flex items-end space-x-4">
         <div>
           <label className="block text-sm">Desde</label>
@@ -103,7 +100,6 @@ export default function LibroVentasPage() {
         </button>
       </div>
 
-      {/* Tabla */}
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white shadow rounded-lg text-sm">
           <thead className="bg-gray-100">
