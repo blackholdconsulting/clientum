@@ -1,99 +1,210 @@
-// app/gastos/page.tsx
-'use client';
+// File: /app/gastos/page.tsx
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useRouter } from 'next/navigation';
+import React from "react";
 
-interface Gasto {
-  id: string;
-  descripcion: string;
-  monto: number;
+interface Apunte {
   fecha: string;
-  categoria: string;
+  codigo: string;
+  concepto: string;
+  documento: string;
+  cuenta: string;
+  debe?: string;
+  haber?: string;
+  contrapartida?: string;
+  tipo: string;
+  obs?: string;
 }
 
-const PAGE_SIZE = 10;
+interface Amortizacion {
+  fecha: string;
+  codigo: string;
+  activo: string;
+  base: string;
+  acumulada: string;
+  anual: string;
+}
+
+const ventas: Apunte[] = [
+  {
+    fecha: "31/07/2024",
+    codigo: "1",
+    concepto: "Venta a CLIENTES (EUROS)",
+    documento: "1",
+    cuenta: "70000000",
+    haber: "1 000,00",
+    contrapartida: "43000000",
+    tipo: "F. Expedida",
+  },
+  {
+    fecha: "31/07/2024",
+    codigo: "1",
+    concepto: "IVA R. CLIENTES (EUROS)",
+    documento: "1",
+    cuenta: "47700000",
+    haber: "210,00",
+    contrapartida: "43000000",
+    tipo: "F. Expedida",
+  },
+];
+
+const compras: Apunte[] = [
+  {
+    fecha: "31/07/2024",
+    codigo: "10",
+    concepto: "Compra a PROVEEDORES (EUROS)",
+    documento: "1825",
+    cuenta: "60000000",
+    debe: "99,17",
+    contrapartida: "40000000",
+    tipo: "F. Recibida",
+  },
+  {
+    fecha: "31/07/2024",
+    codigo: "10",
+    concepto: "IVA S. PROVEEDORES (EUROS)",
+    documento: "1825",
+    cuenta: "47200000",
+    debe: "20,83",
+    contrapartida: "40000000",
+    tipo: "F. Recibida",
+  },
+];
+
+const amortizaciones: Amortizacion[] = [
+  {
+    fecha: "31/07/2024",
+    codigo: "A01",
+    activo: "Equipo Informático",
+    base: "5 000,00",
+    acumulada: "1 250,00",
+    anual: "500,00",
+  },
+  {
+    fecha: "31/07/2024",
+    codigo: "A02",
+    activo: "Maquinaria",
+    base: "12 000,00",
+    acumulada: "3 000,00",
+    anual: "1 000,00",
+  },
+];
 
 export default function GastosPage() {
-  const supabase = createClientComponentClient();
-  const router = useRouter();
-  const [gastos, setGastos] = useState<Gasto[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-
-  useEffect(() => {
-    fetchGastos();
-  }, [page]);
-
-  async function fetchGastos() {
-    setLoading(true);
-    const { data, count, error } = await supabase
-      .from('gastos') // quitamos el genérico aquí
-      .select('*', { count: 'exact' })
-      .order('fecha', { ascending: false })
-      .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
-
-    if (error) {
-      console.error('Error cargando gastos:', error);
-    } else if (data) {
-      setGastos(data as Gasto[]);
-      setTotalCount(count || 0);
-    }
-    setLoading(false);
-  }
-
   return (
-    <main className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Gastos</h1>
-      {loading ? (
-        <p>Cargando gastos…</p>
-      ) : (
-        <>
-          <ul className="space-y-2">
-            {gastos.map((g) => (
-              <li key={g.id}>
-                <span className="font-medium">
-                  {new Date(g.fecha).toLocaleDateString()}:
-                </span>{' '}
-                {g.descripcion} — {g.monto.toFixed(2)} €
-              </li>
-            ))}
-          </ul>
+    <div className="p-6 space-y-10">
+      <h1 className="text-2xl font-bold">Gastos</h1>
 
-          <div className="mt-4 flex items-center space-x-2">
-            <button
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page === 1}
-              className="px-3 py-1 border rounded"
-            >
-              Anterior
-            </button>
-            <span>
-              Página {page} de {Math.ceil(totalCount / PAGE_SIZE)}
-            </span>
-            <button
-              onClick={() =>
-                setPage((p) =>
-                  p * PAGE_SIZE < totalCount ? p + 1 : p
-                )
-              }
-              disabled={page * PAGE_SIZE >= totalCount}
-              className="px-3 py-1 border rounded"
-            >
-              Siguiente
-            </button>
-          </div>
+      {/* Libro de ventas e ingresos */}
+      <section>
+        <h2 className="text-xl font-semibold mb-4">
+          📒 Libro de ventas e ingresos
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm border rounded-lg">
+            <thead className="bg-gray-200">
+              <tr>
+                <th className="px-3 py-2 text-left">Fecha</th>
+                <th className="px-3 py-2 text-left">Cód.</th>
+                <th className="px-3 py-2 text-left">Concepto</th>
+                <th className="px-3 py-2 text-left">Doc.</th>
+                <th className="px-3 py-2 text-left">Cuenta</th>
+                <th className="px-3 py-2 text-right">Debe</th>
+                <th className="px-3 py-2 text-right">Haber</th>
+                <th className="px-3 py-2 text-left">Contrapartida</th>
+                <th className="px-3 py-2 text-left">Tipo</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {ventas.map((a, i) => (
+                <tr key={i} className={i % 2 === 0 ? "" : "bg-gray-50"}>
+                  <td className="px-3 py-2">{a.fecha}</td>
+                  <td className="px-3 py-2">{a.codigo}</td>
+                  <td className="px-3 py-2">{a.concepto}</td>
+                  <td className="px-3 py-2">{a.documento}</td>
+                  <td className="px-3 py-2">{a.cuenta}</td>
+                  <td className="px-3 py-2 text-right">{a.debe || "–"}</td>
+                  <td className="px-3 py-2 text-right">{a.haber || "–"}</td>
+                  <td className="px-3 py-2">{a.contrapartida}</td>
+                  <td className="px-3 py-2">{a.tipo}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-          <button
-            onClick={() => router.push('/gastos/nuevo')}
-            className="mt-6 px-4 py-2 bg-blue-600 text-white rounded"
-          >
-            Nuevo Gasto
-          </button>
-        </>
-      )}
-    </main>
+      {/* Libro de compras y gastos */}
+      <section>
+        <h2 className="text-xl font-semibold mb-4">
+          📕 Libro de compras y gastos
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm border rounded-lg">
+            <thead className="bg-gray-200">
+              <tr>
+                <th className="px-3 py-2 text-left">Fecha</th>
+                <th className="px-3 py-2 text-left">Cód.</th>
+                <th className="px-3 py-2 text-left">Concepto</th>
+                <th className="px-3 py-2 text-left">Doc.</th>
+                <th className="px-3 py-2 text-left">Cuenta</th>
+                <th className="px-3 py-2 text-right">Debe</th>
+                <th className="px-3 py-2 text-right">Haber</th>
+                <th className="px-3 py-2 text-left">Contrapartida</th>
+                <th className="px-3 py-2 text-left">Tipo</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {compras.map((a, i) => (
+                <tr key={i} className={i % 2 === 0 ? "" : "bg-gray-50"}>
+                  <td className="px-3 py-2">{a.fecha}</td>
+                  <td className="px-3 py-2">{a.codigo}</td>
+                  <td className="px-3 py-2">{a.concepto}</td>
+                  <td className="px-3 py-2">{a.documento}</td>
+                  <td className="px-3 py-2">{a.cuenta}</td>
+                  <td className="px-3 py-2 text-right">{a.debe || "–"}</td>
+                  <td className="px-3 py-2 text-right">{a.haber || "–"}</td>
+                  <td className="px-3 py-2">{a.contrapartida}</td>
+                  <td className="px-3 py-2">{a.tipo}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Libro de Amortizaciones */}
+      <section>
+        <h2 className="text-xl font-semibold mb-4">
+          📗 Libro de amortizaciones
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm border rounded-lg">
+            <thead className="bg-gray-200">
+              <tr>
+                <th className="px-3 py-2 text-left">Fecha</th>
+                <th className="px-3 py-2 text-left">Cód.</th>
+                <th className="px-3 py-2 text-left">Activo</th>
+                <th className="px-3 py-2 text-right">Base</th>
+                <th className="px-3 py-2 text-right">Acumulada</th>
+                <th className="px-3 py-2 text-right">Anual</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {amortizaciones.map((a, i) => (
+                <tr key={i} className={i % 2 === 0 ? "" : "bg-gray-50"}>
+                  <td className="px-3 py-2">{a.fecha}</td>
+                  <td className="px-3 py-2">{a.codigo}</td>
+                  <td className="px-3 py-2">{a.activo}</td>
+                  <td className="px-3 py-2 text-right">{a.base}</td>
+                  <td className="px-3 py-2 text-right">{a.acumulada}</td>
+                  <td className="px-3 py-2 text-right">{a.anual}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   );
 }
