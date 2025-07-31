@@ -1,96 +1,106 @@
 // File: /app/facturas/factura-simplificada/page.tsx
 "use client";
 
-import { useState, useEffect, ChangeEvent, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { jsPDF } from "jspdf";
 import { supabase } from "@/lib/supabaseClient";
 import { registraVenta, generarCodigoFactura } from "@/lib/ventas";
+import Link from "next/link";
 
 interface Cliente {
   id: string;
   nombre: string;
 }
+interface Servicio {
+  id: string;
+  nombre: string;
+  precio: number;
+}
 
 export default function FacturaSimplificadaPage() {
-  // ————————————
-  // Estados
-  // ————————————
+  // — Estados —
   const [fecha, setFecha] = useState("");
   const [receptorId, setReceptorId] = useState("");
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [servicio, setServicio] = useState("");
+  const [servicios, setServicios] = useState<Servicio[]>([]);
+
+  const [selectedServicioId, setSelectedServicioId] = useState("");
+  const [servicioNombre, setServicioNombre] = useState("");
   const [precio, setPrecio] = useState(0);
+
   const [ivaPct, setIvaPct] = useState(21);
   const [loading, setLoading] = useState(false);
 
-  // ————————————
-  // Carga lista de clientes
-  // ————————————
+  // — Cargar datos —
   useEffect(() => {
-    supabase
-      .from("clientes")
-      .select("id,nombre")
-      .then(({ data, error }) => {
-        if (error) console.error("Error cargando clientes:", error.message);
-        else setClientes((data || []) as Cliente[]);
-      });
+    supabase.from("clientes").select("id,nombre").then(({ data, error }) => {
+      if (error) console.error(error);
+      else setClientes(data as Cliente[]);
+    });
+    supabase.from("servicios").select("id,nombre,precio").then(({ data, error }) => {
+      if (error) console.error(error);
+      else setServicios(data as Servicio[]);
+    });
   }, []);
 
-  // ————————————
-  // Cálculo de totales
-  // ————————————
-  const base     = precio;
-  const iva      = +(base * ivaPct) / 100;
-  const total    = +(base + iva).toFixed(2);
+  // — Cuando cambias de servicio —
+  const onSelectServicio = (id: string) => {
+    setSelectedServicioId(id);
+    const s = servicios.find((x) => x.id === id);
+    if (s) {
+      setServicioNombre(s.nombre);
+      setPrecio(s.precio);
+    } else {
+      setServicioNombre("");
+      setPrecio(0);
+    }
+  };
 
-  // ————————————
-  // Enviar / emitir ticket
-  // ————————————
+  // — Totales —
+  const base = precio;
+  const iva = +(base * ivaPct) / 100;
+  const total = +(base + iva).toFixed(2);
+
+  // — Emitir Ticket —
   const handleEmitir = async (e: FormEvent) => {
     e.preventDefault();
-
-    if (!fecha || !receptorId || !servicio || precio <= 0) {
-      alert("Completa Fecha, Cliente, Servicio y Precio Base.");
-      return;
+    if (!fecha || !receptorId || !servicioNombre || precio <= 0) {
+      return alert("Completa todos los campos.");
     }
     setLoading(true);
 
-    // 1) Genera código automático
-    const numeroFactura = generarCodigoFactura(); // e.g. "FAC25-ABCD"
-
-    // 2) Obtén user_id
+    // genera código
+    const numeroFactura = generarCodigoFactura();
+    // obtiene user_id
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    const userId = user?.id;
-    if (!userId) {
-      alert("Usuario no autenticado.");
+    if (!user?.id) {
+      alert("Usuario no autenticado");
       setLoading(false);
       return;
     }
 
-    // 3) Inserta en tabla `facturas` usando tus columnas:
-    const { error: facErr } = await supabase
-      .from("facturas")
-      .insert({
-        user_id:       userId,
-        cliente_id:    receptorId,
-        fecha_emisor:  fecha,
-        fecha_vencim:  fecha,
-        concepto:      servicio,
-        base_imponib:  base,
-        iva_porc:      ivaPct,
-        total:         total,
-        via:           "simplificada",
-      });
-
+    // inserta en `facturas`
+    const { error: facErr } = await supabase.from("facturas").insert({
+      user_id:       user.id,
+      cliente_id:    receptorId,
+      fecha_emisor:  fecha,
+      fecha_vencim:  fecha,
+      concepto:      servicioNombre,
+      base_imponib:  base,
+      iva_porc:      ivaPct,
+      total:         total,
+      via:           "simplificada",
+      numero_factura: numeroFactura,
+    });
     if (facErr) {
-      alert("Error al guardar factura: " + facErr.message);
+      alert("Error guardando: " + facErr.message);
       setLoading(false);
       return;
     }
 
-    // 4) Registra en libro de ventas
+    // registra en ventas
     try {
       await registraVenta({
         fecha,
@@ -100,32 +110,30 @@ export default function FacturaSimplificadaPage() {
         iva,
       });
     } catch (err: any) {
-      console.error("Error registro ventas:", err);
-      alert("Factura grabada, pero no se registró en ventas: " + err.message);
+      console.error(err);
+      alert("No se registró en ventas: " + err.message);
     }
 
-    // 5) Genera PDF tipo ticket
+    // genera PDF-ticket
     const cliente = clientes.find((c) => c.id === receptorId);
     const doc = new jsPDF({ unit: "mm", format: [80, 200] });
     let y = 10;
 
-    doc.setFontSize(12).text("COMPROBANTE SIMPLIFICADO", 40, y, {
-      align: "center",
-    });
-    y += 8;
+    doc.setFontSize(12).text("COMPROBANTE", 40, y, { align: "center" });
+    y += 6;
     doc.setFontSize(8).text(`Nº: ${numeroFactura}`, 10, y);
     y += 6;
     doc.text(`Fecha: ${fecha}`, 10, y);
     y += 6;
-    doc.text(`Cliente: ${cliente?.nombre || ""}`, 10, y);
+    doc.text(`Cliente: ${cliente?.nombre}`, 10, y);
     y += 8;
-    doc.setFontSize(10).text(servicio, 10, y);
+    doc.setFontSize(10).text(servicioNombre, 10, y);
     y += 6;
-    doc.setFontSize(8).text(`Base: € ${base.toFixed(2)}`, 10, y);
+    doc.setFontSize(8).text(`Base: €${base.toFixed(2)}`, 10, y);
     y += 6;
-    doc.text(`IVA(${ivaPct}%): € ${iva.toFixed(2)}`, 10, y);
+    doc.text(`IVA(${ivaPct}%): €${iva.toFixed(2)}`, 10, y);
     y += 6;
-    doc.setFontSize(12).text(`TOTAL: € ${total.toFixed(2)}`, 40, y, {
+    doc.setFontSize(12).text(`TOTAL: €${total.toFixed(2)}`, 40, y, {
       align: "center",
     });
     y += 10;
@@ -137,9 +145,6 @@ export default function FacturaSimplificadaPage() {
     setLoading(false);
   };
 
-  // ————————————
-  // Render
-  // ————————————
   return (
     <div className="p-6 max-w-sm mx-auto bg-white rounded shadow">
       <h1 className="text-xl font-bold mb-4">Factura Simplificada</h1>
@@ -149,10 +154,10 @@ export default function FacturaSimplificadaPage() {
           <label className="block text-sm">Fecha</label>
           <input
             type="date"
+            className="mt-1 w-full border rounded px-2 py-1"
             value={fecha}
             onChange={(e) => setFecha(e.target.value)}
             required
-            className="mt-1 w-full border rounded px-2 py-1"
           />
         </div>
 
@@ -160,10 +165,10 @@ export default function FacturaSimplificadaPage() {
         <div>
           <label className="block text-sm">Cliente</label>
           <select
+            className="mt-1 w-full border rounded px-2 py-1"
             value={receptorId}
             onChange={(e) => setReceptorId(e.target.value)}
             required
-            className="mt-1 w-full border rounded px-2 py-1"
           >
             <option value="">— Selecciona cliente —</option>
             {clientes.map((c) => (
@@ -174,44 +179,55 @@ export default function FacturaSimplificadaPage() {
           </select>
         </div>
 
-        {/* Servicio */}
+        {/* Servicio desplegable + link a configurar */}
         <div>
           <label className="block text-sm">Servicio</label>
-          <input
-            type="text"
-            value={servicio}
-            onChange={(e) => setServicio(e.target.value)}
-            placeholder="Descripción breve"
-            required
-            className="mt-1 w-full border rounded px-2 py-1"
-          />
+          <div className="flex space-x-2">
+            <select
+              className="mt-1 flex-1 border rounded px-2 py-1"
+              value={selectedServicioId}
+              onChange={(e) => onSelectServicio(e.target.value)}
+              required
+            >
+              <option value="">— Selecciona servicio —</option>
+              {servicios.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre} (€{s.precio.toFixed(2)})
+                </option>
+              ))}
+            </select>
+            <Link
+              href="/facturas/servicios"
+              className="mt-1 text-blue-600 hover:underline text-sm"
+            >
+              Gestionar
+            </Link>
+          </div>
         </div>
 
-        {/* Precio Base */}
+        {/* Precio (auto-llenado) */}
         <div>
           <label className="block text-sm">Precio Base (€)</label>
           <input
             type="number"
-            value={precio}
-            onChange={(e) => setPrecio(+e.target.value)}
-            step="0.01"
-            required
             className="mt-1 w-full border rounded px-2 py-1"
+            value={precio}
+            readOnly
           />
         </div>
 
-        {/* IVA % */}
+        {/* IVA */}
         <div>
           <label className="block text-sm">IVA (%)</label>
           <input
             type="number"
+            className="mt-1 w-full border rounded px-2 py-1"
             value={ivaPct}
             onChange={(e) => setIvaPct(+e.target.value)}
-            className="mt-1 w-full border rounded px-2 py-1"
           />
         </div>
 
-        {/* Botón Emitir */}
+        {/* Botón emitir */}
         <button
           type="submit"
           disabled={loading}
