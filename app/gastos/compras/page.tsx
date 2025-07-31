@@ -42,7 +42,8 @@ export default function LibroComprasPage() {
           console.error(error);
           setDatos([]);
         } else {
-          setDatos(data ?? []);
+          // Cast via unknown to satisfy TS without unsafe ParserError overlap
+          setDatos((data ?? []) as unknown as Compra[]);
         }
       })
       .finally(() => setLoading(false));
@@ -153,15 +154,9 @@ export default function LibroComprasPage() {
                 <td colSpan={4} className="px-4 py-2 text-right">
                   Totales:
                 </td>
-                <td className="px-4 py-2 text-right">
-                  {sumBase.toFixed(2)}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  {sumIva.toFixed(2)}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  {sumTotal.toFixed(2)}
-                </td>
+                <td className="px-4 py-2 text-right">{sumBase.toFixed(2)}</td>
+                <td className="px-4 py-2 text-right">{sumIva.toFixed(2)}</td>
+                <td className="px-4 py-2 text-right">{sumTotal.toFixed(2)}</td>
               </tr>
             </tfoot>
           )}
