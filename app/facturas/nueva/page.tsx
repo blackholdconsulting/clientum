@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, ChangeEvent } from "react";
 import { jsPDF } from "jspdf";
 import { supabase } from "@/lib/supabaseClient";
