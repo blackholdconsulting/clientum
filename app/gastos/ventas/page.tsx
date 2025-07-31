@@ -2,13 +2,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { CSVLink } from "react-csv";
 
 interface Venta {
   id: string;
   fecha: string;
-  cliente_id: string;
+  cliente: string;
   numero_factura: string;
   base: number;
   iva: number;
@@ -31,7 +32,15 @@ export default function LibroVentasPage() {
       .then((uid) =>
         supabase
           .from("ventas")
-          .select("id, fecha, cliente_id, numero_factura, base, iva, total")
+          .select(`
+            id,
+            fecha,
+            numero_factura,
+            base,
+            iva,
+            total,
+            cliente:clientes(nombre)
+          `)
           .eq("user_id", uid)
           .gte("fecha", desde)
           .lte("fecha", hasta)
@@ -42,22 +51,22 @@ export default function LibroVentasPage() {
           console.error(error);
           setDatos([]);
         } else {
-          // Cast via unknown to avoid ParserError<> mismatch
-          setDatos((data ?? []) as unknown as Venta[]);
+          // data comes back as array of objects with a `cliente` field
+          setDatos(data ?? []);
         }
       })
       .finally(() => setLoading(false));
   }, [desde, hasta]);
 
-  const sumBase  = datos.reduce((s, v) => s + v.base, 0);
-  const sumIva   = datos.reduce((s, v) => s + v.iva, 0);
-  const sumTotal = datos.reduce((s, v) => s + v.total, 0);
+  const sumBase  = datos.reduce((sum, v) => sum + v.base, 0);
+  const sumIva   = datos.reduce((sum, v) => sum + v.iva, 0);
+  const sumTotal = datos.reduce((sum, v) => sum + v.total, 0);
 
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">📒 Libro de Ventas e Ingresos</h1>
 
-      {/* Filtros y export */}
+      {/* Filtros & export */}
       <div className="flex items-end space-x-4">
         <div>
           <label className="block text-sm">Desde</label>
@@ -104,7 +113,7 @@ export default function LibroVentasPage() {
           <thead className="bg-gray-100">
             <tr>
               <th className="px-4 py-2 text-left">Fecha</th>
-              <th className="px-4 py-2 text-left">Cliente ID</th>
+              <th className="px-4 py-2 text-left">Cliente</th>
               <th className="px-4 py-2 text-left">Factura</th>
               <th className="px-4 py-2 text-right">Base</th>
               <th className="px-4 py-2 text-right">IVA</th>
@@ -131,17 +140,18 @@ export default function LibroVentasPage() {
                   className="border-t even:bg-gray-50 hover:bg-gray-50"
                 >
                   <td className="px-4 py-2">{v.fecha}</td>
-                  <td className="px-4 py-2">{v.cliente_id}</td>
-                  <td className="px-4 py-2">{v.numero_factura}</td>
-                  <td className="px-4 py-2 text-right">
-                    {v.base.toFixed(2)}
+                  <td className="px-4 py-2">{v.cliente}</td>
+                  <td className="px-4 py-2">
+                    <Link
+                      href={`/facturas/${v.numero_factura}`}
+                      className="text-indigo-600 hover:underline"
+                    >
+                      {v.numero_factura}
+                    </Link>
                   </td>
-                  <td className="px-4 py-2 text-right">
-                    {v.iva.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    {v.total.toFixed(2)}
-                  </td>
+                  <td className="px-4 py-2 text-right">{v.base.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">{v.iva.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">{v.total.toFixed(2)}</td>
                 </tr>
               ))
             )}
@@ -161,5 +171,5 @@ export default function LibroVentasPage() {
         </table>
       </div>
     </div>
-);
+  );
 }
