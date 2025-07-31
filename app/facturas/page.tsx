@@ -1,4 +1,6 @@
+// File: /app/facturas/page.tsx
 "use client";
+
 import { useState, ChangeEvent, FormEvent } from "react";
 import { jsPDF } from "jspdf";
 import { supabase } from "@/lib/supabaseClient";
@@ -15,17 +17,15 @@ export default function CrearFacturaPage() {
   const [fecha, setFecha] = useState("");
   const [vencimiento, setVencimiento] = useState("");
 
-  // Emisor (ahora completamente editable; podrías cargarte por defecto el nombre de la empresa desde supabase)
+  // Emisor y Receptor
   const [emisor, setEmisor] = useState({
-    nombre: "",     // antes estaba fijo; ahora lo dejamos vacío para personalizar
+    nombre: "",
     direccion: "",
     nif: "",
     cp: "",
     ciudad: "",
     email: "",
   });
-
-  // Receptor
   const [receptor, setReceptor] = useState({
     nombre: "",
     direccion: "",
@@ -35,22 +35,27 @@ export default function CrearFacturaPage() {
     email: "",
   });
 
-  // Líneas de factura
+  // Líneas e impuestos
   const [lineas, setLineas] = useState<Linea[]>([
     { descripcion: "", unidades: 1, precioUnitario: 0 },
   ]);
-
-  // Impuestos
   const [ivaPct, setIvaPct] = useState(21);
   const [irpfPct, setIrpfPct] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  // Añadir línea
   const addLinea = () =>
     setLineas((prev) => [
       ...prev,
       { descripcion: "", unidades: 1, precioUnitario: 0 },
     ]);
 
+  // Eliminar línea
+  const removeLinea = (idx: number) => {
+    setLineas((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // Actualizar línea
   const onLineaChange = (
     idx: number,
     e: ChangeEvent<HTMLInputElement>
@@ -71,6 +76,7 @@ export default function CrearFacturaPage() {
     );
   };
 
+  // Cálculo totales
   const calcularTotales = () => {
     const base = lineas.reduce(
       (sum, l) => sum + l.unidades * l.precioUnitario,
@@ -82,32 +88,29 @@ export default function CrearFacturaPage() {
     return { base, iva, irpf, total };
   };
 
+  // Manejar envío a Verifactu
   const handleVerifactu = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     const numero = generarCodigoFactura();
-
-    // 1) Guardar en facturas
-    const { error: facErr } = await supabase
-      .from("facturas")
-      .insert({
-        fecha,
-        vencimiento,
-        emisor,
-        receptor,
-        numero_factura: numero,
-        lineas,
-        iva: ivaPct,
-        irpf: irpfPct,
-        via: "verifactu",
-      });
+    // 1) Guardar factura
+    const { error: facErr } = await supabase.from("facturas").insert({
+      fecha,
+      vencimiento,
+      emisor,
+      receptor,
+      numero_factura: numero,
+      lineas,
+      iva: ivaPct,
+      irpf: irpfPct,
+      via: "verifactu",
+    });
     if (facErr) {
       alert("Error al guardar factura: " + facErr.message);
       setLoading(false);
       return;
     }
-
     // 2) Registrar en ventas
     const { base, iva } = calcularTotales();
     try {
@@ -120,45 +123,36 @@ export default function CrearFacturaPage() {
       });
     } catch (err: any) {
       console.error(err);
-      alert(
-        "Factura creada, pero no pudo registrarse en ventas: " +
-          err.message
-      );
+      alert("Factura creada, pero fallo registro en ventas: " + err.message);
     }
-
-    // 3) Envío a Verifactu...
-    // await fetch("/api/verifactu", ...)
-
+    // 3) Lógica Verifactu…
     setLoading(false);
     alert("Verifactu creada: " + numero);
   };
 
+  // Manejar generación Facturae
   const handleFacturae = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     const numero = generarCodigoFactura();
-
-    // 1) Guardar en facturas
-    const { error: facErr } = await supabase
-      .from("facturas")
-      .insert({
-        fecha,
-        vencimiento,
-        emisor,
-        receptor,
-        numero_factura: numero,
-        lineas,
-        iva: ivaPct,
-        irpf: irpfPct,
-        via: "facturae",
-      });
+    // 1) Guardar factura
+    const { error: facErr } = await supabase.from("facturas").insert({
+      fecha,
+      vencimiento,
+      emisor,
+      receptor,
+      numero_factura: numero,
+      lineas,
+      iva: ivaPct,
+      irpf: irpfPct,
+      via: "facturae",
+    });
     if (facErr) {
       alert("Error al guardar factura: " + facErr.message);
       setLoading(false);
       return;
     }
-
     // 2) Registrar en ventas
     const { base, iva } = calcularTotales();
     try {
@@ -171,16 +165,9 @@ export default function CrearFacturaPage() {
       });
     } catch (err: any) {
       console.error(err);
-      alert(
-        "Factura creada, pero no pudo registrarse en ventas: " +
-          err.message
-      );
+      alert("Factura creada, pero fallo registro en ventas: " + err.message);
     }
-
-    // 3) Generar y enviar Facturae...
-    // const xml = buildFacturaeXML({ numero, ... });
-    // await fetch("/api/facturae", ...)
-
+    // 3) Lógica Facturae…
     setLoading(false);
     alert("Facturae generada: " + numero);
   };
@@ -196,15 +183,15 @@ export default function CrearFacturaPage() {
             type="date"
             value={fecha}
             onChange={(e) => setFecha(e.target.value)}
-            className="border rounded px-3 py-2"
             required
+            className="border rounded px-3 py-2"
           />
           <input
             type="date"
             value={vencimiento}
             onChange={(e) => setVencimiento(e.target.value)}
-            className="border rounded px-3 py-2"
             required
+            className="border rounded px-3 py-2"
           />
         </div>
 
@@ -324,14 +311,14 @@ export default function CrearFacturaPage() {
           {lineas.map((l, i) => (
             <div
               key={i}
-              className="grid grid-cols-4 gap-4 items-center"
+              className="grid grid-cols-5 gap-4 items-center"
             >
               <input
                 name="descripcion"
                 placeholder="Descripción"
                 value={l.descripcion}
                 onChange={(e) => onLineaChange(i, e)}
-                className="border rounded px-3 py-2"
+                className="border rounded px-3 py-2 col-span-2"
               />
               <input
                 name="unidades"
@@ -344,23 +331,28 @@ export default function CrearFacturaPage() {
               <input
                 name="precioUnitario"
                 type="number"
-                placeholder="P.U."
+                placeholder="Precio unitario"
                 step="0.01"
                 value={l.precioUnitario}
                 onChange={(e) => onLineaChange(i, e)}
                 className="border rounded px-3 py-2"
               />
-              {i === lineas.length - 1 && (
-                <button
-                  type="button"
-                  onClick={addLinea}
-                  className="px-2 py-1 bg-blue-600 text-white rounded"
-                >
-                  +
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => removeLinea(i)}
+                className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+              >
+                Eliminar
+              </button>
             </div>
           ))}
+          <button
+            type="button"
+            onClick={addLinea}
+            className="text-sm text-blue-600"
+          >
+            + Añadir línea
+          </button>
         </fieldset>
 
         {/* Impuestos y acciones */}
@@ -380,7 +372,8 @@ export default function CrearFacturaPage() {
               type="number"
               value={irpfPct}
               onChange={(e) => setIrpfPct(+e.target.value)}
-              className="mt-1 w-full border rounded px-3 py-2"            />
+              className="mt-1 w-full border rounded px-3 py-2"
+            />
           </div>
           <div className="col-span-2 flex space-x-4 justify-end">
             <button
