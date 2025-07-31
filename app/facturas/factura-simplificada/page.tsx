@@ -4,7 +4,7 @@
 import { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { jsPDF } from "jspdf";
 import { supabase } from "@/lib/supabaseClient";
-import { generarCodigoFactura, registraVenta } from "@/lib/ventas";
+import { registraVenta, generarCodigoFactura } from "@/lib/ventas";
 
 interface Cliente {
   id: string;
@@ -12,115 +12,134 @@ interface Cliente {
 }
 
 export default function FacturaSimplificadaPage() {
-  // ————————————————————————
-  // Estado del formulario
-  // ————————————————————————
+  // ————————————
+  // Estados
+  // ————————————
   const [fecha, setFecha] = useState("");
   const [receptorId, setReceptorId] = useState("");
   const [clientes, setClientes] = useState<Cliente[]>([]);
-
   const [servicio, setServicio] = useState("");
   const [precio, setPrecio] = useState(0);
-
   const [ivaPct, setIvaPct] = useState(21);
   const [loading, setLoading] = useState(false);
 
-  // ————————————————————————
-  // Al montar: cargar clientes para el select
-  // ————————————————————————
+  // ————————————
+  // Carga lista de clientes
+  // ————————————
   useEffect(() => {
     supabase
       .from("clientes")
       .select("id,nombre")
       .then(({ data, error }) => {
-        if (error) console.error(error);
+        if (error) console.error("Error cargando clientes:", error.message);
         else setClientes((data || []) as Cliente[]);
       });
   }, []);
 
-  // ————————————————————————
+  // ————————————
   // Cálculo de totales
-  // ————————————————————————
-  const base = precio;
-  const iva = +(base * ivaPct) / 100;
-  const total = +(base + iva).toFixed(2);
+  // ————————————
+  const base     = precio;
+  const iva      = +(base * ivaPct) / 100;
+  const total    = +(base + iva).toFixed(2);
 
-  // ————————————————————————
-  // Manejar envío / generación de ticket
-  // ————————————————————————
+  // ————————————
+  // Enviar / emitir ticket
+  // ————————————
   const handleEmitir = async (e: FormEvent) => {
     e.preventDefault();
+
     if (!fecha || !receptorId || !servicio || precio <= 0) {
-      alert("Completa fecha, cliente, servicio y precio.");
+      alert("Completa Fecha, Cliente, Servicio y Precio Base.");
       return;
     }
     setLoading(true);
 
-    // generar código único de ticket
-    const codigo = generarCodigoFactura(); // p.ej. FAC25-ABCD
+    // 1) Genera código automático
+    const numeroFactura = generarCodigoFactura(); // e.g. "FAC25-ABCD"
 
-    // 1) Guardar en tabla `facturas` como simplificada
-    const { error: facErr } = await supabase.from("facturas").insert({
-      fecha,
-      receptor_id: receptorId,
-      numero_factura: codigo,
-      servicio,
-      base,
-      iva: ivaPct,
-      total,
-      via: "simplificada",
-    });
+    // 2) Obtén user_id
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const userId = user?.id;
+    if (!userId) {
+      alert("Usuario no autenticado.");
+      setLoading(false);
+      return;
+    }
+
+    // 3) Inserta en tabla `facturas` usando tus columnas:
+    const { error: facErr } = await supabase
+      .from("facturas")
+      .insert({
+        user_id:       userId,
+        cliente_id:    receptorId,
+        fecha_emisor:  fecha,
+        fecha_vencim:  fecha,
+        concepto:      servicio,
+        base_imponib:  base,
+        iva_porc:      ivaPct,
+        total:         total,
+        via:           "simplificada",
+      });
+
     if (facErr) {
       alert("Error al guardar factura: " + facErr.message);
       setLoading(false);
       return;
     }
 
-    // 2) Registrar en libro de ventas
+    // 4) Registra en libro de ventas
     try {
       await registraVenta({
         fecha,
         cliente_id: receptorId,
-        numero_factura: codigo,
+        numero_factura: numeroFactura,
         base,
         iva,
       });
     } catch (err: any) {
-      console.error(err);
+      console.error("Error registro ventas:", err);
       alert("Factura grabada, pero no se registró en ventas: " + err.message);
-      setLoading(false);
-      return;
     }
 
-    // 3) Generar PDF tipo ticket
+    // 5) Genera PDF tipo ticket
     const cliente = clientes.find((c) => c.id === receptorId);
-    const doc = new jsPDF({ unit: "mm", format: [80, 200] }); // ticket tamaño 80×200mm
+    const doc = new jsPDF({ unit: "mm", format: [80, 200] });
     let y = 10;
 
-    doc.setFontSize(14).text("COMPROBANTE SIMPLIFICADO", 10, y, { align: "center" });
-    y += 10;
-    doc.setFontSize(10).text(`Código: ${codigo}`, 10, y);
+    doc.setFontSize(12).text("COMPROBANTE SIMPLIFICADO", 40, y, {
+      align: "center",
+    });
+    y += 8;
+    doc.setFontSize(8).text(`Nº: ${numeroFactura}`, 10, y);
     y += 6;
     doc.text(`Fecha: ${fecha}`, 10, y);
-    y += 8;
+    y += 6;
     doc.text(`Cliente: ${cliente?.nombre || ""}`, 10, y);
     y += 8;
-    doc.setFontSize(12).text("Servicio", 10, y);
-    y += 6;
     doc.setFontSize(10).text(servicio, 10, y);
-    y += 8;
-    doc.text(`Base: € ${base.toFixed(2)}`, 10, y);
     y += 6;
-    doc.text(`IVA (${ivaPct}%): € ${iva.toFixed(2)}`, 10, y);
+    doc.setFontSize(8).text(`Base: € ${base.toFixed(2)}`, 10, y);
     y += 6;
-    doc.setFontSize(12).text(`TOTAL: € ${total.toFixed(2)}`, 10, y);
+    doc.text(`IVA(${ivaPct}%): € ${iva.toFixed(2)}`, 10, y);
+    y += 6;
+    doc.setFontSize(12).text(`TOTAL: € ${total.toFixed(2)}`, 40, y, {
+      align: "center",
+    });
     y += 10;
-    doc.setFontSize(8).text("¡Gracias por su compra!", 10, y, { align: "center" });
+    doc.setFontSize(6).text("¡Gracias por su compra!", 40, y, {
+      align: "center",
+    });
 
-    doc.save(`ticket-${codigo}.pdf`);
+    doc.save(`ticket-${numeroFactura}.pdf`);
     setLoading(false);
   };
 
+  // ————————————
+  // Render
+  // ————————————
   return (
     <div className="p-6 max-w-sm mx-auto bg-white rounded shadow">
       <h1 className="text-xl font-bold mb-4">Factura Simplificada</h1>
@@ -146,7 +165,7 @@ export default function FacturaSimplificadaPage() {
             required
             className="mt-1 w-full border rounded px-2 py-1"
           >
-            <option value="">— Seleccione cliente —</option>
+            <option value="">— Selecciona cliente —</option>
             {clientes.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nombre}
@@ -168,7 +187,7 @@ export default function FacturaSimplificadaPage() {
           />
         </div>
 
-        {/* Precio */}
+        {/* Precio Base */}
         <div>
           <label className="block text-sm">Precio Base (€)</label>
           <input
@@ -181,7 +200,7 @@ export default function FacturaSimplificadaPage() {
           />
         </div>
 
-        {/* IVA */}
+        {/* IVA % */}
         <div>
           <label className="block text-sm">IVA (%)</label>
           <input
@@ -192,11 +211,11 @@ export default function FacturaSimplificadaPage() {
           />
         </div>
 
-        {/* Botón */}
+        {/* Botón Emitir */}
         <button
           type="submit"
           disabled={loading}
-          className="w-full mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
         >
           {loading ? "Procesando..." : "Emitir Ticket"}
         </button>
