@@ -34,7 +34,7 @@ export default function CrearFacturaPage() {
     email: "",
   });
 
-  // Receptor (solo ID, carga nombre desde clientes)
+  // Receptor (solo ID; cargaremos nombre luego)
   const [receptorId, setReceptorId] = useState("");
   const [clientes, setClientes] = useState<Cliente[]>([]);
 
@@ -46,27 +46,25 @@ export default function CrearFacturaPage() {
   const [irpfPct, setIrpfPct] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // Carga lista de clientes al montar
+  // Al montar, carga todos los clientes
   useEffect(() => {
     supabase
-      .from<Cliente, Cliente>("clientes")
-      .select("id,nombre")
+      .from("clientes")
+      .select<Cliente>("id,nombre")
       .then(({ data, error }) => {
         if (error) console.error(error);
         else setClientes(data || []);
       });
   }, []);
 
-  // Añadir/eliminar/editar líneas
+  // Funciones de línea
   const addLinea = () =>
     setLineas((prev) => [
       ...prev,
       { descripcion: "", unidades: 1, precioUnitario: 0 },
     ]);
-
   const removeLinea = (idx: number) =>
     setLineas((prev) => prev.filter((_, i) => i !== idx));
-
   const onLineaChange = (
     idx: number,
     e: ChangeEvent<HTMLInputElement>
@@ -85,7 +83,7 @@ export default function CrearFacturaPage() {
     );
   };
 
-  // Calcular base, IVA, IRPF y total
+  // Cálculo de totales
   const calcularTotales = () => {
     const base = lineas.reduce(
       (sum, l) => sum + l.unidades * l.precioUnitario,
@@ -96,7 +94,7 @@ export default function CrearFacturaPage() {
     return { base, iva, irpf, total: base + iva - irpf };
   };
 
-  // Exportar PDF y guardar en Supabase + ventas
+  // Exportar PDF (guarda factura y la registra en ventas)
   const handleExportPDF = async () => {
     if (!serie || !numero || !receptorId) {
       alert("Indica Serie, Número y selecciona Receptor.");
@@ -105,7 +103,7 @@ export default function CrearFacturaPage() {
     setLoading(true);
     const numeroFactura = `${serie}-${numero}`;
 
-    // 1) Guardar factura
+    // Guardar en facturas
     const { error: facErr } = await supabase.from("facturas").insert({
       serie,
       numero,
@@ -125,7 +123,7 @@ export default function CrearFacturaPage() {
       return;
     }
 
-    // 2) Registrar en ventas
+    // Registrar en ventas
     const { base, iva } = calcularTotales();
     try {
       await registraVenta({
@@ -140,7 +138,7 @@ export default function CrearFacturaPage() {
       alert("Factura guardada, pero fallo registro ventas: " + err.message);
     }
 
-    // 3) Generar PDF
+    // Generar PDF
     const cliente = clientes.find((c) => c.id === receptorId);
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     let y = 40;
@@ -162,7 +160,7 @@ export default function CrearFacturaPage() {
     doc.text("Importe", 450, y, { align: "right" });
     y += 16;
 
-    // Detalle de líneas
+    // Detalle líneas
     lineas.forEach((l) => {
       doc.text(l.descripcion, 40, y);
       doc.text(String(l.unidades), 240, y);
@@ -245,7 +243,7 @@ export default function CrearFacturaPage() {
             }
             className="w-full border rounded px-3 py-2"
           />
-          {/* … resto de campos emisor … */}
+          {/* ... resto de campos emisor ... */}
         </fieldset>
 
         {/* Receptor */}
@@ -269,7 +267,10 @@ export default function CrearFacturaPage() {
         <fieldset className="space-y-4">
           <legend className="font-semibold">Líneas</legend>
           {lineas.map((l, i) => (
-            <div key={i} className="grid grid-cols-5 gap-4 items-center">
+            <div
+              key={i}
+              className="grid grid-cols-5 gap-4 items-center"
+            >
               <input
                 name="descripcion"
                 placeholder="Descripción"
