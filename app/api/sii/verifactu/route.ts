@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const { facturaId } = body;
 
   try {
-    // Obtener factura
+    // 1️⃣ Obtener factura
     const { data: factura, error } = await supabase
       .from("facturas")
       .select("*")
@@ -25,13 +25,35 @@ export async function POST(request: Request) {
       );
     }
 
-    // Aquí iría la lógica real para enviar a Verifactu
-    // Ejemplo de simulación
+    // 2️⃣ Envío real a Verifactu (simulación)
     console.log("Enviando factura a Verifactu...", factura.numero);
+
+    // Simulación de respuesta AEAT
+    const respuestaVerifactu = {
+      estado: "aceptada",
+      csv: "CSV-VERI-456",
+    };
+
+    // 3️⃣ Actualizar estado y CSV automáticamente
+    const { error: updateError } = await supabase
+      .from("facturas")
+      .update({
+        estado: respuestaVerifactu.estado,
+        csv: respuestaVerifactu.csv,
+      })
+      .eq("id", facturaId);
+
+    if (updateError) {
+      return NextResponse.json(
+        { success: false, message: updateError.message },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
       message: `Factura ${factura.numero} enviada correctamente a Verifactu`,
+      result: respuestaVerifactu,
     });
   } catch (err: any) {
     return NextResponse.json(
