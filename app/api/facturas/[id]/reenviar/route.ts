@@ -2,10 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendToSii } from "@/lib/sii/sendToSII";
 
-export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: Request) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
     return NextResponse.json(
       { success: false, message: "Faltan variables de entorno" },
@@ -19,11 +16,23 @@ export async function POST(
   );
 
   try {
+    // ✅ Obtener ID de la URL
+    const url = new URL(request.url);
+    const parts = url.pathname.split("/");
+    const id = parts[parts.indexOf("facturas") + 1]; // obtiene el ID de [id]
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, message: "ID de factura no proporcionado" },
+        { status: 400 }
+      );
+    }
+
     // 1️⃣ Obtener factura
     const { data: factura, error } = await supabase
       .from("facturas")
       .select("*")
-      .eq("id", params.id)
+      .eq("id", id)
       .single();
 
     if (error || !factura) {
@@ -66,7 +75,7 @@ export async function POST(
         estado: result.estado,
         csv: result.csv || null,
       })
-      .eq("id", params.id);
+      .eq("id", id);
 
     if (updateError) {
       return NextResponse.json(
