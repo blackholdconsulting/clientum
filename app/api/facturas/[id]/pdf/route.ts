@@ -20,7 +20,10 @@ export async function GET(request: Request) {
       .single();
 
     if (error || !factura) {
-      return NextResponse.json({ success: false, message: "Factura no encontrada" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: "Factura no encontrada" },
+        { status: 404 }
+      );
     }
 
     const pdfBuffer = await generatePDF(factura);
@@ -38,3 +41,4 @@ export async function GET(request: Request) {
     );
   }
 }
+
