@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const { facturaId } = body;
 
   try {
-    // Obtener factura
+    // 1️⃣ Obtener factura
     const { data: factura, error } = await supabase
       .from("facturas")
       .select("*")
@@ -25,13 +25,35 @@ export async function POST(request: Request) {
       );
     }
 
-    // Aquí iría la lógica real para enviar al SII (Facturae)
-    // Ejemplo de simulación
-    console.log("Enviando factura a Facturae (SII)...", factura.numero);
+    // 2️⃣ Envío real al SII (simulación)
+    console.log("Enviando factura a Facturae...", factura.numero);
+
+    // Simulación de respuesta AEAT
+    const respuestaAEAT = {
+      estado: "aceptada",
+      csv: "CSV-123-FAKE",
+    };
+
+    // 3️⃣ Actualizar estado y CSV automáticamente
+    const { error: updateError } = await supabase
+      .from("facturas")
+      .update({
+        estado: respuestaAEAT.estado,
+        csv: respuestaAEAT.csv,
+      })
+      .eq("id", facturaId);
+
+    if (updateError) {
+      return NextResponse.json(
+        { success: false, message: updateError.message },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
       message: `Factura ${factura.numero} enviada correctamente a Facturae (SII)`,
+      result: respuestaAEAT,
     });
   } catch (err: any) {
     return NextResponse.json(
@@ -40,4 +62,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
