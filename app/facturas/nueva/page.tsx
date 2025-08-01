@@ -1,172 +1,194 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { PDFDownloadLink, Page, Text, View, Document, StyleSheet } from "@react-pdf/renderer";
+
+interface Cliente {
+  id: string;
+  nombre: string;
+  direccion: string;
+  telefono: string;
+  email: string;
+}
+
+interface Linea {
+  descripcion: string;
+  cantidad: number;
+  precio: number;
+}
+
+const styles = StyleSheet.create({
+  page: { padding: 30, fontSize: 12 },
+  section: { marginBottom: 10 },
+  tableHeader: { flexDirection: "row", borderBottom: "1px solid #000", paddingBottom: 5 },
+  tableRow: { flexDirection: "row", justifyContent: "space-between", marginVertical: 3 },
+  total: { marginTop: 10, textAlign: "right" },
+});
+
+function FacturaPDF({ serie, numero, cliente, lineas, iva }: any) {
+  const subtotal = lineas.reduce((sum: number, l: any) => sum + l.cantidad * l.precio, 0);
+  const ivaTotal = (subtotal * iva) / 100;
+  const total = subtotal + ivaTotal;
+
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        <View style={styles.section}>
+          <Text>FACTURA Nº {numero}</Text>
+          <Text>Serie: {serie}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text>Cliente: {cliente.nombre}</Text>
+          <Text>Dirección: {cliente.direccion}</Text>
+          <Text>Tel: {cliente.telefono} - Email: {cliente.email}</Text>
+        </View>
+
+        <View style={styles.tableHeader}>
+          <Text style={{ width: "50%" }}>Descripción</Text>
+          <Text style={{ width: "20%", textAlign: "center" }}>Cant.</Text>
+          <Text style={{ width: "30%", textAlign: "right" }}>Precio</Text>
+        </View>
+
+        {lineas.map((linea: any, index: number) => (
+          <View key={index} style={styles.tableRow}>
+            <Text style={{ width: "50%" }}>{linea.descripcion}</Text>
+            <Text style={{ width: "20%", textAlign: "center" }}>{linea.cantidad}</Text>
+            <Text style={{ width: "30%", textAlign: "right" }}>{linea.precio.toFixed(2)} €</Text>
+          </View>
+        ))}
+
+        <View style={styles.total}>
+          <Text>Subtotal: {subtotal.toFixed(2)} €</Text>
+          <Text>IVA ({iva}%): {ivaTotal.toFixed(2)} €</Text>
+          <Text>Total: {total.toFixed(2)} €</Text>
+        </View>
+      </Page>
+    </Document>
+  );
+}
 
 export default function NuevaFactura() {
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clienteId, setClienteId] = useState("");
   const [serie, setSerie] = useState("");
   const [numero, setNumero] = useState("");
-  const [fechaEmision, setFechaEmision] = useState("");
-  const [fechaVencimiento, setFechaVencimiento] = useState("");
-  const [emisor, setEmisor] = useState("");
-  const [receptor, setReceptor] = useState("");
-  const [concepto, setConcepto] = useState("");
-  const [cantidad, setCantidad] = useState(1);
-  const [precio, setPrecio] = useState(0);
   const [iva, setIva] = useState(21);
-  const [loading, setLoading] = useState(false);
+  const [lineas, setLineas] = useState<Linea[]>([{ descripcion: "", cantidad: 1, precio: 0 }]);
 
-  const handleGuardar = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/facturas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          serie,
-          numero,
-          fechaEmision,
-          fechaVencimiento,
-          emisor,
-          receptor,
-          concepto,
-          cantidad,
-          precio,
-          iva,
-        }),
-      });
+  const clienteSeleccionado = clientes.find((c) => c.id === clienteId);
 
+  useEffect(() => {
+    const fetchClientes = async () => {
+      const res = await fetch("/api/clientes");
       const data = await res.json();
-      if (data.success) {
-        alert("Factura guardada correctamente");
-      } else {
-        alert("Error guardando factura: " + data.message);
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Error al guardar factura");
-    } finally {
-      setLoading(false);
-    }
+      setClientes(data.clientes || []);
+    };
+    fetchClientes();
+  }, []);
+
+  const addLinea = () => setLineas([...lineas, { descripcion: "", cantidad: 1, precio: 0 }]);
+  const removeLinea = (index: number) => setLineas(lineas.filter((_, i) => i !== index));
+  const updateLinea = (index: number, field: keyof Linea, value: any) => {
+    const updated = [...lineas];
+    updated[index][field] = field === "cantidad" || field === "precio" ? parseFloat(value) : value;
+    setLineas(updated);
   };
 
-  const handleFacturae = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/sii/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          serie,
-          numero,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert("Facturae generada y enviada correctamente");
-      } else {
-        alert("Error en Facturae: " + data.message);
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Error enviando Facturae");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifactu = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/verifactu/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          serie,
-          numero,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert("Factura enviada a Verifactu correctamente");
-      } else {
-        alert("Error en Verifactu: " + data.message);
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Error enviando Verifactu");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePDF = async () => {
-    try {
-      const res = await fetch("/api/facturas/pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serie, numero }),
-      });
-
-      if (!res.ok) throw new Error("Error generando PDF");
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `Factura-${serie}-${numero}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (error) {
-      console.error(error);
-      alert("Error exportando PDF");
-    }
+  const guardarFactura = async () => {
+    const res = await fetch("/api/facturas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        serie,
+        numero,
+        cliente_id: clienteId,
+        lineas,
+        iva,
+      }),
+    });
+    const data = await res.json();
+    alert(data.message || "Factura guardada");
   };
 
   return (
-    <div className="max-w-3xl mx-auto bg-white shadow p-6 rounded-lg">
+    <div className="max-w-4xl mx-auto bg-white shadow p-6 rounded-lg">
       <h1 className="text-2xl font-bold mb-4">Crear Factura</h1>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         <input className="input" placeholder="Serie" value={serie} onChange={(e) => setSerie(e.target.value)} />
         <input className="input" placeholder="Número" value={numero} onChange={(e) => setNumero(e.target.value)} />
-        <input className="input" type="date" value={fechaEmision} onChange={(e) => setFechaEmision(e.target.value)} />
-        <input className="input" type="date" value={fechaVencimiento} onChange={(e) => setFechaVencimiento(e.target.value)} />
-        <input className="input" placeholder="Emisor" value={emisor} onChange={(e) => setEmisor(e.target.value)} />
-        <input className="input" placeholder="Receptor (ID del cliente)" value={receptor} onChange={(e) => setReceptor(e.target.value)} />
+        <select className="input col-span-2" value={clienteId} onChange={(e) => setClienteId(e.target.value)}>
+          <option value="">Selecciona Cliente</option>
+          {clientes.map((c) => (
+            <option key={c.id} value={c.id}>{c.nombre}</option>
+          ))}
+        </select>
       </div>
 
-      <textarea
-        className="input w-full mb-4"
-        placeholder="Concepto"
-        value={concepto}
-        onChange={(e) => setConcepto(e.target.value)}
-      />
-
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <input className="input" type="number" placeholder="Cantidad" value={cantidad} onChange={(e) => setCantidad(+e.target.value)} />
-        <input className="input" type="number" placeholder="Precio" value={precio} onChange={(e) => setPrecio(+e.target.value)} />
-        <input className="input" type="number" placeholder="IVA %" value={iva} onChange={(e) => setIva(+e.target.value)} />
-      </div>
-
-      <button
-        onClick={handleGuardar}
-        disabled={loading}
-        className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
-      >
-        Guardar Factura
+      <h2 className="text-lg font-semibold mb-2">Líneas de servicio</h2>
+      {lineas.map((linea, index) => (
+        <div key={index} className="grid grid-cols-4 gap-2 mb-2">
+          <input
+            className="input col-span-2"
+            placeholder="Descripción"
+            value={linea.descripcion}
+            onChange={(e) => updateLinea(index, "descripcion", e.target.value)}
+          />
+          <input
+            className="input"
+            type="number"
+            placeholder="Cantidad"
+            value={linea.cantidad}
+            onChange={(e) => updateLinea(index, "cantidad", e.target.value)}
+          />
+          <input
+            className="input"
+            type="number"
+            placeholder="Precio"
+            value={linea.precio}
+            onChange={(e) => updateLinea(index, "precio", e.target.value)}
+          />
+          <button className="bg-red-500 text-white px-2 rounded" onClick={() => removeLinea(index)}>
+            Eliminar
+          </button>
+        </div>
+      ))}
+      <button className="bg-green-500 text-white px-4 py-1 rounded mb-4" onClick={addLinea}>
+        Añadir línea
       </button>
 
-      <div className="flex justify-between mt-4">
-        <button onClick={handlePDF} className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
-          Exportar PDF
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <input
+          className="input"
+          type="number"
+          placeholder="IVA %"
+          value={iva}
+          onChange={(e) => setIva(parseFloat(e.target.value))}
+        />
+      </div>
+
+      <div className="flex justify-between">
+        <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={guardarFactura}>
+          Guardar Factura
         </button>
-        <button onClick={handleVerifactu} className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">
-          Enviar Verifactu
-        </button>
-        <button onClick={handleFacturae} className="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800">
-          Facturae
-        </button>
+        {clienteSeleccionado && (
+          <PDFDownloadLink
+            document={
+              <FacturaPDF
+                serie={serie}
+                numero={numero}
+                cliente={clienteSeleccionado}
+                lineas={lineas}
+                iva={iva}
+              />
+            }
+            fileName={`Factura-${serie}-${numero}.pdf`}
+            className="bg-green-600 text-white px-4 py-2 rounded"
+          >
+            Descargar PDF
+          </PDFDownloadLink>
+        )}
       </div>
 
       <style jsx>{`
