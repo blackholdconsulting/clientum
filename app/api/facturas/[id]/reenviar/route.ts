@@ -1,0 +1,60 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { sendToSii } from "@/lib/sii/sendToSII";
+
+export async function POST(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+    return NextResponse.json(
+      { success: false, message: "Faltan variables de entorno" },
+      { status: 500 }
+    );
+  }
+
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_KEY!
+  );
+
+  try {
+    // 1. Obtener factura
+    const { data: factura, error } = await supabase
+      .from("facturas")
+      .select("*")
+      .eq("id", params.id)
+      .single();
+
+    if (error || !factura) {
+      return NextResponse.json({ success: false, message: "Factura no encontrada" }, { status: 404 });
+    }
+
+    // 2. Reintentar envío
+    const result = await sendToSii(
+      factura.json_factura,
+      undefined, // puedes usar certificado guardado si está disponible
+      undefined
+    );
+
+    // 3. Actualizar estado
+    const { error: updateError } = await supabase
+      .from("facturas")
+      .update({
+        estado: result.estado,
+        csv: result.csv || null,
+      })
+      .eq("id", params.id);
+
+    if (updateError) {
+      return NextResponse.json({ success: false, message: updateError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, result });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, message: err.message || "Error desconocido" },
+      { status: 500 }
+    );
+  }
+}
