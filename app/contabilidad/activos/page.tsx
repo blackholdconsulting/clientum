@@ -1,140 +1,136 @@
-// app/contabilidad/activos/page.tsx
-'use client'
+"use client";
 
-import React, { useState } from 'react'
-import { Menu } from '@headlessui/react'
-import {
-  FiChevronDown,
-  FiUpload,
-  FiPlus,
-  FiDownload,
-} from 'react-icons/fi'
+import React, { useState, useEffect, ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Menu, Transition } from "@headlessui/react";
+
+interface Activo {
+  id: string;
+  nombre: string;
+  codigo: string;
+  grupo: string;
+  valor: number;
+  amortizacion: number;
+  saldo: number;
+}
 
 export default function ActivosPage() {
-  const [filter, setFilter] = useState<'Todos' | 'Totalmente amortizados'>('Todos')
+  const router = useRouter();
+  const [activos, setActivos] = useState<Activo[]>([]);
+  const [filter, setFilter] = useState("all");
+
+  // Carga de activos
+  useEffect(() => {
+    fetch(`/api/contabilidad/activos?filter=${filter}`)
+      .then((res) => res.json())
+      .then((data) => setActivos(data.activos || []));
+  }, [filter]);
 
   return (
-    <main className="h-full overflow-auto bg-gray-50 p-6">
-      <header className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-2xl font-semibold text-gray-900">Activos</h1>
-        <div className="flex flex-wrap gap-2">
-          {/* Importar */}
-          <button
-            type="button"
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-100"
-          >
-            <FiUpload className="mr-2 text-lg" />
+    <div className="p-6">
+      {/* Header con acciones */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 space-y-4 sm:space-y-0">
+        <h1 className="text-2xl font-semibold">Activos</h1>
+        <div className="flex items-center gap-2">
+          <button className="px-4 py-2 border rounded hover:bg-gray-100">
             Importar
           </button>
 
-          {/* Exportar menu */}
           <Menu as="div" className="relative inline-block text-left">
-            <Menu.Button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-100">
-              <FiDownload className="mr-2 text-lg" />
-              Exportar
-              <FiChevronDown className="ml-2 text-lg" />
+            <Menu.Button className="px-4 py-2 border rounded hover:bg-gray-100">
+              Exportar ▾
             </Menu.Button>
-            <Menu.Items className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-md shadow-lg focus:outline-none z-10">
-              <Menu.Item>
-                {({ active }) => (
-                  <button
-                    className={`${
-                      active ? 'bg-gray-100' : ''
-                    } w-full text-left px-4 py-2 text-gray-700`}
-                  >
-                    CSV
-                  </button>
-                )}
-              </Menu.Item>
-              <Menu.Item>
-                {({ active }) => (
-                  <button
-                    className={`${
-                      active ? 'bg-gray-100' : ''
-                    } w-full text-left px-4 py-2 text-gray-700`}
-                  >
-                    PDF
-                  </button>
-                )}
-              </Menu.Item>
-            </Menu.Items>
+            <Transition
+              as={React.Fragment}
+              enter="transition ease-out duration-100"
+              enterFrom="transform opacity-0 scale-95"
+              enterTo="transform opacity-100 scale-100"
+              leave="transition ease-in duration-75"
+              leaveFrom="transform opacity-100 scale-100"
+              leaveTo="transform opacity-0 scale-95"
+            >
+              <Menu.Items className="absolute right-0 mt-2 w-40 bg-white border rounded shadow-lg">
+                <Menu.Item>
+                  {({ active }) => (
+                    <button
+                      className={`block w-full text-left px-4 py-2 ${active ? "bg-gray-100" : ""}`}
+                    >
+                      CSV
+                    </button>
+                  )}
+                </Menu.Item>
+                <Menu.Item>
+                  {({ active }) => (
+                    <button
+                      className={`block w-full text-left px-4 py-2 ${active ? "bg-gray-100" : ""}`}
+                    >
+                      PDF
+                    </button>
+                  )}
+                </Menu.Item>
+              </Menu.Items>
+            </Transition>
           </Menu>
 
-          {/* Nuevo activo menu */}
-          <Menu as="div" className="relative inline-block text-left">
-            <Menu.Button className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
-              <FiPlus className="mr-2 text-lg" />
-              Nuevo activo
-              <FiChevronDown className="ml-2 text-white" />
-            </Menu.Button>
-            <Menu.Items className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-md shadow-lg focus:outline-none z-10">
-              <Menu.Item>
-                {({ active }) => (
-                  <button
-                    className={`${
-                      active ? 'bg-gray-100' : ''
-                    } w-full text-left px-4 py-2 text-gray-700`}
-                  >
-                    Manualmente
-                  </button>
-                )}
-              </Menu.Item>
-              <Menu.Item>
-                {({ active }) => (
-                  <button
-                    className={`${
-                      active ? 'bg-gray-100' : ''
-                    } w-full text-left px-4 py-2 text-gray-700`}
-                  >
-                    Desde factura de compra
-                  </button>
-                )}
-              </Menu.Item>
-            </Menu.Items>
-          </Menu>
+          {/* ESTE ES EL BOTÓN CONFIGURADO */}
+          <button
+            onClick={() => router.push("/contabilidad/activos/nuevo-activo")}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            + Nuevo activo
+          </button>
         </div>
-      </header>
+      </div>
 
-      {/* Filtros */}
-      <section className="mb-4 flex flex-wrap items-center gap-4">
-        <label htmlFor="filtro" className="sr-only">Filtrar</label>
+      {/* Filtro */}
+      <div className="mb-4">
         <select
-          id="filtro"
           value={filter}
-          onChange={(e) => setFilter(e.target.value as any)}
-          className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50"
+          onChange={(e: ChangeEvent<HTMLSelectElement>) => setFilter(e.target.value)}
+          className="border rounded px-3 py-2"
         >
-          <option>Todos</option>
-          <option>Totalmente amortizados</option>
+          <option value="all">Todos</option>
+          <option value="grupo1">Grupo 1</option>
+          <option value="grupo2">Grupo 2</option>
         </select>
-        <button className="text-indigo-600 hover:underline">+ Filtro</button>
-      </section>
+      </div>
 
-      {/* Contenido principal */}
-      <section className="bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-gray-100">
+      {/* Tabla de activos */}
+      <div className="overflow-x-auto bg-white rounded shadow">
+        <table className="min-w-full">
+          <thead className="bg-gray-100 text-left">
             <tr>
-              <th className="px-6 py-3 text-sm font-medium text-gray-700">Activo</th>
-              <th className="px-6 py-3 text-sm font-medium text-gray-700">Código</th>
-              <th className="px-6 py-3 text-sm font-medium text-gray-700">Grupo</th>
-              <th className="px-6 py-3 text-sm font-medium text-gray-700 text-right">Valor</th>
-              <th className="px-6 py-3 text-sm font-medium text-gray-700 text-right">Amortización</th>
-              <th className="px-6 py-3 text-sm font-medium text-gray-700 text-right">Saldo</th>
-              <th className="px-6 py-3 text-sm font-medium text-gray-700">&nbsp;</th>
+              <th className="px-4 py-2">Activo</th>
+              <th className="px-4 py-2">Código</th>
+              <th className="px-4 py-2">Grupo</th>
+              <th className="px-4 py-2 text-right">Valor</th>
+              <th className="px-4 py-2 text-right">Amortización</th>
+              <th className="px-4 py-2 text-right">Saldo</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
-            {/* Si no hay activos */}
-            <tr>
-              <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                No tienes activos registrados.
-              </td>
-            </tr>
-            {/* Rellenar filas con map cuando existan datos */}
+          <tbody>
+            {activos.length > 0 ? (
+              activos.map((a) => (
+                <tr key={a.id} className="border-t">
+                  <td className="px-4 py-2">{a.nombre}</td>
+                  <td className="px-4 py-2">{a.codigo}</td>
+                  <td className="px-4 py-2">{a.grupo}</td>
+                  <td className="px-4 py-2 text-right">{a.valor.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">{a.amortizacion.toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right">{a.saldo.toFixed(2)}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  No tienes activos registrados.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
-      </section>
-    </main>
-  )
+      </div>
+    </div>
+  );
 }
