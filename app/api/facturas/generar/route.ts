@@ -55,7 +55,11 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ success: true, message: "Factura generada correctamente", data });
+    return NextResponse.json({
+      success: true,
+      message: "Factura generada correctamente",
+      data
+    });
   } catch (err: any) {
     return NextResponse.json(
       { success: false, message: err.message || "Error desconocido" },
