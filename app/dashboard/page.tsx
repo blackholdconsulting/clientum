@@ -15,7 +15,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { FaRedoAlt, FaCheckCircle, FaClock } from "react-icons/fa";
+import { FaRedoAlt, FaCheckCircle, FaClock, FaExclamationTriangle } from "react-icons/fa";
 
 interface KpiData {
   ingresos: number;
@@ -54,6 +54,7 @@ export default function DashboardPage() {
     rechazadas: 0,
     pendientes: 0,
   });
+  const [porcentajeRechazadas, setPorcentajeRechazadas] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -80,6 +81,16 @@ export default function DashboardPage() {
         if (resEstados.ok) {
           const data = await resEstados.json();
           setEstadoFacturas(data.stats);
+
+          const total =
+            (data.stats.aceptadas || 0) +
+            (data.stats.rechazadas || 0) +
+            (data.stats.pendientes || 0);
+
+          const porcentaje =
+            total > 0 ? Math.round(((data.stats.rechazadas || 0) / total) * 100) : 0;
+
+          setPorcentajeRechazadas(porcentaje);
         }
       } catch (error) {
         console.error("Error cargando dashboard:", error);
@@ -99,6 +110,17 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6">
+      {/* Banner de alerta */}
+      {porcentajeRechazadas >= 30 && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6 flex items-center space-x-3">
+          <FaExclamationTriangle className="text-red-600 text-2xl" />
+          <p className="font-semibold">
+            Atención: {porcentajeRechazadas}% de tus facturas han sido rechazadas. 
+            Revisa los envíos para evitar problemas fiscales.
+          </p>
+        </div>
+      )}
+
       <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
 
       {/* KPIs */}
