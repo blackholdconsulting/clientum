@@ -1,9 +1,9 @@
+// /app/api/contabilidad/activos/route.ts
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseServer";
 
 export async function GET(request: Request) {
   try {
-    // Autenticación
     const {
       data: { user },
       error: authError,
@@ -15,7 +15,6 @@ export async function GET(request: Request) {
       );
     }
 
-    // Leer activos del usuario
     const { searchParams } = new URL(request.url);
     const filter = searchParams.get("filter") || "all";
 
@@ -51,7 +50,6 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    // Autenticación
     const {
       data: { user },
       error: authError,
@@ -63,7 +61,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Extraer y validar campos
     const { nombre, codigo, grupo, valor, amortizacion } = body;
     if (!nombre || !codigo || !grupo) {
       return NextResponse.json(
@@ -72,7 +69,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Insertar nuevo activo
     const payload = {
       user_id: user.id,
       nombre,
@@ -80,7 +76,7 @@ export async function POST(request: Request) {
       grupo,
       valor,
       amortizacion,
-      saldo: valor,              // inicializamos el saldo al valor
+      saldo: valor,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
