@@ -12,7 +12,7 @@ export default function FacturasPage() {
   useEffect(() => {
     const fetchFacturas = async () => {
       try {
-        const res = await fetch("/api/facturas"); // Endpoint para listar
+        const res = await fetch("/api/facturas");
         const data = await res.json();
         if (data.success) {
           setFacturas(data.facturas);
@@ -37,6 +37,26 @@ export default function FacturasPage() {
       default:
         return <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded">Borrador</span>;
     }
+  };
+
+  const handleEnviarFacturae = async (facturaId: string) => {
+    const res = await fetch(`/api/sii/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ facturaId })
+    });
+    const data = await res.json();
+    alert(data.success ? "✅ Factura enviada a Facturae" : "❌ Error: " + data.message);
+  };
+
+  const handleEnviarVerifactu = async (facturaId: string) => {
+    const res = await fetch(`/api/sii/verifactu`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ facturaId })
+    });
+    const data = await res.json();
+    alert(data.success ? "✅ Factura enviada a Verifactu" : "❌ Error: " + data.message);
   };
 
   if (loading) return <p className="p-6">Cargando facturas...</p>;
@@ -66,10 +86,7 @@ export default function FacturasPage() {
         </thead>
         <tbody>
           {facturas.map((factura) => (
-            <tr
-              key={factura.id}
-              className="hover:bg-gray-50 transition-all"
-            >
+            <tr key={factura.id} className="hover:bg-gray-50 transition-all">
               <td className="p-3 border-b">{factura.numero}</td>
               <td className="p-3 border-b">{factura.fecha_emisor}</td>
               <td className="p-3 border-b">{factura.receptor || factura.cliente_id}</td>
@@ -84,10 +101,16 @@ export default function FacturasPage() {
                 </button>
                 <ExportarPDFButton factura={factura} />
                 <button
-                  onClick={() => alert("Funcionalidad de reenviar próximamente")}
-                  className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600"
+                  onClick={() => handleEnviarFacturae(factura.id)}
+                  className="bg-gray-700 text-white px-3 py-1 rounded hover:bg-gray-800"
                 >
-                  Reenviar
+                  Facturae
+                </button>
+                <button
+                  onClick={() => handleEnviarVerifactu(factura.id)}
+                  className="bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700"
+                >
+                  Verifactu
                 </button>
               </td>
             </tr>
