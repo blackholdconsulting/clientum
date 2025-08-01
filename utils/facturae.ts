@@ -1,5 +1,4 @@
 // utils/facturae.ts
-
 import { format } from "date-fns";
 
 interface Emisor {
@@ -44,24 +43,20 @@ export function generateFacturaeXML(data: FacturaData): string {
   const totalIVA = data.lineas.reduce((acc, l) => acc + (l.cantidad * l.precioUnitario * l.iva) / 100, 0);
   const totalFactura = totalBase + totalIVA;
 
-  const lineasXML = data.lineas
-    .map(
-      (l, index) => `
-        <InvoiceLine>
-          <InvoiceLineNumber>${index + 1}</InvoiceLineNumber>
-          <ItemDescription>${l.descripcion}</ItemDescription>
-          <Quantity>${l.cantidad.toFixed(2)}</Quantity>
-          <UnitPriceWithoutTax>${l.precioUnitario.toFixed(2)}</UnitPriceWithoutTax>
-          <Tax>
-            <TaxTypeCode>01</TaxTypeCode>
-            <TaxRate>${l.iva}</TaxRate>
-            <TaxAmount>${((l.cantidad * l.precioUnitario * l.iva) / 100).toFixed(2)}</TaxAmount>
-          </Tax>
-          <LineTotalAmount>${(l.cantidad * l.precioUnitario + (l.cantidad * l.precioUnitario * l.iva) / 100).toFixed(2)}</LineTotalAmount>
-        </InvoiceLine>
-      `
-    )
-    .join("");
+  const lineasXML = data.lineas.map((l, i) => `
+    <InvoiceLine>
+      <InvoiceLineNumber>${i + 1}</InvoiceLineNumber>
+      <ItemDescription>${l.descripcion}</ItemDescription>
+      <Quantity>${l.cantidad.toFixed(2)}</Quantity>
+      <UnitPriceWithoutTax>${l.precioUnitario.toFixed(2)}</UnitPriceWithoutTax>
+      <Tax>
+        <TaxTypeCode>01</TaxTypeCode>
+        <TaxRate>${l.iva}</TaxRate>
+        <TaxAmount>${((l.cantidad * l.precioUnitario * l.iva) / 100).toFixed(2)}</TaxAmount>
+      </Tax>
+      <LineTotalAmount>${(l.cantidad * l.precioUnitario + (l.cantidad * l.precioUnitario * l.iva) / 100).toFixed(2)}</LineTotalAmount>
+    </InvoiceLine>
+  `).join("");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Facturae xmlns="http://www.facturae.es/Facturae/2014/v3.2.2/Facturae"
