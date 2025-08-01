@@ -26,6 +26,7 @@ export default function FacturasElectronicasPage() {
   return (
     <div className="max-w-5xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">Facturas Electrónicas</h1>
+
       {loading ? (
         <p>Cargando...</p>
       ) : facturas.length === 0 ? (
@@ -39,16 +40,29 @@ export default function FacturasElectronicasPage() {
               <th className="border p-2">Cliente</th>
               <th className="border p-2">Estado AEAT</th>
               <th className="border p-2">CSV</th>
+              <th className="border p-2">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {facturas.map((f) => (
               <tr key={f.id}>
                 <td className="border p-2">{f.numero}</td>
-                <td className="border p-2">{new Date(f.fecha).toLocaleDateString()}</td>
+                <td className="border p-2">
+                  {f.fecha
+                    ? new Date(f.fecha).toLocaleDateString()
+                    : "-"}
+                </td>
                 <td className="border p-2">{f.cliente}</td>
                 <td className="border p-2">{f.estado}</td>
                 <td className="border p-2">{f.csv || "-"}</td>
+                <td className="border p-2">
+                  <a
+                    href={`/facturas/factura-electronica/${f.id}`}
+                    className="bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700"
+                  >
+                    Ver detalle
+                  </a>
+                </td>
               </tr>
             ))}
           </tbody>
