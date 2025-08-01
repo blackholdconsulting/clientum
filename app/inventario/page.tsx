@@ -74,28 +74,23 @@ export default function InventarioPage() {
       return;
     }
 
-    // 2. Insertar en ventas
-    const { data: venta } = await supabase
-      .from("ventas")
-      .insert([{ producto_id: id, cantidad: 1, total: precio, user_id: userId }])
-      .select()
-      .single();
-
-    // 3. Crear factura simplificada
+    // 2. Crear factura simplificada en tabla facturas
     const numeroFactura = generarNumeroFactura();
     const { data: factura } = await supabase
-      .from("facturas_simplificadas")
+      .from("facturas")
       .insert([{
         numero: numeroFactura,
-        producto_id: id,
-        cantidad: 1,
+        cliente_id: null, // B2C sin cliente específico
         total: precio,
+        estado: "pagada",
+        tipo: "simplificada",
+        fecha_emision: new Date().toISOString(),
         user_id: userId
       }])
       .select()
       .single();
 
-    // 4. Crear ingreso vinculado
+    // 3. Registrar ingreso vinculado a la factura
     if (factura) {
       await supabase.from("ingresos").insert([{
         factura_id: factura.id,
@@ -104,6 +99,14 @@ export default function InventarioPage() {
         user_id: userId
       }]);
     }
+
+    // 4. Insertar en ventas (opcional para histórico)
+    await supabase.from("ventas").insert([{
+      producto_id: id,
+      cantidad: 1,
+      total: precio,
+      user_id: userId
+    }]);
 
     fetchProductos(userId);
   };
@@ -172,7 +175,7 @@ export default function InventarioPage() {
                   onClick={() => venderProducto(p.id, p.precio)}
                   className="px-2 py-1 bg-blue-600 text-white rounded"
                 >
-                  Vender (Crear Factura)
+                  Vender (Factura simplificada)
                 </button>
               </td>
             </tr>
