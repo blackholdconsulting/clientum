@@ -89,9 +89,11 @@ export default function NuevaFactura() {
 
   const addLinea = () => setLineas([...lineas, { descripcion: "", cantidad: 1, precio: 0 }]);
   const removeLinea = (index: number) => setLineas(lineas.filter((_, i) => i !== index));
-  const updateLinea = (index: number, field: keyof Linea, value: any) => {
-    const updated = [...lineas];
-    updated[index][field] = field === "cantidad" || field === "precio" ? parseFloat(value) : value;
+
+  const updateLinea = (index: number, field: keyof Linea, value: string | number) => {
+    const updated: Linea[] = [...lineas];
+    (updated[index] as Record<keyof Linea, any>)[field] =
+      field === "cantidad" || field === "precio" ? parseFloat(value as string) : value;
     setLineas(updated);
   };
 
@@ -128,7 +130,7 @@ export default function NuevaFactura() {
 
       <h2 className="text-lg font-semibold mb-2">Líneas de servicio</h2>
       {lineas.map((linea, index) => (
-        <div key={index} className="grid grid-cols-4 gap-2 mb-2">
+        <div key={index} className="grid grid-cols-5 gap-2 mb-2">
           <input
             className="input col-span-2"
             placeholder="Descripción"
