@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, ChangeEvent } from "react";
+import React, { useState, useEffect, ChangeEvent, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Menu, Transition } from "@headlessui/react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 
 interface Activo {
   id: string;
@@ -27,6 +29,51 @@ export default function ActivosPage() {
       .then((data) => setActivos(data.activos || []));
   }, [filter]);
 
+  // Export CSV
+  const exportCSV = useCallback(() => {
+    if (activos.length === 0) return;
+    const header = ["Activo","Código","Grupo","Valor","Amortización","Saldo"];
+    const rows = activos.map(a => [
+      a.nombre,
+      a.codigo,
+      a.grupo,
+      a.valor.toFixed(2),
+      a.amortizacion.toFixed(2),
+      a.saldo.toFixed(2),
+    ]);
+    const csvContent =
+      [header, ...rows].map(r => r.map(v => `"${v}"`).join(",")).join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `activos_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [activos]);
+
+  // Export PDF
+  const exportPDF = useCallback(() => {
+    if (activos.length === 0) return;
+    const doc = new jsPDF();
+    doc.text("Listado de Activos", 14, 20);
+    autoTable(doc, {
+      startY: 30,
+      head: [["Activo","Código","Grupo","Valor","Amortización","Saldo"]],
+      body: activos.map(a => [
+        a.nombre,
+        a.codigo,
+        a.grupo,
+        a.valor.toFixed(2),
+        a.amortizacion.toFixed(2),
+        a.saldo.toFixed(2),
+      ]),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [22, 119, 255] }
+    });
+    doc.save(`activos_${new Date().toISOString().slice(0,10)}.pdf`);
+  }, [activos]);
+
   return (
     <div className="p-6">
       {/* Header con acciones */}
@@ -37,43 +84,21 @@ export default function ActivosPage() {
             Importar
           </button>
 
-          <Menu as="div" className="relative inline-block text-left">
-            <Menu.Button className="px-4 py-2 border rounded hover:bg-gray-100">
-              Exportar ▾
-            </Menu.Button>
-            <Transition
-              as={React.Fragment}
-              enter="transition ease-out duration-100"
-              enterFrom="transform opacity-0 scale-95"
-              enterTo="transform opacity-100 scale-100"
-              leave="transition ease-in duration-75"
-              leaveFrom="transform opacity-100 scale-100"
-              leaveTo="transform opacity-0 scale-95"
-            >
-              <Menu.Items className="absolute right-0 mt-2 w-40 bg-white border rounded shadow-lg">
-                <Menu.Item>
-                  {({ active }) => (
-                    <button
-                      className={`block w-full text-left px-4 py-2 ${active ? "bg-gray-100" : ""}`}
-                    >
-                      CSV
-                    </button>
-                  )}
-                </Menu.Item>
-                <Menu.Item>
-                  {({ active }) => (
-                    <button
-                      className={`block w-full text-left px-4 py-2 ${active ? "bg-gray-100" : ""}`}
-                    >
-                      PDF
-                    </button>
-                  )}
-                </Menu.Item>
-              </Menu.Items>
-            </Transition>
-          </Menu>
+          {/* Exportar CSV/PDF directo */}
+          <button
+            onClick={exportCSV}
+            className="px-4 py-2 bg-yellow-400 text-white rounded hover:bg-yellow-500"
+          >
+            Exportar CSV
+          </button>
+          <button
+            onClick={exportPDF}
+            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+          >
+            Exportar PDF
+          </button>
 
-          {/* ESTE ES EL BOTÓN CONFIGURADO */}
+          {/* Nuevo activo */}
           <button
             onClick={() => router.push("/contabilidad/activos/nuevo-activo")}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
