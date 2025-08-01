@@ -23,7 +23,6 @@ export default function NuevaFactura() {
   const [iva, setIva] = useState(21);
   const [lineas, setLineas] = useState<Linea[]>([{ descripcion: "", cantidad: 1, precio: 0 }]);
 
-  // ✅ Datos del remitente
   const [empresa, setEmpresa] = useState({
     nombre: "",
     nif: "",
@@ -43,7 +42,26 @@ export default function NuevaFactura() {
       const data = await res.json();
       setClientes(data.clientes || []);
     };
+    const fetchPerfil = async () => {
+      const res = await fetch("/api/usuario/perfil");
+      const data = await res.json();
+      if (data.success && data.perfil) {
+        setEmpresa({
+          nombre: data.perfil.nombre_empresa,
+          nif: data.perfil.nif,
+          direccion: data.perfil.direccion,
+          ciudad: data.perfil.ciudad,
+          provincia: data.perfil.provincia,
+          cp: data.perfil.cp,
+          pais: data.perfil.pais,
+          telefono: data.perfil.telefono,
+          email: data.perfil.email,
+          web: data.perfil.web,
+        });
+      }
+    };
     fetchClientes();
+    fetchPerfil();
   }, []);
 
   const addLinea = () => setLineas([...lineas, { descripcion: "", cantidad: 1, precio: 0 }]);
@@ -74,11 +92,39 @@ export default function NuevaFactura() {
     alert(data.message || "Factura guardada");
   };
 
+  const generarFacturae = async () => {
+    const res = await fetch("/api/facturas/facturae", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        serie,
+        numero,
+        cliente_id: clienteId,
+        lineas,
+        iva,
+        tipo_factura: tipoFactura,
+        metodo_pago: metodoPago,
+        remitente: empresa,
+      }),
+    });
+    const data = await res.json();
+    alert(data.message || "Facturae generada");
+  };
+
+  const enviarVerifactu = async () => {
+    const res = await fetch("/api/sii/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ serie, numero }),
+    });
+    const data = await res.json();
+    alert(data.message || "Factura enviada a AEAT");
+  };
+
   return (
     <div className="max-w-4xl mx-auto bg-white shadow p-6 rounded-lg">
       <h1 className="text-2xl font-bold mb-4">Crear Factura</h1>
 
-      {/* Datos de la factura */}
       <div className="grid grid-cols-2 gap-4 mb-4">
         <input className="input" placeholder="Serie" value={serie} onChange={(e) => setSerie(e.target.value)} />
         <input className="input" placeholder="Número" value={numero} onChange={(e) => setNumero(e.target.value)} />
@@ -107,22 +153,20 @@ export default function NuevaFactura() {
         />
       </div>
 
-      {/* Datos del remitente */}
       <h2 className="text-lg font-semibold mt-6 mb-2">Datos de la Empresa (Remitente)</h2>
       <div className="grid grid-cols-2 gap-4 mb-4">
-        <input className="input" placeholder="Nombre o Razón Social" value={empresa.nombre} onChange={(e) => setEmpresa({ ...empresa, nombre: e.target.value })} />
-        <input className="input" placeholder="NIF / CIF" value={empresa.nif} onChange={(e) => setEmpresa({ ...empresa, nif: e.target.value })} />
-        <input className="input col-span-2" placeholder="Dirección" value={empresa.direccion} onChange={(e) => setEmpresa({ ...empresa, direccion: e.target.value })} />
-        <input className="input" placeholder="Ciudad" value={empresa.ciudad} onChange={(e) => setEmpresa({ ...empresa, ciudad: e.target.value })} />
-        <input className="input" placeholder="Provincia" value={empresa.provincia} onChange={(e) => setEmpresa({ ...empresa, provincia: e.target.value })} />
-        <input className="input" placeholder="Código Postal" value={empresa.cp} onChange={(e) => setEmpresa({ ...empresa, cp: e.target.value })} />
-        <input className="input" placeholder="País" value={empresa.pais} onChange={(e) => setEmpresa({ ...empresa, pais: e.target.value })} />
-        <input className="input" placeholder="Teléfono" value={empresa.telefono} onChange={(e) => setEmpresa({ ...empresa, telefono: e.target.value })} />
-        <input className="input" placeholder="Email" value={empresa.email} onChange={(e) => setEmpresa({ ...empresa, email: e.target.value })} />
-        <input className="input" placeholder="Web" value={empresa.web} onChange={(e) => setEmpresa({ ...empresa, web: e.target.value })} />
+        <input className="input" placeholder="Nombre o Razón Social" value={empresa.nombre} readOnly />
+        <input className="input" placeholder="NIF / CIF" value={empresa.nif} readOnly />
+        <input className="input col-span-2" placeholder="Dirección" value={empresa.direccion} readOnly />
+        <input className="input" placeholder="Ciudad" value={empresa.ciudad} readOnly />
+        <input className="input" placeholder="Provincia" value={empresa.provincia} readOnly />
+        <input className="input" placeholder="Código Postal" value={empresa.cp} readOnly />
+        <input className="input" placeholder="País" value={empresa.pais} readOnly />
+        <input className="input" placeholder="Teléfono" value={empresa.telefono} readOnly />
+        <input className="input" placeholder="Email" value={empresa.email} readOnly />
+        <input className="input" placeholder="Web" value={empresa.web} readOnly />
       </div>
 
-      {/* Líneas */}
       <h2 className="text-lg font-semibold mb-2">Líneas de servicio</h2>
       {lineas.map((linea, index) => (
         <div key={index} className="grid grid-cols-5 gap-2 mb-2">
@@ -155,9 +199,15 @@ export default function NuevaFactura() {
         Añadir línea
       </button>
 
-      <div className="flex justify-end">
+      <div className="flex justify-between">
         <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={guardarFactura}>
           Guardar Factura
+        </button>
+        <button className="bg-purple-600 text-white px-4 py-2 rounded" onClick={generarFacturae}>
+          Facturae
+        </button>
+        <button className="bg-indigo-600 text-white px-4 py-2 rounded" onClick={enviarVerifactu}>
+          Verifactu
         </button>
       </div>
 
