@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -25,6 +25,8 @@ export default function InventarioPage() {
   const [precio, setPrecio] = useState(0);
   const [cantidad, setCantidad] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
+
+  const scannerRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -56,8 +58,8 @@ export default function InventarioPage() {
     if (!userId) return;
     const producto = productos.find((p) => p.id === id);
     if (!producto || producto.cantidad <= 0) return;
-    const nuevaCantidad = producto.cantidad - 1;
 
+    const nuevaCantidad = producto.cantidad - 1;
     await supabase.from("productos").update({ cantidad: nuevaCantidad }).eq("id", id).eq("user_id", userId);
     fetchProductos(userId);
   };
@@ -68,7 +70,6 @@ export default function InventarioPage() {
     const csvHeader = ["Código", "Nombre", "Cantidad", "Precio"];
     const csvRows = productos.map((p) => [p.codigo_barras, p.nombre, p.cantidad, p.precio]);
     const csvContent = [csvHeader, ...csvRows].map((row) => row.join(",")).join("\n");
-
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -89,6 +90,21 @@ export default function InventarioPage() {
     doc.save("inventario.pdf");
   };
 
+  const handleScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && scannerRef.current) {
+      const scannedCode = scannerRef.current.value.trim();
+      const producto = productos.find((p) => p.codigo_barras === scannedCode);
+
+      if (producto) {
+        venderProducto(producto.id, producto.precio);
+      } else {
+        alert("Producto no encontrado");
+      }
+
+      scannerRef.current.value = "";
+    }
+  };
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Inventario y Almacén</h1>
@@ -104,7 +120,19 @@ export default function InventarioPage() {
         </button>
       </div>
 
-      {/* Input para código de barras */}
+      {/* Campo para el lector de código de barras */}
+      <div className="mb-4">
+        <label className="block text-sm mb-1">Escanea el código de barras:</label>
+        <input
+          type="text"
+          ref={scannerRef}
+          onKeyDown={handleScan}
+          className="border px-2 py-1 rounded w-64"
+          autoFocus
+        />
+      </div>
+
+      {/* Input para añadir producto manualmente */}
       <div className="flex flex-col md:flex-row gap-2 mb-6">
         <input
           type="text"
