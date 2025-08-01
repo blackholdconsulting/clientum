@@ -50,6 +50,10 @@ export default function InventarioPage() {
     fetchProductos(userId);
   };
 
+  const generarNumeroFactura = () => {
+    return `FS-${Date.now()}`; // Ej: FS-1722554550000
+  };
+
   const venderProducto = async (id: number, precio: number) => {
     if (!userId) return;
 
@@ -58,21 +62,50 @@ export default function InventarioPage() {
 
     const nuevaCantidad = producto.cantidad - 1;
 
+    // 1. Actualizar stock
     const { error: updateError } = await supabase
       .from("productos")
       .update({ cantidad: nuevaCantidad })
       .eq("id", id)
       .eq("user_id", userId);
 
-    if (!updateError) {
-      await supabase.from("ventas").insert([{
+    if (updateError) {
+      console.error("Error al actualizar stock", updateError);
+      return;
+    }
+
+    // 2. Insertar en ventas
+    const { data: venta } = await supabase
+      .from("ventas")
+      .insert([{ producto_id: id, cantidad: 1, total: precio, user_id: userId }])
+      .select()
+      .single();
+
+    // 3. Crear factura simplificada
+    const numeroFactura = generarNumeroFactura();
+    const { data: factura } = await supabase
+      .from("facturas_simplificadas")
+      .insert([{
+        numero: numeroFactura,
         producto_id: id,
         cantidad: 1,
         total: precio,
         user_id: userId
+      }])
+      .select()
+      .single();
+
+    // 4. Crear ingreso vinculado
+    if (factura) {
+      await supabase.from("ingresos").insert([{
+        factura_id: factura.id,
+        importe: precio,
+        concepto: `Venta: ${producto.nombre}`,
+        user_id: userId
       }]);
-      fetchProductos(userId);
     }
+
+    fetchProductos(userId);
   };
 
   const valorTotalStock = productos.reduce((acc, p) => acc + p.cantidad * p.precio, 0);
@@ -139,7 +172,7 @@ export default function InventarioPage() {
                   onClick={() => venderProducto(p.id, p.precio)}
                   className="px-2 py-1 bg-blue-600 text-white rounded"
                 >
-                  Vender
+                  Vender (Crear Factura)
                 </button>
               </td>
             </tr>
