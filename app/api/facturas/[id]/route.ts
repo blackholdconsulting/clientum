@@ -6,14 +6,14 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 );
 
-// ✅ GET
+// ✅ GET - Obtener factura por ID
 export async function GET(
   request: Request,
   context: { params: { id: string } }
 ) {
-  try {
-    const { id } = context.params;
+  const { id } = context.params;
 
+  try {
     const { data, error } = await supabase
       .from("facturas")
       .select("*")
@@ -21,22 +21,29 @@ export async function GET(
       .single();
 
     if (error) {
-      return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ success: true, factura: data });
   } catch (err: any) {
-    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: err.message || "Error desconocido" },
+      { status: 500 }
+    );
   }
 }
 
-// ✅ PUT
+// ✅ PUT - Actualizar factura completa
 export async function PUT(
   request: Request,
   context: { params: { id: string } }
 ) {
+  const { id } = context.params;
+
   try {
-    const { id } = context.params;
     const body = await request.json();
 
     const { data, error } = await supabase
@@ -47,7 +54,10 @@ export async function PUT(
       .single();
 
     if (error) {
-      return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
@@ -56,17 +66,21 @@ export async function PUT(
       factura: data,
     });
   } catch (err: any) {
-    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: err.message || "Error desconocido" },
+      { status: 500 }
+    );
   }
 }
 
-// ✅ PATCH
+// ✅ PATCH - Actualizar solo campos específicos
 export async function PATCH(
   request: Request,
   context: { params: { id: string } }
 ) {
+  const { id } = context.params;
+
   try {
-    const { id } = context.params;
     const body = await request.json();
 
     const { data, error } = await supabase
@@ -77,15 +91,21 @@ export async function PATCH(
       .single();
 
     if (error) {
-      return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       success: true,
-      message: "Campos específicos de factura actualizados",
+      message: "Campos de factura actualizados",
       factura: data,
     });
   } catch (err: any) {
-    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: err.message || "Error desconocido" },
+      { status: 500 }
+    );
   }
 }
