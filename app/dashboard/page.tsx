@@ -11,13 +11,29 @@ import {
   Tooltip,
   CartesianGrid,
   Legend,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
+import { FaRedoAlt, FaCheckCircle, FaClock } from "react-icons/fa";
 
 interface KpiData {
   ingresos: number;
   gastos: number;
   beneficio: number;
   facturasPendientes: number;
+}
+
+interface ReintentoStats {
+  pendientes: number;
+  ultimo_intento: string | null;
+  tasa_exito: number;
+}
+
+interface EstadoFacturas {
+  aceptadas: number;
+  rechazadas: number;
+  pendientes: number;
 }
 
 export default function DashboardPage() {
@@ -27,10 +43,17 @@ export default function DashboardPage() {
     beneficio: 0,
     facturasPendientes: 0,
   });
-
-  const [chartData, setChartData] = useState<
-    { mes: string; ingresos: number; gastos: number }[]
-  >([]);
+  const [chartData, setChartData] = useState<{ mes: string; ingresos: number; gastos: number }[]>([]);
+  const [reintentoStats, setReintentoStats] = useState<ReintentoStats>({
+    pendientes: 0,
+    ultimo_intento: null,
+    tasa_exito: 0,
+  });
+  const [estadoFacturas, setEstadoFacturas] = useState<EstadoFacturas>({
+    aceptadas: 0,
+    rechazadas: 0,
+    pendientes: 0,
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -46,6 +69,18 @@ export default function DashboardPage() {
           const data = await resChart.json();
           setChartData(data);
         }
+
+        const resReintentos = await fetch("/api/dashboard/reintentos-kpi");
+        if (resReintentos.ok) {
+          const data = await resReintentos.json();
+          setReintentoStats(data.stats);
+        }
+
+        const resEstados = await fetch("/api/dashboard/estado-facturas");
+        if (resEstados.ok) {
+          const data = await resEstados.json();
+          setEstadoFacturas(data.stats);
+        }
       } catch (error) {
         console.error("Error cargando dashboard:", error);
       }
@@ -53,6 +88,14 @@ export default function DashboardPage() {
 
     fetchData();
   }, []);
+
+  const pieData = [
+    { name: "Aceptadas", value: estadoFacturas.aceptadas },
+    { name: "Rechazadas", value: estadoFacturas.rechazadas },
+    { name: "Pendientes", value: estadoFacturas.pendientes },
+  ];
+
+  const COLORS = ["#16a34a", "#dc2626", "#f59e0b"];
 
   return (
     <div className="p-6">
@@ -62,39 +105,83 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-4 rounded-lg shadow text-center hover:shadow-lg transition">
           <h2 className="text-lg font-semibold">Ingresos</h2>
-          <p className="text-2xl font-bold text-green-600">
-            {kpis.ingresos.toFixed(2)} €
-          </p>
+          <p className="text-2xl font-bold text-green-600">{kpis.ingresos.toFixed(2)} €</p>
         </div>
         <div className="bg-white p-4 rounded-lg shadow text-center hover:shadow-lg transition">
           <h2 className="text-lg font-semibold">Gastos</h2>
-          <p className="text-2xl font-bold text-red-600">
-            {kpis.gastos.toFixed(2)} €
-          </p>
+          <p className="text-2xl font-bold text-red-600">{kpis.gastos.toFixed(2)} €</p>
         </div>
         <div className="bg-white p-4 rounded-lg shadow text-center hover:shadow-lg transition">
           <h2 className="text-lg font-semibold">Beneficio</h2>
-          <p
-            className={`text-2xl font-bold ${
-              kpis.beneficio >= 0 ? "text-green-600" : "text-red-600"
-            }`}
-          >
+          <p className={`text-2xl font-bold ${kpis.beneficio >= 0 ? "text-green-600" : "text-red-600"}`}>
             {kpis.beneficio.toFixed(2)} €
           </p>
         </div>
         <div className="bg-white p-4 rounded-lg shadow text-center hover:shadow-lg transition">
           <h2 className="text-lg font-semibold">Facturas Pendientes</h2>
-          <p className="text-2xl font-bold text-yellow-600">
-            {kpis.facturasPendientes}
-          </p>
+          <p className="text-2xl font-bold text-yellow-600">{kpis.facturasPendientes}</p>
         </div>
       </div>
 
-      {/* Gráfico */}
+      {/* Tarjeta KPI Reintentos */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white shadow rounded-lg p-6 flex items-center space-x-4">
+          <FaRedoAlt className="text-yellow-500 text-3xl" />
+          <div>
+            <p className="text-gray-500 text-sm">Reintentos pendientes</p>
+            <h2 className="text-2xl font-bold">{reintentoStats.pendientes}</h2>
+          </div>
+        </div>
+
+        <div className="bg-white shadow rounded-lg p-6 flex items-center space-x-4">
+          <FaClock className="text-blue-500 text-3xl" />
+          <div>
+            <p className="text-gray-500 text-sm">Último reintento</p>
+            <h2 className="text-lg font-semibold">
+              {reintentoStats.ultimo_intento
+                ? new Date(reintentoStats.ultimo_intento).toLocaleString()
+                : "N/A"}
+            </h2>
+          </div>
+        </div>
+
+        <div className="bg-white shadow rounded-lg p-6 flex items-center space-x-4">
+          <FaCheckCircle className="text-green-500 text-3xl" />
+          <div>
+            <p className="text-gray-500 text-sm">Tasa de éxito</p>
+            <h2 className="text-2xl font-bold">{reintentoStats.tasa_exito}%</h2>
+          </div>
+        </div>
+      </div>
+
+      {/* Gráfico circular de estados de facturas */}
       <div className="bg-white p-6 rounded-lg shadow mb-6">
-        <h2 className="text-xl font-semibold mb-4">
-          Evolución de Ingresos y Gastos
-        </h2>
+        <h2 className="text-xl font-semibold mb-4">Estado de Facturas</h2>
+        <ResponsiveContainer width="100%" height={300}>
+          <PieChart>
+            <Pie
+              data={pieData}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              outerRadius={100}
+              fill="#8884d8"
+              label
+            >
+              {pieData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip />
+            <Legend />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Gráfico evolución ingresos/gastos */}
+      <div className="bg-white p-6 rounded-lg shadow mb-6">
+        <h2 className="text-xl font-semibold mb-4">Evolución de Ingresos y Gastos</h2>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -102,169 +189,40 @@ export default function DashboardPage() {
             <YAxis />
             <Tooltip />
             <Legend />
-            <Line
-              type="monotone"
-              dataKey="ingresos"
-              stroke="#16a34a"
-              name="Ingresos (€)"
-            />
-            <Line
-              type="monotone"
-              dataKey="gastos"
-              stroke="#dc2626"
-              name="Gastos (€)"
-            />
+            <Line type="monotone" dataKey="ingresos" stroke="#16a34a" name="Ingresos (€)" />
+            <Line type="monotone" dataKey="gastos" stroke="#dc2626" name="Gastos (€)" />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
       {/* Botones estilo Holded */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-        <Link
-          href="/facturas/nueva"
-          className="card-button bg-gradient-to-r from-green-400 to-green-600"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-8 w-8 mb-2"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
+        <Link href="/facturas/nueva" className="card-button bg-gradient-to-r from-green-400 to-green-600">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Crear Factura
         </Link>
 
-        <Link
-          href="/clientes/nuevo"
-          className="card-button bg-gradient-to-r from-blue-400 to-blue-600"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-8 w-8 mb-2"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M5.121 17.804A13.937 13.937 0 0112 15c2.89 0 5.556.915 7.879 2.452M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-            />
+        <Link href="/clientes/nuevo" className="card-button bg-gradient-to-r from-blue-400 to-blue-600">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 15c2.89 0 5.556.915 7.879 2.452M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
           Añadir Cliente
         </Link>
 
-        <Link
-          href="/tesoreria"
-          className="card-button bg-gradient-to-r from-indigo-400 to-indigo-600"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-8 w-8 mb-2"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 8c-3.866 0-7 2.686-7 6 0 1.657 1.343 3 3 3h8c1.657 0 3-1.343 3-3 0-3.314-3.134-6-7-6z"
-            />
+        <Link href="/tesoreria" className="card-button bg-gradient-to-r from-indigo-400 to-indigo-600">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-3.866 0-7 2.686-7 6 0 1.657 1.343 3 3 3h8c1.657 0 3-1.343 3-3 0-3.314-3.134-6-7-6z" />
           </svg>
           Ver Tesorería
         </Link>
 
-        <Link
-          href="/presupuestos/nuevo"
-          className="card-button bg-gradient-to-r from-yellow-400 to-yellow-600"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-8 w-8 mb-2"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M3 7h18M3 12h18M3 17h18"
-            />
+        <Link href="/presupuestos/nuevo" className="card-button bg-gradient-to-r from-yellow-400 to-yellow-600">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h18M3 17h18" />
           </svg>
           Crear Presupuesto
-        </Link>
-
-        <Link
-          href="/NOP/opex"
-          className="card-button bg-gradient-to-r from-pink-400 to-pink-600"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-8 w-8 mb-2"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          Ver OPEX
-        </Link>
-
-        <Link
-          href="/NOP/capex"
-          className="card-button bg-gradient-to-r from-purple-400 to-purple-600"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-8 w-8 mb-2"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 8c-3.866 0-7 2.686-7 6 0 1.657 1.343 3 3 3h8c1.657 0 3-1.343 3-3 0-3.314-3.134-6-7-6z"
-            />
-          </svg>
-          Ver CAPEX
-        </Link>
-
-        <Link
-          href="/NOP/budget"
-          className="card-button bg-gradient-to-r from-orange-400 to-orange-600"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-8 w-8 mb-2"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M3 7h18M3 12h18M3 17h18"
-            />
-          </svg>
-          Budget Anual
         </Link>
       </div>
 
