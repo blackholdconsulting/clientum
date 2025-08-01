@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: Request) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
     return NextResponse.json(
       { success: false, message: "Faltan variables de entorno de Supabase" },
@@ -18,6 +15,18 @@ export async function GET(
   );
 
   try {
+    // ✅ Extraer ID de la URL
+    const url = new URL(request.url);
+    const parts = url.pathname.split("/");
+    const id = parts[parts.indexOf("facturas") + 1];
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, message: "ID de factura no proporcionado" },
+        { status: 400 }
+      );
+    }
+
     const { data, error } = await supabase
       .from("facturas")
       .select(
@@ -43,7 +52,7 @@ export async function GET(
         created_at
       `
       )
-      .eq("id", params.id)
+      .eq("id", id)
       .single();
 
     if (error) {
@@ -62,3 +71,4 @@ export async function GET(
     );
   }
 }
+
