@@ -1,14 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PDFDownloadLink, Page, Text, View, Document, StyleSheet } from "@react-pdf/renderer";
 
 interface Cliente {
   id: string;
   nombre: string;
-  direccion: string;
-  telefono: string;
-  email: string;
 }
 
 interface Linea {
@@ -17,66 +13,29 @@ interface Linea {
   precio: number;
 }
 
-const styles = StyleSheet.create({
-  page: { padding: 30, fontSize: 12 },
-  section: { marginBottom: 10 },
-  tableHeader: { flexDirection: "row", borderBottom: "1px solid #000", paddingBottom: 5 },
-  tableRow: { flexDirection: "row", justifyContent: "space-between", marginVertical: 3 },
-  total: { marginTop: 10, textAlign: "right" },
-});
-
-function FacturaPDF({ serie, numero, cliente, lineas, iva }: any) {
-  const subtotal = lineas.reduce((sum: number, l: any) => sum + l.cantidad * l.precio, 0);
-  const ivaTotal = (subtotal * iva) / 100;
-  const total = subtotal + ivaTotal;
-
-  return (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        <View style={styles.section}>
-          <Text>FACTURA Nº {numero}</Text>
-          <Text>Serie: {serie}</Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text>Cliente: {cliente.nombre}</Text>
-          <Text>Dirección: {cliente.direccion}</Text>
-          <Text>Tel: {cliente.telefono} - Email: {cliente.email}</Text>
-        </View>
-
-        <View style={styles.tableHeader}>
-          <Text style={{ width: "50%" }}>Descripción</Text>
-          <Text style={{ width: "20%", textAlign: "center" }}>Cant.</Text>
-          <Text style={{ width: "30%", textAlign: "right" }}>Precio</Text>
-        </View>
-
-        {lineas.map((linea: any, index: number) => (
-          <View key={index} style={styles.tableRow}>
-            <Text style={{ width: "50%" }}>{linea.descripcion}</Text>
-            <Text style={{ width: "20%", textAlign: "center" }}>{linea.cantidad}</Text>
-            <Text style={{ width: "30%", textAlign: "right" }}>{linea.precio.toFixed(2)} €</Text>
-          </View>
-        ))}
-
-        <View style={styles.total}>
-          <Text>Subtotal: {subtotal.toFixed(2)} €</Text>
-          <Text>IVA ({iva}%): {ivaTotal.toFixed(2)} €</Text>
-          <Text>Total: {total.toFixed(2)} €</Text>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
 export default function NuevaFactura() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clienteId, setClienteId] = useState("");
   const [serie, setSerie] = useState("");
   const [numero, setNumero] = useState("");
+  const [tipoFactura, setTipoFactura] = useState("FACTURA");
+  const [metodoPago, setMetodoPago] = useState("TRANSFERENCIA");
   const [iva, setIva] = useState(21);
   const [lineas, setLineas] = useState<Linea[]>([{ descripcion: "", cantidad: 1, precio: 0 }]);
 
-  const clienteSeleccionado = clientes.find((c) => c.id === clienteId);
+  // ✅ Datos del remitente
+  const [empresa, setEmpresa] = useState({
+    nombre: "",
+    nif: "",
+    direccion: "",
+    ciudad: "",
+    provincia: "",
+    cp: "",
+    pais: "España",
+    telefono: "",
+    email: "",
+    web: "",
+  });
 
   useEffect(() => {
     const fetchClientes = async () => {
@@ -89,7 +48,6 @@ export default function NuevaFactura() {
 
   const addLinea = () => setLineas([...lineas, { descripcion: "", cantidad: 1, precio: 0 }]);
   const removeLinea = (index: number) => setLineas(lineas.filter((_, i) => i !== index));
-
   const updateLinea = (index: number, field: keyof Linea, value: string | number) => {
     const updated: Linea[] = [...lineas];
     (updated[index] as Record<keyof Linea, any>)[field] =
@@ -107,6 +65,9 @@ export default function NuevaFactura() {
         cliente_id: clienteId,
         lineas,
         iva,
+        tipo_factura: tipoFactura,
+        metodo_pago: metodoPago,
+        remitente: empresa,
       }),
     });
     const data = await res.json();
@@ -117,17 +78,51 @@ export default function NuevaFactura() {
     <div className="max-w-4xl mx-auto bg-white shadow p-6 rounded-lg">
       <h1 className="text-2xl font-bold mb-4">Crear Factura</h1>
 
+      {/* Datos de la factura */}
       <div className="grid grid-cols-2 gap-4 mb-4">
         <input className="input" placeholder="Serie" value={serie} onChange={(e) => setSerie(e.target.value)} />
         <input className="input" placeholder="Número" value={numero} onChange={(e) => setNumero(e.target.value)} />
-        <select className="input col-span-2" value={clienteId} onChange={(e) => setClienteId(e.target.value)}>
+        <select className="input" value={clienteId} onChange={(e) => setClienteId(e.target.value)}>
           <option value="">Selecciona Cliente</option>
           {clientes.map((c) => (
             <option key={c.id} value={c.id}>{c.nombre}</option>
           ))}
         </select>
+        <select className="input" value={tipoFactura} onChange={(e) => setTipoFactura(e.target.value)}>
+          <option value="FACTURA">Factura</option>
+          <option value="RECTIFICATIVA">Rectificativa</option>
+          <option value="ABONO">Abono</option>
+        </select>
+        <select className="input" value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)}>
+          <option value="TRANSFERENCIA">Transferencia</option>
+          <option value="TARJETA">Tarjeta</option>
+          <option value="EFECTIVO">Efectivo</option>
+        </select>
+        <input
+          className="input"
+          type="number"
+          placeholder="IVA %"
+          value={iva}
+          onChange={(e) => setIva(parseFloat(e.target.value))}
+        />
       </div>
 
+      {/* Datos del remitente */}
+      <h2 className="text-lg font-semibold mt-6 mb-2">Datos de la Empresa (Remitente)</h2>
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <input className="input" placeholder="Nombre o Razón Social" value={empresa.nombre} onChange={(e) => setEmpresa({ ...empresa, nombre: e.target.value })} />
+        <input className="input" placeholder="NIF / CIF" value={empresa.nif} onChange={(e) => setEmpresa({ ...empresa, nif: e.target.value })} />
+        <input className="input col-span-2" placeholder="Dirección" value={empresa.direccion} onChange={(e) => setEmpresa({ ...empresa, direccion: e.target.value })} />
+        <input className="input" placeholder="Ciudad" value={empresa.ciudad} onChange={(e) => setEmpresa({ ...empresa, ciudad: e.target.value })} />
+        <input className="input" placeholder="Provincia" value={empresa.provincia} onChange={(e) => setEmpresa({ ...empresa, provincia: e.target.value })} />
+        <input className="input" placeholder="Código Postal" value={empresa.cp} onChange={(e) => setEmpresa({ ...empresa, cp: e.target.value })} />
+        <input className="input" placeholder="País" value={empresa.pais} onChange={(e) => setEmpresa({ ...empresa, pais: e.target.value })} />
+        <input className="input" placeholder="Teléfono" value={empresa.telefono} onChange={(e) => setEmpresa({ ...empresa, telefono: e.target.value })} />
+        <input className="input" placeholder="Email" value={empresa.email} onChange={(e) => setEmpresa({ ...empresa, email: e.target.value })} />
+        <input className="input" placeholder="Web" value={empresa.web} onChange={(e) => setEmpresa({ ...empresa, web: e.target.value })} />
+      </div>
+
+      {/* Líneas */}
       <h2 className="text-lg font-semibold mb-2">Líneas de servicio</h2>
       {lineas.map((linea, index) => (
         <div key={index} className="grid grid-cols-5 gap-2 mb-2">
@@ -160,37 +155,10 @@ export default function NuevaFactura() {
         Añadir línea
       </button>
 
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <input
-          className="input"
-          type="number"
-          placeholder="IVA %"
-          value={iva}
-          onChange={(e) => setIva(parseFloat(e.target.value))}
-        />
-      </div>
-
-      <div className="flex justify-between">
+      <div className="flex justify-end">
         <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={guardarFactura}>
           Guardar Factura
         </button>
-        {clienteSeleccionado && (
-          <PDFDownloadLink
-            document={
-              <FacturaPDF
-                serie={serie}
-                numero={numero}
-                cliente={clienteSeleccionado}
-                lineas={lineas}
-                iva={iva}
-              />
-            }
-            fileName={`Factura-${serie}-${numero}.pdf`}
-            className="bg-green-600 text-white px-4 py-2 rounded"
-          >
-            Descargar PDF
-          </PDFDownloadLink>
-        )}
       </div>
 
       <style jsx>{`
