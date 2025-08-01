@@ -34,6 +34,9 @@ export default function FacturasPage() {
         return <span className="bg-green-100 text-green-700 px-2 py-1 rounded">Pagada</span>;
       case "enviada":
         return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">Enviada</span>;
+      case "rechazada":
+      case "error":
+        return <span className="bg-red-100 text-red-700 px-2 py-1 rounded">{estado}</span>;
       default:
         return <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded">Borrador</span>;
     }
@@ -57,6 +60,16 @@ export default function FacturasPage() {
     });
     const data = await res.json();
     alert(data.success ? "✅ Factura enviada a Verifactu" : "❌ Error: " + data.message);
+  };
+
+  const handleProgramarReintento = async (facturaId: string, tipo: string) => {
+    const res = await fetch(`/api/facturas/${facturaId}/programar-reintento`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ facturaId, tipo })
+    });
+    const data = await res.json();
+    alert(data.success ? "🔄 Reintento programado correctamente" : "❌ Error: " + data.message);
   };
 
   if (loading) return <p className="p-6">Cargando facturas...</p>;
@@ -112,6 +125,23 @@ export default function FacturasPage() {
                 >
                   Verifactu
                 </button>
+
+                {(factura.estado === "rechazada" || factura.estado === "error") && (
+                  <>
+                    <button
+                      onClick={() => handleProgramarReintento(factura.id, "facturae")}
+                      className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600"
+                    >
+                      Reintentar Facturae
+                    </button>
+                    <button
+                      onClick={() => handleProgramarReintento(factura.id, "verifactu")}
+                      className="bg-orange-500 text-white px-3 py-1 rounded hover:bg-orange-600"
+                    >
+                      Reintentar Verifactu
+                    </button>
+                  </>
+                )}
               </td>
             </tr>
           ))}
