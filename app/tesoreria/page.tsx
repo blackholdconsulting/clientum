@@ -1,131 +1,151 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  Legend,
-} from "recharts";
+import { createClient } from "@supabase/supabase-js";
+import { useRouter } from "next/navigation";
 
-interface Kpi {
-  saldoTotal: number;
-  entradasMes: number;
-  salidasMes: number;
+// Configuración Supabase
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+interface Cuenta {
+  id: number;
+  nombre: string;
+  saldo: number;
 }
 
-export default function TesoreriaDashboard() {
-  const [kpi, setKpi] = useState<Kpi>({
-    saldoTotal: 0,
-    entradasMes: 0,
-    salidasMes: 0,
-  });
+export default function TesoreriaPage() {
+  const [cuentas, setCuentas] = useState<Cuenta[]>([]);
+  const [newCuenta, setNewCuenta] = useState("");
+  const [saldo, setSaldo] = useState(0);
+  const [userId, setUserId] = useState<string | null>(null);
+  const router = useRouter();
 
-  const [cashflowData, setCashflowData] = useState<
-    { mes: string; entradas: number; salidas: number }[]
-  >([]);
-
+  // Obtener usuario logueado
   useEffect(() => {
-    // Simulación de datos - reemplazar con fetch a la API real
-    setKpi({
-      saldoTotal: 15230.45,
-      entradasMes: 4320.5,
-      salidasMes: 1890.75,
-    });
-
-    setCashflowData([
-      { mes: "Ene", entradas: 3000, salidas: 1500 },
-      { mes: "Feb", entradas: 3500, salidas: 2000 },
-      { mes: "Mar", entradas: 4000, salidas: 1800 },
-      { mes: "Abr", entradas: 4200, salidas: 2100 },
-      { mes: "May", entradas: 3800, salidas: 2300 },
-      { mes: "Jun", entradas: 5000, salidas: 2500 },
-      { mes: "Jul", entradas: 4700, salidas: 2200 },
-      { mes: "Ago", entradas: 4900, salidas: 2400 },
-      { mes: "Sep", entradas: 5100, salidas: 2600 },
-      { mes: "Oct", entradas: 5300, salidas: 2700 },
-      { mes: "Nov", entradas: 5500, salidas: 2800 },
-      { mes: "Dic", entradas: 6000, salidas: 3000 },
-    ]);
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+      setUserId(user.id);
+      fetchCuentas(user.id);
+    };
+    getUser();
   }, []);
+
+  // Cargar cuentas filtradas por user_id
+  const fetchCuentas = async (uid: string) => {
+    const { data, error } = await supabase
+      .from("cuentas")
+      .select("*")
+      .eq("user_id", uid);
+
+    if (error) {
+      console.error("Error al cargar cuentas:", error);
+    } else {
+      setCuentas(data || []);
+    }
+  };
+
+  // Crear nueva cuenta
+  const addCuenta = async () => {
+    if (!newCuenta || !userId) return;
+
+    const { error } = await supabase.from("cuentas").insert([
+      {
+        nombre: newCuenta,
+        saldo,
+        user_id: userId,
+      },
+    ]);
+
+    if (error) {
+      console.error("Error al crear cuenta:", error);
+    } else {
+      setNewCuenta("");
+      setSaldo(0);
+      fetchCuentas(userId);
+    }
+  };
+
+  // Eliminar cuenta (solo del usuario)
+  const deleteCuenta = async (id: number) => {
+    if (!userId) return;
+
+    const { error } = await supabase
+      .from("cuentas")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId);
+
+    if (error) {
+      console.error("Error al eliminar cuenta:", error);
+    } else {
+      fetchCuentas(userId);
+    }
+  };
 
   return (
     <div className="p-6">
-      <h1 className="text-3xl font-bold mb-6">Dashboard Tesorería</h1>
+      <h1 className="text-2xl font-bold mb-4">Tesorería</h1>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white p-4 shadow rounded-lg text-center">
-          <h2 className="text-lg font-semibold">Saldo Total</h2>
-          <p className="text-2xl font-bold text-green-600">{kpi.saldoTotal.toFixed(2)} €</p>
-        </div>
-        <div className="bg-white p-4 shadow rounded-lg text-center">
-          <h2 className="text-lg font-semibold">Entradas del Mes</h2>
-          <p className="text-2xl font-bold text-blue-600">{kpi.entradasMes.toFixed(2)} €</p>
-        </div>
-        <div className="bg-white p-4 shadow rounded-lg text-center">
-          <h2 className="text-lg font-semibold">Salidas del Mes</h2>
-          <p className="text-2xl font-bold text-red-600">{kpi.salidasMes.toFixed(2)} €</p>
-        </div>
-        <div className="bg-white p-4 shadow rounded-lg text-center">
-          <h2 className="text-lg font-semibold">Balance Neto</h2>
-          <p
-            className={`text-2xl font-bold ${
-              kpi.entradasMes - kpi.salidasMes >= 0 ? "text-green-600" : "text-red-600"
-            }`}
-          >
-            {(kpi.entradasMes - kpi.salidasMes).toFixed(2)} €
-          </p>
-        </div>
+      {/* Formulario para crear cuenta */}
+      <div className="flex space-x-2 mb-6">
+        <input
+          type="text"
+          placeholder="Nombre de la cuenta"
+          value={newCuenta}
+          onChange={(e) => setNewCuenta(e.target.value)}
+          className="border rounded px-3 py-2 flex-1"
+        />
+        <input
+          type="number"
+          placeholder="Saldo inicial"
+          value={saldo}
+          onChange={(e) => setSaldo(Number(e.target.value))}
+          className="border rounded px-3 py-2 w-32"
+        />
+        <button
+          onClick={addCuenta}
+          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+        >
+          Añadir
+        </button>
       </div>
 
-      {/* Gráfico de Cashflow */}
-      <div className="bg-white p-6 rounded-lg shadow mb-6">
-        <h2 className="text-xl font-semibold mb-4">Evolución del Cashflow</h2>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={cashflowData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="mes" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Line type="monotone" dataKey="entradas" stroke="#16a34a" name="Entradas (€)" />
-            <Line type="monotone" dataKey="salidas" stroke="#dc2626" name="Salidas (€)" />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Accesos rápidos */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Link
-          href="/tesoreria/cuentas"
-          className="bg-indigo-600 text-white p-4 rounded-lg shadow hover:bg-indigo-700 text-center"
-        >
-          Ver Cuentas
-        </Link>
-        <Link
-          href="/tesoreria/pagos-cobros"
-          className="bg-indigo-600 text-white p-4 rounded-lg shadow hover:bg-indigo-700 text-center"
-        >
-          Pagos y Cobros
-        </Link>
-        <Link
-          href="/tesoreria/remesas"
-          className="bg-indigo-600 text-white p-4 rounded-lg shadow hover:bg-indigo-700 text-center"
-        >
-          Remesas
-        </Link>
-        <Link
-          href="/tesoreria/cashflow"
-          className="bg-indigo-600 text-white p-4 rounded-lg shadow hover:bg-indigo-700 text-center"
-        >
-          Cashflow Detallado
-        </Link>
+      {/* Tabla de cuentas */}
+      <div className="overflow-x-auto shadow border border-gray-200 rounded-lg">
+        <table className="min-w-full bg-white">
+          <thead>
+            <tr>
+              <th className="px-4 py-2 border-b">ID</th>
+              <th className="px-4 py-2 border-b">Nombre</th>
+              <th className="px-4 py-2 border-b">Saldo</th>
+              <th className="px-4 py-2 border-b text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cuentas.map((cuenta) => (
+              <tr key={cuenta.id} className="hover:bg-gray-50">
+                <td className="px-4 py-2 border-b">{cuenta.id}</td>
+                <td className="px-4 py-2 border-b">{cuenta.nombre}</td>
+                <td className="px-4 py-2 border-b">{cuenta.saldo} €</td>
+                <td className="px-4 py-2 border-b text-center">
+                  <button
+                    onClick={() => deleteCuenta(cuenta.id)}
+                    className="px-3 py-1 text-sm text-white bg-red-600 hover:bg-red-700 rounded"
+                  >
+                    Eliminar
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
