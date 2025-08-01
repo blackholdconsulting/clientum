@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -50,73 +52,57 @@ export default function InventarioPage() {
     fetchProductos(userId);
   };
 
-  const generarNumeroFactura = () => {
-    return `FS-${Date.now()}`; // Ej: FS-1722554550000
-  };
-
   const venderProducto = async (id: number, precio: number) => {
     if (!userId) return;
-
     const producto = productos.find((p) => p.id === id);
     if (!producto || producto.cantidad <= 0) return;
-
     const nuevaCantidad = producto.cantidad - 1;
 
-    // 1. Actualizar stock
-    const { error: updateError } = await supabase
-      .from("productos")
-      .update({ cantidad: nuevaCantidad })
-      .eq("id", id)
-      .eq("user_id", userId);
-
-    if (updateError) {
-      console.error("Error al actualizar stock", updateError);
-      return;
-    }
-
-    // 2. Crear factura simplificada en tabla facturas
-    const numeroFactura = generarNumeroFactura();
-    const { data: factura } = await supabase
-      .from("facturas")
-      .insert([{
-        numero: numeroFactura,
-        cliente_id: null, // B2C sin cliente específico
-        total: precio,
-        estado: "pagada",
-        tipo: "simplificada",
-        fecha_emision: new Date().toISOString(),
-        user_id: userId
-      }])
-      .select()
-      .single();
-
-    // 3. Registrar ingreso vinculado a la factura
-    if (factura) {
-      await supabase.from("ingresos").insert([{
-        factura_id: factura.id,
-        importe: precio,
-        concepto: `Venta: ${producto.nombre}`,
-        user_id: userId
-      }]);
-    }
-
-    // 4. Insertar en ventas (opcional para histórico)
-    await supabase.from("ventas").insert([{
-      producto_id: id,
-      cantidad: 1,
-      total: precio,
-      user_id: userId
-    }]);
-
+    await supabase.from("productos").update({ cantidad: nuevaCantidad }).eq("id", id).eq("user_id", userId);
     fetchProductos(userId);
   };
 
   const valorTotalStock = productos.reduce((acc, p) => acc + p.cantidad * p.precio, 0);
 
+  const exportCSV = () => {
+    const csvHeader = ["Código", "Nombre", "Cantidad", "Precio"];
+    const csvRows = productos.map((p) => [p.codigo_barras, p.nombre, p.cantidad, p.precio]);
+    const csvContent = [csvHeader, ...csvRows].map((row) => row.join(",")).join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "inventario.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.text("Inventario y Almacén", 14, 10);
+    autoTable(doc, {
+      head: [["Código", "Nombre", "Cantidad", "Precio"]],
+      body: productos.map((p) => [p.codigo_barras, p.nombre, p.cantidad, `${p.precio} €`]),
+    });
+    doc.save("inventario.pdf");
+  };
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Inventario y Almacén</h1>
       <p className="mb-4 text-gray-700">Valor total en stock: <strong>{valorTotalStock.toFixed(2)} €</strong></p>
+
+      {/* Botones de exportación */}
+      <div className="flex space-x-2 mb-4">
+        <button onClick={exportCSV} className="px-3 py-1 bg-yellow-500 text-white rounded">
+          Exportar CSV
+        </button>
+        <button onClick={exportPDF} className="px-3 py-1 bg-red-500 text-white rounded">
+          Exportar PDF
+        </button>
+      </div>
 
       {/* Input para código de barras */}
       <div className="flex flex-col md:flex-row gap-2 mb-6">
@@ -175,7 +161,7 @@ export default function InventarioPage() {
                   onClick={() => venderProducto(p.id, p.precio)}
                   className="px-2 py-1 bg-blue-600 text-white rounded"
                 >
-                  Vender (Factura simplificada)
+                  Vender
                 </button>
               </td>
             </tr>
