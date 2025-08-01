@@ -25,7 +25,6 @@ export default function NuevoActivoPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      // TODO: ajustar URL y lógica de envío a tu API
       const res = await fetch("/api/contabilidad/activos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -37,11 +36,16 @@ export default function NuevoActivoPage() {
           amortizacion: parseFloat(form.amortizacion),
         }),
       });
-      if (!res.ok) throw new Error("Error al crear activo");
+      const data = await res.json();
+      if (!data.success) {
+        console.error("API error:", data.error);
+        alert("Error guardando activo: " + data.error);
+        return;
+      }
       router.push("/contabilidad/activos");
-    } catch (err) {
-      console.error("Crear activo falló:", err);
-      alert("No se pudo guardar el activo");
+    } catch (err: any) {
+      console.error("Fetch failed:", err);
+      alert("Error de red o inesperado: " + err.message);
     } finally {
       setLoading(false);
     }
