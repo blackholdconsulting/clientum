@@ -96,4 +96,11 @@ export default function PagosCobrosPage() {
               <td className="border px-3 py-2">{new Date(item.fecha).toLocaleDateString()}</td>
               <td className="border px-3 py-2">{item.tipo}</td>
               <td className="border px-3 py-2">{item.concepto}</td>
-              <td className="border px-3 py-2">{item.mo
+              <td className="border px-3 py-2">{item.monto} €</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
