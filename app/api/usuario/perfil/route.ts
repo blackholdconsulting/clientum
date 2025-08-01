@@ -1,90 +1,73 @@
-// /app/api/usuario/perfil/route.ts
+// app/api/usuario/perfil/route.ts
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseServer";
 
 export async function GET() {
-  try {
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, error: authError?.message || "No autenticado" },
-        { status: 401 }
-      );
-    }
-
-    const { data: perfil, error: selectError } = await supabase
-      .from("perfil")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
-
-    if (selectError) {
-      return NextResponse.json(
-        { success: false, error: selectError.message },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ success: true, perfil });
-  } catch (err: any) {
-    console.error("GET /api/usuario/perfil error:", err);
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
     return NextResponse.json(
-      { success: false, error: err.message || "Error inesperado" },
-      { status: 500 }
+      { success: false, error: authError?.message || "No autenticado" },
+      { status: 401 }
     );
   }
+
+  const { data: perfil, error } = await supabase
+    .from("perfil")
+    .select("*")
+    .eq("user_id", user.id)
+    .single();
+
+  if (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true, perfil });
 }
 
 export async function POST(request: Request) {
-  try {
-    const body = await request.json();
+  const body = await request.json();
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, error: authError?.message || "No autenticado" },
-        { status: 401 }
-      );
-    }
-
-    const {
-      nombre, apellidos, telefono, idioma,
-      nombre_empresa, nif, direccion, ciudad,
-      provincia, cp, pais, email, web, firma,
-    } = body;
-
-    const payload = {
-      user_id: user.id,
-      nombre, apellidos, telefono, idioma,
-      nombre_empresa, nif, direccion, ciudad,
-      provincia, cp, pais, email, web, firma,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { data, error: upsertError } = await supabase
-      .from("perfil")
-      .upsert(payload, { onConflict: "user_id" })
-      .single();
-
-    if (upsertError) {
-      return NextResponse.json(
-        { success: false, error: upsertError.message },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ success: true, perfil: data });
-  } catch (err: any) {
-    console.error("POST /api/usuario/perfil error:", err);
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
     return NextResponse.json(
-      { success: false, error: err.message || "Error inesperado" },
-      { status: 500 }
+      { success: false, error: authError?.message || "No autenticado" },
+      { status: 401 }
     );
   }
+
+  const payload = {
+    user_id: user.id,
+    nombre: body.nombre,
+    apellidos: body.apellidos,
+    telefono: body.telefono,
+    idioma: body.idioma,
+    nombre_empresa: body.nombre_empresa,
+    nif: body.nif,
+    direccion: body.direccion,
+    ciudad: body.ciudad,
+    provincia: body.provincia,
+    cp: body.cp,
+    pais: body.pais,
+    email: body.email,
+    web: body.web,
+    firma: body.firma,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from("perfil")
+    .upsert(payload, { onConflict: "user_id" })
+    .single();
+
+  if (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true, perfil: data });
 }
