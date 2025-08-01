@@ -32,6 +32,24 @@ export default function FacturaDetallePage() {
     fetchFactura();
   }, [id]);
 
+  const handleReenviar = async () => {
+    try {
+      const res = await fetch(`/api/facturas/${factura.id}/reenviar`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("Factura reenviada correctamente a AEAT.");
+        window.location.reload();
+      } else {
+        alert("Error al reintentar envío: " + data.message);
+      }
+    } catch (error) {
+      alert("Error inesperado al reenviar la factura.");
+      console.error(error);
+    }
+  };
+
   if (loading) return <p className="p-6">Cargando factura...</p>;
   if (!factura) return <p className="p-6">Factura no encontrada.</p>;
 
@@ -135,6 +153,16 @@ export default function FacturaDetallePage() {
       >
         ← Volver
       </button>
+
+      {/* Botón de reintento */}
+      {(factura.estado === "ERROR" || factura.estado === "RECHAZADA") && (
+        <button
+          onClick={handleReenviar}
+          className="mt-4 ml-4 bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700"
+        >
+          Reintentar envío a AEAT
+        </button>
+      )}
     </div>
   );
 }
