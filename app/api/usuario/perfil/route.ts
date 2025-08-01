@@ -2,51 +2,52 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 
 export async function GET() {
-  // Recupera el usuario logueado
+  // 1. Autenticación
   const {
     data: { user },
-    error: userError,
+    error: authError,
   } = await supabase.auth.getUser();
-  if (userError || !user) {
+  if (authError || !user) {
     return NextResponse.json(
-      { success: false, error: userError?.message || "Usuario no autenticado" },
+      { success: false, error: authError?.message || "No autenticado" },
       { status: 401 }
     );
   }
 
-  // Lee el perfil de la tabla 'perfil' (ajusta el nombre de la tabla si difiere)
-  const { data: perfil, error } = await supabase
+  // 2. Leer perfil
+  const { data: perfil, error: selectError } = await supabase
     .from("perfil")
     .select("*")
     .eq("user_id", user.id)
     .single();
 
-  if (error) {
+  if (selectError) {
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: selectError.message },
       { status: 500 }
     );
   }
 
+  // 3. Devolver perfil
   return NextResponse.json({ success: true, perfil });
 }
 
-export async function POST(req: Request) {
-  const body = await req.json();
+export async function POST(request: Request) {
+  const body = await request.json();
 
-  // Recupera el usuario logueado
+  // 1. Autenticación
   const {
     data: { user },
-    error: userError,
+    error: authError,
   } = await supabase.auth.getUser();
-  if (userError || !user) {
+  if (authError || !user) {
     return NextResponse.json(
-      { success: false, error: userError?.message || "Usuario no autenticado" },
+      { success: false, error: authError?.message || "No autenticado" },
       { status: 401 }
     );
   }
 
-  // Construye el payload con TODOS los campos que envía el cliente
+  // 2. Extraer campos del body
   const {
     nombre,
     apellidos,
@@ -64,6 +65,7 @@ export async function POST(req: Request) {
     firma,
   } = body;
 
+  // 3. Upsert en la tabla "perfil"
   const payload = {
     user_id: user.id,
     nombre,
@@ -79,22 +81,22 @@ export async function POST(req: Request) {
     pais,
     email,
     web,
-    firma,            // ¡ahora guardamos también la firma Base64!
+    firma,
     updated_at: new Date().toISOString(),
   };
 
-  // Inserta o actualiza (upsert) la fila en la tabla 'perfil'
-  const { data, error } = await supabase
+  const { data, error: upsertError } = await supabase
     .from("perfil")
     .upsert(payload, { onConflict: "user_id" })
     .single();
 
-  if (error) {
+  if (upsertError) {
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: upsertError.message },
       { status: 500 }
     );
   }
 
+  // 4. Siempre devolvemos JSON con éxito
   return NextResponse.json({ success: true, perfil: data });
 }
