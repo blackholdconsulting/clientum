@@ -1,4 +1,3 @@
-// File: /app/layout.tsx
 import "./globals.css";
 import Link from "next/link";
 import { headers } from "next/headers";
@@ -126,9 +125,28 @@ export default async function RootLayout({
             <Link href="/impuestos" className={linkClass("/impuestos")}>
               ⚖️ Impuestos
             </Link>
-            <Link href="/tesoreria" className={linkClass("/tesoreria")}>
-              🏦 Tesorería
-            </Link>
+
+            {/* Tesorería con submenú */}
+            <div>
+              <Link href="/tesoreria" className={linkClass("/tesoreria")}>
+                🏦 Tesorería
+              </Link>
+              <div className="pl-4 space-y-1">
+                <Link href="/tesoreria/cuentas" className={linkClass("/tesoreria/cuentas")}>
+                  💳 Cuentas
+                </Link>
+                <Link href="/tesoreria/cashflow" className={linkClass("/tesoreria/cashflow")}>
+                  💹 Cashflow
+                </Link>
+                <Link href="/tesoreria/pagos-cobros" className={linkClass("/tesoreria/pagos-cobros")}>
+                  💵 Pagos y Cobros
+                </Link>
+                <Link href="/tesoreria/remesas" className={linkClass("/tesoreria/remesas")}>
+                  📤 Remesas
+                </Link>
+              </div>
+            </div>
+
             <Link href="/gastos" className={linkClass("/gastos")}>
               💸 Gastos
             </Link>
@@ -141,6 +159,13 @@ export default async function RootLayout({
             <Link href="/RR.HH" className={linkClass("/RR.HH")}>
               👩‍💼 RRHH
             </Link>
+
+            {/* Inventario */}
+            <div>
+              <Link href="/inventario" className={linkClass("/inventario")}>
+                📦 Inventario y Almacén
+              </Link>
+            </div>
 
             {/* Ayuda y Soporte */}
             <div>
