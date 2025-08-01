@@ -1,4 +1,3 @@
-// app/api/facturas/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -10,7 +9,7 @@ const supabase = createClient(
 export async function GET() {
   const { data, error } = await supabase
     .from("facturas")
-    .select("id, numero, fecha, cliente, estado")
+    .select("id, numero, fecha, cliente, estado, csv")
     .order("fecha", { ascending: false });
 
   if (error) {
