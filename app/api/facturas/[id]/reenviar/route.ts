@@ -19,7 +19,7 @@ export async function POST(
   );
 
   try {
-    // 1. Obtener factura
+    // 1️⃣ Obtener factura
     const { data: factura, error } = await supabase
       .from("facturas")
       .select("*")
@@ -27,17 +27,39 @@ export async function POST(
       .single();
 
     if (error || !factura) {
-      return NextResponse.json({ success: false, message: "Factura no encontrada" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: "Factura no encontrada" },
+        { status: 404 }
+      );
     }
 
-    // 2. Reintentar envío
+    const userId = factura.user_id;
+
+    // 2️⃣ Obtener certificado del usuario
+    const { data: certData, error: certError } = await supabase
+      .from("certificados")
+      .select("certificado, password")
+      .eq("user_id", userId)
+      .single();
+
+    if (certError || !certData) {
+      return NextResponse.json(
+        { success: false, message: "No se encontró certificado del usuario" },
+        { status: 404 }
+      );
+    }
+
+    const certificadoBuffer = certData.certificado;
+    const password = certData.password;
+
+    // 3️⃣ Reintentar envío
     const result = await sendToSii(
       factura.json_factura,
-      undefined, // puedes usar certificado guardado si está disponible
-      undefined
+      certificadoBuffer,
+      password
     );
 
-    // 3. Actualizar estado
+    // 4️⃣ Actualizar estado en la tabla facturas
     const { error: updateError } = await supabase
       .from("facturas")
       .update({
@@ -47,7 +69,10 @@ export async function POST(
       .eq("id", params.id);
 
     if (updateError) {
-      return NextResponse.json({ success: false, message: updateError.message }, { status: 500 });
+      return NextResponse.json(
+        { success: false, message: updateError.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ success: true, result });
