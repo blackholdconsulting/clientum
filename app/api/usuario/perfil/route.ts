@@ -1,9 +1,9 @@
+// /app/api/usuario/perfil/route.ts
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseServer";
 
 export async function GET() {
   try {
-    // Autenticación
     const {
       data: { user },
       error: authError,
@@ -15,7 +15,6 @@ export async function GET() {
       );
     }
 
-    // Leer perfil
     const { data: perfil, error: selectError } = await supabase
       .from("perfil")
       .select("*")
@@ -29,10 +28,9 @@ export async function GET() {
       );
     }
 
-    // Responder perfil
     return NextResponse.json({ success: true, perfil });
   } catch (err: any) {
-    console.error("Error en GET /perfil:", err);
+    console.error("GET /api/usuario/perfil error:", err);
     return NextResponse.json(
       { success: false, error: err.message || "Error inesperado" },
       { status: 500 }
@@ -44,7 +42,6 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    // Autenticación
     const {
       data: { user },
       error: authError,
@@ -56,41 +53,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // Extraer campos
     const {
-      nombre,
-      apellidos,
-      telefono,
-      idioma,
-      nombre_empresa,
-      nif,
-      direccion,
-      ciudad,
-      provincia,
-      cp,
-      pais,
-      email,
-      web,
-      firma,
+      nombre, apellidos, telefono, idioma,
+      nombre_empresa, nif, direccion, ciudad,
+      provincia, cp, pais, email, web, firma,
     } = body;
 
-    // Upsert perfil
     const payload = {
       user_id: user.id,
-      nombre,
-      apellidos,
-      telefono,
-      idioma,
-      nombre_empresa,
-      nif,
-      direccion,
-      ciudad,
-      provincia,
-      cp,
-      pais,
-      email,
-      web,
-      firma,
+      nombre, apellidos, telefono, idioma,
+      nombre_empresa, nif, direccion, ciudad,
+      provincia, cp, pais, email, web, firma,
       updated_at: new Date().toISOString(),
     };
 
@@ -106,10 +79,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Respuesta exitosa
     return NextResponse.json({ success: true, perfil: data });
   } catch (err: any) {
-    console.error("Error en POST /perfil:", err);
+    console.error("POST /api/usuario/perfil error:", err);
     return NextResponse.json(
       { success: false, error: err.message || "Error inesperado" },
       { status: 500 }
