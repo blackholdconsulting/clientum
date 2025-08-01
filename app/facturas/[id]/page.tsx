@@ -10,28 +10,33 @@ export default function DetalleFacturaPage() {
   const { id } = params;
   const [factura, setFactura] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [mensaje, setMensaje] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
     if (!id) return;
-
-    const fetchFactura = async () => {
-      try {
-        const res = await fetch(`/api/facturas/${id}`);
-        const data = await res.json();
-        if (data.success) {
-          setFactura(data.factura);
-        } else {
-          alert("Error al cargar factura: " + data.message);
-        }
-      } catch (error) {
-        console.error("Error cargando factura:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchFactura();
   }, [id]);
+
+  const fetchFactura = async () => {
+    try {
+      const res = await fetch(`/api/facturas/${id}`);
+      const data = await res.json();
+      if (data.success) {
+        setFactura(data.factura);
+      } else {
+        setMensaje({ text: data.message, type: "error" });
+      }
+    } catch (error) {
+      setMensaje({ text: "Error al cargar factura", type: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const mostrarMensaje = (text: string, type: "success" | "error") => {
+    setMensaje({ text, type });
+    setTimeout(() => setMensaje(null), 4000);
+  };
 
   const getEstadoBadge = (estado: string) => {
     switch (estado) {
@@ -44,31 +49,63 @@ export default function DetalleFacturaPage() {
     }
   };
 
+  const actualizarEstadoFactura = async (nuevoEstado: string) => {
+    const res = await fetch(`/api/facturas/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ estado: nuevoEstado }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setFactura((prev: any) => ({ ...prev, estado: nuevoEstado }));
+    }
+  };
+
   const handleEnviarFacturae = async () => {
     const res = await fetch(`/api/sii/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ facturaId: factura.id })
+      body: JSON.stringify({ facturaId: factura.id }),
     });
     const data = await res.json();
-    alert(data.success ? "✅ Factura enviada a Facturae" : "❌ Error: " + data.message);
+    if (data.success) {
+      mostrarMensaje("Factura enviada correctamente a Facturae", "success");
+      actualizarEstadoFactura("enviada");
+    } else {
+      mostrarMensaje("Error al enviar Facturae: " + data.message, "error");
+    }
   };
 
   const handleEnviarVerifactu = async () => {
     const res = await fetch(`/api/sii/verifactu`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ facturaId: factura.id })
+      body: JSON.stringify({ facturaId: factura.id }),
     });
     const data = await res.json();
-    alert(data.success ? "✅ Factura enviada a Verifactu" : "❌ Error: " + data.message);
+    if (data.success) {
+      mostrarMensaje("Factura enviada correctamente a Verifactu", "success");
+      actualizarEstadoFactura("enviada");
+    } else {
+      mostrarMensaje("Error al enviar Verifactu: " + data.message, "error");
+    }
   };
 
   if (loading) return <p className="p-6">Cargando factura...</p>;
   if (!factura) return <p className="p-6">Factura no encontrada.</p>;
 
   return (
-    <div className="max-w-5xl mx-auto p-6 bg-white shadow rounded-xl">
+    <div className="max-w-5xl mx-auto p-6 bg-white shadow rounded-xl relative">
+      {mensaje && (
+        <div
+          className={`absolute top-4 right-4 px-4 py-2 rounded shadow-lg text-white ${
+            mensaje.type === "success" ? "bg-green-500" : "bg-red-500"
+          }`}
+        >
+          {mensaje.text}
+        </div>
+      )}
+
       {/* Cabecera */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Factura #{factura.numero}</h1>
