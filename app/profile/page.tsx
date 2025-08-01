@@ -4,12 +4,10 @@ import { useState, ChangeEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 interface PerfilForm {
-  // Datos personales
   nombre: string;
   apellidos: string;
   telefono: string;
   idioma: string;
-  // Datos empresa / remitente
   nombre_empresa: string;
   nif: string;
   direccion: string;
@@ -19,13 +17,11 @@ interface PerfilForm {
   pais: string;
   email: string;
   web: string;
-  // Firma electrónica en Base64
   firma: string;
 }
 
 export default function ProfilePage() {
   const router = useRouter();
-
   const [form, setForm] = useState<PerfilForm>({
     nombre: "",
     apellidos: "",
@@ -42,12 +38,10 @@ export default function ProfilePage() {
     web: "",
     firma: "",
   });
-
   const [previewAvatar, setPreviewAvatar] = useState<string | null>(null);
   const [previewFirma, setPreviewFirma] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Al montar, carga perfil existente
   useEffect(() => {
     async function fetchPerfil() {
       const res = await fetch("/api/usuario/perfil");
@@ -84,22 +78,18 @@ export default function ProfilePage() {
 
   const handleAvatar = (e: ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.[0]) return;
-    const file = e.target.files[0];
-    const url = URL.createObjectURL(file);
-    setPreviewAvatar(url);
-    // Aquí podrías enviar avatar a un endpoint aparte si lo necesitas
+    setPreviewAvatar(URL.createObjectURL(e.target.files[0]));
   };
 
   const handleFirma = (e: ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.[0]) return;
-    const file = e.target.files[0];
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result as string;
       setForm(f => ({ ...f, firma: base64 }));
       setPreviewFirma(base64);
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(e.target.files[0]);
   };
 
   const handleSave = async () => {
@@ -120,9 +110,14 @@ export default function ProfilePage() {
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-start justify-center p-6">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl overflow-auto">
+      <div
+        className="
+          bg-white rounded-lg shadow-lg w-full max-w-2xl
+          max-h-[calc(100vh-4rem)] overflow-y-auto
+        "
+      >
         {/* Header */}
-        <div className="flex items-center justify-between border-b px-6 py-4">
+        <div className="flex items-center justify-between border-b px-6 py-4 sticky top-0 bg-white z-10">
           <h2 className="text-lg font-semibold">Perfil de usuario</h2>
           <button
             onClick={handleSave}
@@ -204,103 +199,85 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Datos de la Empresa (Remitente) */}
-          <h3 className="text-md font-semibold mt-4">Datos de la Empresa (Remitente)</h3>
+          {/* Datos de la Empresa */}
+          <h3 className="text-md font-semibold">Datos de la Empresa (Remitente)</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Nombre / Razón Social</label>
-              <input
-                type="text"
-                name="nombre_empresa"
-                value={form.nombre_empresa}
-                onChange={handleChange}
-                className="mt-1 block w-full border rounded px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">NIF / CIF</label>
-              <input
-                type="text"
-                name="nif"
-                value={form.nif}
-                onChange={handleChange}
-                className="mt-1 block w-full border rounded px-3 py-2"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700">Dirección</label>
-              <input
-                type="text"
-                name="direccion"
-                value={form.direccion}
-                onChange={handleChange}
-                className="mt-1 block w-full border rounded px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Ciudad</label>
-              <input
-                type="text"
-                name="ciudad"
-                value={form.ciudad}
-                onChange={handleChange}
-                className="mt-1 block w-full border rounded px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Provincia</label>
-              <input
-                type="text"
-                name="provincia"
-                value={form.provincia}
-                onChange={handleChange}
-                className="mt-1 block w-full border rounded px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Código Postal</label>
-              <input
-                type="text"
-                name="cp"
-                value={form.cp}
-                onChange={handleChange}
-                className="mt-1 block w-full border rounded px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">País</label>
-              <input
-                type="text"
-                name="pais"
-                value={form.pais}
-                onChange={handleChange}
-                className="mt-1 block w-full border rounded px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Email</label>
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                className="mt-1 block w-full border rounded px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Web</label>
-              <input
-                type="text"
-                name="web"
-                value={form.web}
-                onChange={handleChange}
-                className="mt-1 block w-full border rounded px-3 py-2"
-              />
-            </div>
+            <input
+              type="text"
+              name="nombre_empresa"
+              value={form.nombre_empresa}
+              onChange={handleChange}
+              placeholder="Nombre / Razón Social"
+              className="mt-1 block w-full border rounded px-3 py-2"
+            />
+            <input
+              type="text"
+              name="nif"
+              value={form.nif}
+              onChange={handleChange}
+              placeholder="NIF / CIF"
+              className="mt-1 block w-full border rounded px-3 py-2"
+            />
+            <input
+              type="text"
+              name="direccion"
+              value={form.direccion}
+              onChange={handleChange}
+              placeholder="Dirección"
+              className="sm:col-span-2 mt-1 block w-full border rounded px-3 py-2"
+            />
+            <input
+              type="text"
+              name="ciudad"
+              value={form.ciudad}
+              onChange={handleChange}
+              placeholder="Ciudad"
+              className="mt-1 block w-full border rounded px-3 py-2"
+            />
+            <input
+              type="text"
+              name="provincia"
+              value={form.provincia}
+              onChange={handleChange}
+              placeholder="Provincia"
+              className="mt-1 block w-full border rounded px-3 py-2"
+            />
+            <input
+              type="text"
+              name="cp"
+              value={form.cp}
+              onChange={handleChange}
+              placeholder="Código Postal"
+              className="mt-1 block w-full border rounded px-3 py-2"
+            />
+            <input
+              type="text"
+              name="pais"
+              value={form.pais}
+              onChange={handleChange}
+              placeholder="País"
+              className="mt-1 block w-full border rounded px-3 py-2"
+            />
+            <input
+              type="email"
+              name="email"
+              value={form.email}
+              onChange={handleChange}
+              placeholder="Email"
+              className="mt-1 block w-full border rounded px-3 py-2"
+            />
+            <input
+              type="text"
+              name="web"
+              value={form.web}
+              onChange={handleChange}
+              placeholder="Web"
+              className="mt-1 block w-full border rounded px-3 py-2"
+            />
           </div>
 
           {/* Firma electrónica */}
-          <h3 className="text-md font-semibold mt-4">Firma electrónica</h3>
+          <h3 className="text-md font-semibold mt-6">Firma electrónica</h3>
           <div className="flex items-start space-x-6">
             <div className="h-24 w-48 bg-gray-100 rounded overflow-hidden border">
               {previewFirma ? (
