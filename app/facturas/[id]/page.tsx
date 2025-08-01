@@ -1,96 +1,63 @@
-// app/facturas/[id]/page.tsx
-import React from "react";
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
-import Layout from "../../../components/Layout";
+"use client";
 
-interface FacturaRow {
-  id: string;
-  user_id: string;
-  fecha_emisor: string;
-  total: number;
-  iva_total: number;
-  estado: string;
-}
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import ExportarPDFButton from "@/components/ExportarPDFButton";
 
-interface ClienteRow {
-  id: string;
-  nombre: string;
-  email: string;
-}
+export default function FacturaDetallePage() {
+  const params = useParams();
+  const router = useRouter();
+  const { id } = params;
+  const [factura, setFactura] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-interface SiiLog {
-  estado: string;
-  codigo: string;
-  descripcion: string;
-  enviado_at: string;
-}
+  useEffect(() => {
+    if (!id) return;
 
-// Firmamos Page de forma genérica para evitar el choque con PageProps intern
-export default async function Page(props: any) {
-  const facturaId = props.params.id;
-  const supabase = createServerComponentClient({ cookies });
+    const fetchFactura = async () => {
+      try {
+        const res = await fetch(`/api/facturas/${id}`);
+        const data = await res.json();
+        if (data.success) {
+          setFactura(data.factura);
+        } else {
+          alert("No se pudo cargar la factura: " + data.message);
+        }
+      } catch (error) {
+        console.error("Error cargando factura:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // Cargo la factura
-  const { data: facturaData, error: facturaError } = await supabase
-    .from("facturas")
-    .select("*")
-    .eq("id", facturaId)
-    .single();
-  if (facturaError || !facturaData) {
-    return (
-      <Layout>
-        <p className="p-6">Error cargando factura.</p>
-      </Layout>
-    );
-  }
-  const factura = facturaData as FacturaRow;
+    fetchFactura();
+  }, [id]);
 
-  // Cargo el cliente asociado
-  const { data: clienteData } = await supabase
-    .from("clientes")
-    .select("id, nombre, email")
-    .eq("id", factura.user_id)
-    .single();
-  const cliente = (clienteData as ClienteRow) || null;
-
-  // Cargo logs del SII
-  const { data: logsData } = await supabase
-    .from("sii_logs")
-    .select("*")
-    .eq("factura_id", facturaId);
-  const siiLogs = (logsData as SiiLog[]) || [];
+  if (loading) return <p className="p-6">Cargando factura...</p>;
+  if (!factura) return <p className="p-6">Factura no encontrada.</p>;
 
   return (
-    <Layout>
-      <main className="p-6">
-        <h1 className="text-2xl font-bold mb-4">Factura {factura.id}</h1>
-        <p>
-          <strong>Fecha emisor:</strong>{" "}
-          {new Date(factura.fecha_emisor).toLocaleDateString()}
-        </p>
-        <p>
-          <strong>Cliente:</strong> {cliente?.nombre} ({cliente?.email})
-        </p>
-        <p>
-          <strong>Total:</strong> {factura.total.toFixed(2)} € |{" "}
-          <strong>IVA:</strong> {factura.iva_total.toFixed(2)} €
-        </p>
-        <p>
-          <strong>Estado:</strong> {factura.estado}
-        </p>
+    <div className="max-w-3xl mx-auto p-6 bg-white shadow rounded">
+      <h1 className="text-2xl font-bold mb-4">Detalle de Factura</h1>
 
-        <h2 className="mt-6 text-xl font-semibold">Logs SII</h2>
-        <ul className="list-disc pl-5">
-          {siiLogs.map((log, i) => (
-            <li key={i}>
-              {log.estado} – {log.codigo}: {log.descripcion} (
-              {new Date(log.enviado_at).toLocaleString()})
-            </li>
-          ))}
-          {siiLogs.length === 0 && <li>No hay registros.</li>}
-        </ul>
-      </main>
-    </Layout>
+      <div className="mb-6">
+        <p><strong>Número:</strong> {factura.numero}</p>
+        <p><strong>Fecha emisión:</strong> {factura.fecha_emisor}</p>
+        <p><strong>Fecha vencimiento:</strong> {factura.fecha_vencim}</p>
+        <p><strong>Cliente ID:</strong> {factura.cliente_id}</p>
+        <p><strong>Concepto:</strong> {factura.concepto}</p>
+        <p><strong>Total:</strong> {factura.total} €</p>
+      </div>
+
+      {/* Botón Exportar PDF */}
+      <ExportarPDFButton factura={factura} />
+
+      <button
+        onClick={() => router.back()}
+        className="mt-4 ml-4 bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400"
+      >
+        ← Volver
+      </button>
+    </div>
   );
 }
