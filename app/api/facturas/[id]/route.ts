@@ -1,17 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-);
-
-// ✅ GET - Obtener factura por ID
 export async function GET(
   request: Request,
-  context: { params: { id: string } }
+  context: any
 ) {
-  const { id } = context.params;
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_KEY!
+  );
+  const id = context?.params?.id;
 
   try {
     const { data, error } = await supabase
@@ -21,31 +19,27 @@ export async function GET(
       .single();
 
     if (error) {
-      return NextResponse.json(
-        { success: false, message: error.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ success: false, message: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, factura: data });
   } catch (err: any) {
-    return NextResponse.json(
-      { success: false, message: err.message || "Error desconocido" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
   }
 }
 
-// ✅ PUT - Actualizar factura completa
 export async function PUT(
   request: Request,
-  context: { params: { id: string } }
+  context: any
 ) {
-  const { id } = context.params;
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_KEY!
+  );
+  const id = context?.params?.id;
 
   try {
     const body = await request.json();
-
     const { data, error } = await supabase
       .from("facturas")
       .update(body)
@@ -54,10 +48,7 @@ export async function PUT(
       .single();
 
     if (error) {
-      return NextResponse.json(
-        { success: false, message: error.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ success: false, message: error.message }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -66,23 +57,22 @@ export async function PUT(
       factura: data,
     });
   } catch (err: any) {
-    return NextResponse.json(
-      { success: false, message: err.message || "Error desconocido" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
   }
 }
 
-// ✅ PATCH - Actualizar solo campos específicos
 export async function PATCH(
   request: Request,
-  context: { params: { id: string } }
+  context: any
 ) {
-  const { id } = context.params;
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_KEY!
+  );
+  const id = context?.params?.id;
 
   try {
     const body = await request.json();
-
     const { data, error } = await supabase
       .from("facturas")
       .update(body)
@@ -91,21 +81,15 @@ export async function PATCH(
       .single();
 
     if (error) {
-      return NextResponse.json(
-        { success: false, message: error.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ success: false, message: error.message }, { status: 500 });
     }
 
     return NextResponse.json({
       success: true,
-      message: "Campos de factura actualizados",
+      message: "Campos específicos actualizados",
       factura: data,
     });
   } catch (err: any) {
-    return NextResponse.json(
-      { success: false, message: err.message || "Error desconocido" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
   }
 }
