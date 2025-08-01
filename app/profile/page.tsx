@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ChangeEvent } from "react";
+import { useState, ChangeEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export default function ProfilePage() {
@@ -8,14 +8,52 @@ export default function ProfilePage() {
 
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
   const [form, setForm] = useState({
+    // Datos personales
     nombre: "",
     apellidos: "",
     telefono: "",
     idioma: "Español",
+    // Datos empresa / remitente para facturación
+    nombre_empresa: "",
+    nif: "",
+    direccion: "",
+    ciudad: "",
+    provincia: "",
+    cp: "",
+    pais: "España",
+    email: "",
+    web: "",
   });
 
   const [loading, setLoading] = useState(false);
+
+  // Al montar, cargamos el perfil existente
+  useEffect(() => {
+    async function fetchPerfil() {
+      const res = await fetch("/api/usuario/perfil");
+      const data = await res.json();
+      if (data.success && data.perfil) {
+        setForm({
+          nombre: data.perfil.nombre || "",
+          apellidos: data.perfil.apellidos || "",
+          telefono: data.perfil.telefono || "",
+          idioma: data.perfil.idioma || "Español",
+          nombre_empresa: data.perfil.nombre_empresa || "",
+          nif: data.perfil.nif || "",
+          direccion: data.perfil.direccion || "",
+          ciudad: data.perfil.ciudad || "",
+          provincia: data.perfil.provincia || "",
+          cp: data.perfil.cp || "",
+          pais: data.perfil.pais || "España",
+          email: data.perfil.email || "",
+          web: data.perfil.web || "",
+        });
+      }
+    }
+    fetchPerfil();
+  }, []);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -30,25 +68,21 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSave = () => {
-    console.log("Guardando perfil:", form, photoFile);
-  };
-
-  const handleUploadCert = async (e: React.FormEvent<HTMLFormElement>, type: string) => {
-    e.preventDefault();
-    const fileInput = (e.currentTarget.elements.namedItem("file") as HTMLInputElement);
-    if (!fileInput.files?.length) return;
-
-    const formData = new FormData();
-    formData.append("file", fileInput.files[0]);
-    formData.append("type", type);
-
+  const handleSave = async () => {
     setLoading(true);
-    const res = await fetch("/api/certs/upload", { method: "POST", body: formData });
+    const body = JSON.stringify(form);
+    const res = await fetch("/api/usuario/perfil", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
     setLoading(false);
-
-    if (res.ok) alert("Subida completada ✅");
-    else alert("Error al subir ❌");
+    if (res.ok) {
+      alert("Perfil guardado ✅");
+      router.refresh();
+    } else {
+      alert("Error al guardar el perfil ❌");
+    }
   };
 
   return (
@@ -60,9 +94,10 @@ export default function ProfilePage() {
           <div className="flex items-center space-x-4">
             <button
               onClick={handleSave}
-              className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+              disabled={loading}
+              className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
             >
-              Guardar
+              {loading ? "Guardando..." : "Guardar"}
             </button>
             <button
               onClick={() => router.back()}
@@ -73,7 +108,6 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Form */}
         <div className="px-6 py-8 space-y-6">
           {/* Foto */}
           <div className="flex items-center space-x-6">
@@ -100,9 +134,7 @@ export default function ProfilePage() {
           {/* Datos básicos */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Nombre
-              </label>
+              <label className="block text-sm font-medium text-gray-700">Nombre</label>
               <input
                 type="text"
                 name="nombre"
@@ -112,9 +144,7 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Apellidos
-              </label>
+              <label className="block text-sm font-medium text-gray-700">Apellidos</label>
               <input
                 type="text"
                 name="apellidos"
@@ -124,9 +154,7 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Teléfono
-              </label>
+              <label className="block text-sm font-medium text-gray-700">Teléfono</label>
               <input
                 type="tel"
                 name="telefono"
@@ -136,9 +164,7 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Idioma
-              </label>
+              <label className="block text-sm font-medium text-gray-700">Idioma</label>
               <select
                 name="idioma"
                 value={form.idioma}
@@ -153,76 +179,98 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Certificados */}
-          <div className="border-t pt-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Certificados Digitales</h3>
-
-            <form onSubmit={(e) => handleUploadCert(e, "certificate")} className="mb-4">
-              <label className="block mb-1">Certificado (.pem)</label>
-              <input type="file" name="file" accept=".pem" className="mb-2" />
-              <button
-                disabled={loading}
-                className="bg-blue-600 text-white px-4 py-2 rounded"
-              >
-                Subir Certificado
-              </button>
-            </form>
-
-            <form onSubmit={(e) => handleUploadCert(e, "private-key")}>
-              <label className="block mb-1">Clave privada (.pem)</label>
-              <input type="file" name="file" accept=".pem" className="mb-2" />
-              <button
-                disabled={loading}
-                className="bg-blue-600 text-white px-4 py-2 rounded"
-              >
-                Subir Clave Privada
-              </button>
-            </form>
-          </div>
-
-          {/* Secciones adicionales */}
-          <div className="space-y-8">
-            {/* Primeros pasos */}
-            <div className="border-t pt-4">
-              <div className="flex items-center text-sm font-medium text-gray-700">
-                <span className="mr-2">▶</span>PRIMEROS PASOS
-              </div>
-              <p className="mt-1 text-sm text-gray-500">
-                Visualiza u oculta la sección de primeros pasos para aprender a
-                utilizar Clientum
-              </p>
-              <button className="mt-2 px-4 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">
-                Ocultar
-              </button>
+          {/* Datos de la Empresa (Remitente) */}
+          <h3 className="text-md font-semibold mt-4">Datos de la Empresa (Remitente)</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Nombre / Razón Social</label>
+              <input
+                type="text"
+                name="nombre_empresa"
+                value={form.nombre_empresa}
+                onChange={handleChange}
+                className="mt-1 block w-full border rounded px-3 py-2"
+              />
             </div>
-
-            {/* Contraseña */}
-            <div className="border-t pt-4">
-              <div className="flex items-center text-sm font-medium text-gray-700">
-                <span className="mr-2">🔒</span>CONTRASEÑA
-              </div>
-              <p className="mt-1 text-sm text-gray-500">
-                Modifica la contraseña con la que accedes actualmente a tu
-                cuenta en Clientum.
-              </p>
-              <button className="mt-2 px-4 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">
-                Crear contraseña
-              </button>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">NIF / CIF</label>
+              <input
+                type="text"
+                name="nif"
+                value={form.nif}
+                onChange={handleChange}
+                className="mt-1 block w-full border rounded px-3 py-2"
+              />
             </div>
-
-            {/* Verificación en dos pasos */}
-            <div className="border-t pt-4">
-              <div className="flex items-center text-sm font-medium text-gray-700">
-                <span className="mr-2">🛡️</span>VERIFICACIÓN EN DOS PASOS
-              </div>
-              <p className="mt-1 text-sm text-gray-500">
-                Aumenta la seguridad de tu cuenta con la verificación en dos
-                pasos. Además de tu contraseña, necesitarás un código secreto
-                enviado a tu móvil o email para acceder.
-              </p>
-              <button className="mt-2 px-4 py-2 bg-gray-100 rounded hover:bg-gray-200 text-sm">
-                Activar
-              </button>
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-gray-700">Dirección</label>
+              <input
+                type="text"
+                name="direccion"
+                value={form.direccion}
+                onChange={handleChange}
+                className="mt-1 block w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Ciudad</label>
+              <input
+                type="text"
+                name="ciudad"
+                value={form.ciudad}
+                onChange={handleChange}
+                className="mt-1 block w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Provincia</label>
+              <input
+                type="text"
+                name="provincia"
+                value={form.provincia}
+                onChange={handleChange}
+                className="mt-1 block w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Código Postal</label>
+              <input
+                type="text"
+                name="cp"
+                value={form.cp}
+                onChange={handleChange}
+                className="mt-1 block w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">País</label>
+              <input
+                type="text"
+                name="pais"
+                value={form.pais}
+                onChange={handleChange}
+                className="mt-1 block w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Email</label>
+              <input
+                type="email"
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+                className="mt-1 block w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Web</label>
+              <input
+                type="text"
+                name="web"
+                value={form.web}
+                onChange={handleChange}
+                className="mt-1 block w-full border rounded px-3 py-2"
+              />
             </div>
           </div>
         </div>
