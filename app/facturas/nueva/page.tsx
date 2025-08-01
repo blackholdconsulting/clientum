@@ -29,6 +29,7 @@ export default function NuevaFacturaPage() {
       iva_percent: iva,
       iva_total: ivaTotal,
       total,
+      estado: "borrador",
       servicio: "",
       base: baseImponible,
       iva,
@@ -55,65 +56,53 @@ export default function NuevaFacturaPage() {
     });
 
     const data = await response.json();
-    setMensaje(data.success ? "✅ Factura generada correctamente" : "❌ Error: " + data.message);
+    if (data.success) {
+      setMensaje("✅ Factura generada correctamente");
+    } else {
+      setMensaje("❌ Error guardando factura: " + data.message);
+    }
   };
 
   return (
     <div className="max-w-4xl mx-auto mt-6 bg-white shadow-md rounded-xl p-8">
-      <header className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-700">Crear Factura</h1>
-        <div className="space-x-2">
-          <button className="bg-green-500 text-white px-4 py-2 rounded-lg shadow hover:bg-green-600">
-            Exportar PDF
-          </button>
-          <button className="bg-indigo-500 text-white px-4 py-2 rounded-lg shadow hover:bg-indigo-600">
-            Enviar Verifactu
-          </button>
-          <button className="bg-gray-600 text-white px-4 py-2 rounded-lg shadow hover:bg-gray-700">
-            Facturae
-          </button>
-        </div>
-      </header>
+      <h1 className="text-3xl font-bold mb-4">Crear Factura</h1>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         <input
           placeholder="Serie"
           value={serie}
           onChange={(e) => setSerie(e.target.value)}
-          className="border p-3 rounded-lg focus:ring-2 focus:ring-indigo-400"
+          className="border p-3 rounded-lg"
         />
         <input
           placeholder="Número"
           value={numero}
           onChange={(e) => setNumero(e.target.value)}
-          className="border p-3 rounded-lg focus:ring-2 focus:ring-indigo-400"
+          className="border p-3 rounded-lg"
         />
         <input
           type="date"
           value={fechaEmisor}
           onChange={(e) => setFechaEmisor(e.target.value)}
-          className="border p-3 rounded-lg focus:ring-2 focus:ring-indigo-400"
+          className="border p-3 rounded-lg"
         />
         <input
           type="date"
           value={fechaVencimiento}
           onChange={(e) => setFechaVencimiento(e.target.value)}
-          className="border p-3 rounded-lg focus:ring-2 focus:ring-indigo-400"
+          className="border p-3 rounded-lg"
         />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 mb-4">
         <input
           placeholder="Emisor"
           value={emisor}
           onChange={(e) => setEmisor(e.target.value)}
-          className="border p-3 rounded-lg focus:ring-2 focus:ring-indigo-400"
+          className="border p-3 rounded-lg col-span-2"
         />
         <input
           placeholder="Receptor (ID del cliente)"
           value={receptor}
           onChange={(e) => setReceptor(e.target.value)}
-          className="border p-3 rounded-lg focus:ring-2 focus:ring-indigo-400"
+          className="border p-3 rounded-lg col-span-2"
         />
       </div>
 
@@ -121,7 +110,7 @@ export default function NuevaFacturaPage() {
         placeholder="Concepto"
         value={concepto}
         onChange={(e) => setConcepto(e.target.value)}
-        className="border p-3 rounded-lg w-full mb-4 focus:ring-2 focus:ring-indigo-400"
+        className="border p-3 rounded-lg w-full mb-4"
       />
 
       <div className="grid grid-cols-3 gap-4 mb-4">
@@ -130,29 +119,29 @@ export default function NuevaFacturaPage() {
           placeholder="Unidades"
           value={unidades}
           onChange={(e) => setUnidades(Number(e.target.value))}
-          className="border p-3 rounded-lg focus:ring-2 focus:ring-indigo-400"
+          className="border p-3 rounded-lg"
         />
         <input
           type="number"
           placeholder="Precio"
           value={precio}
           onChange={(e) => setPrecio(Number(e.target.value))}
-          className="border p-3 rounded-lg focus:ring-2 focus:ring-indigo-400"
+          className="border p-3 rounded-lg"
         />
         <input
           type="number"
           placeholder="IVA %"
           value={iva}
           onChange={(e) => setIva(Number(e.target.value))}
-          className="border p-3 rounded-lg focus:ring-2 focus:ring-indigo-400"
+          className="border p-3 rounded-lg"
         />
       </div>
 
       <button
         onClick={handleGenerarFactura}
-        className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg shadow hover:bg-blue-700 transition-all"
+        className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700"
       >
-        💾 Guardar Factura
+        Guardar Factura
       </button>
 
       {mensaje && (
@@ -163,3 +152,4 @@ export default function NuevaFacturaPage() {
     </div>
   );
 }
+
