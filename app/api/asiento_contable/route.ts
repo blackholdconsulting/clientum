@@ -1,10 +1,10 @@
 // app/api/asiento_contable/route.ts
 
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { supabase } from "@/lib/supabaseServer";
 
 export async function GET() {
-  const { data, error } = await supabaseServer
+  const { data, error } = await supabase
     .from("asiento_contable")
     .select("*")
     .order("fecha", { ascending: false });
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     haber,
   } = await request.json();
 
-  const { error } = await supabaseServer
+  const { error } = await supabase
     .from("asiento_contable")
     .insert([
       { user_id, factura_id, fecha, cuenta_id, descripcion, debe, haber },
