@@ -167,7 +167,6 @@ export default function NuevaFacturaPage() {
       <h1 className="text-2xl font-semibold mb-6">Crear Factura</h1>
 
       <form onSubmit={handleGuardar} className="bg-white p-6 rounded shadow space-y-6" ref={refFactura}>
-        {/* Cabecera */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <input
             value={serie}
@@ -204,7 +203,6 @@ export default function NuevaFacturaPage() {
           </select>
         </div>
 
-        {/* Líneas */}
         {lineas.map(l => (
           <div key={l.id} className="grid grid-cols-1 lg:grid-cols-6 gap-4 items-end">
             <input
@@ -263,7 +261,6 @@ export default function NuevaFacturaPage() {
           + Añadir línea
         </button>
 
-        {/* Totales + opciones */}
         <div className="flex justify-between items-center">
           <div className="space-y-1 text-sm">
             <div>Subtotal: {subtotal.toFixed(2)} €</div>
@@ -330,7 +327,6 @@ export default function NuevaFacturaPage() {
         </div>
       </form>
 
-      {/* Botones de acción */}
       <div className="mt-4 flex gap-3">
         <button
           onClick={handleGuardar}
@@ -354,7 +350,6 @@ export default function NuevaFacturaPage() {
         )}
       </div>
 
-      {/* Modal QR */}
       <Transition show={qrOpen} as={Fragment}>
         <Dialog
           open
@@ -367,7 +362,7 @@ export default function NuevaFacturaPage() {
             enterFrom="opacity-0"
             enterTo="opacity-100"
           >
-            <Dialog.Overlay className="fixed inset-0 bg-black bg-opacity-30" />
+            <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" />
           </Transition.Child>
           <Transition.Child
             as={Fragment}
