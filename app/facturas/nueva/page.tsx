@@ -33,7 +33,7 @@ interface Linea {
 }
 
 export default function NuevaFacturaPage() {
-  const refFactura = useRef<HTMLDivElement>(null);
+  const refFactura = useRef<HTMLFormElement>(null);
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [perfil, setPerfil]       = useState<Perfil | null>(null);
