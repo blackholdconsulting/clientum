@@ -1,3 +1,4 @@
+// app/contabilidad/asientos/nuevo/page.tsx
 "use client";
 
 import React, { FormEvent, useState } from "react";
@@ -18,20 +19,25 @@ export default function NuevoAsientoPage() {
     e.preventDefault();
     setLoading(true);
 
-    const payload = { fecha, factura_id: facturaId, cuenta_id: cuentaId, descripcion, debe, haber };
+    // Inserta el asiento
+    const { error } = await supabase
+      .from("asiento_contable")
+      .insert([
+        {
+          fecha,
+          factura_id: facturaId,
+          cuenta_id: cuentaId,
+          descripcion,
+          debe,
+          haber,
+        },
+      ]);
 
-    const res = await fetch("/api/asiento_contable", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (res.ok) {
-      router.push("/contabilidad/asientos");
-    } else {
-      const err = await res.json();
-      alert("Error: " + (err.message || JSON.stringify(err)));
+    if (error) {
+      alert("Error guardando asiento: " + error.message);
       setLoading(false);
+    } else {
+      router.push("/contabilidad/asientos");
     }
   };
 
@@ -39,6 +45,7 @@ export default function NuevoAsientoPage() {
     <div className="p-6 max-w-md mx-auto">
       <h1 className="text-2xl font-semibold mb-4">Nuevo Asiento Contable</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Fecha */}
         <div>
           <label className="block mb-1">Fecha</label>
           <input
@@ -50,6 +57,7 @@ export default function NuevoAsientoPage() {
           />
         </div>
 
+        {/* Factura */}
         <div>
           <label className="block mb-1">Factura</label>
           <select
@@ -59,10 +67,11 @@ export default function NuevoAsientoPage() {
             className="w-full border px-3 py-2 rounded"
           >
             <option value="">-- Selecciona factura --</option>
-            {/* Aquí podrías mapear facturas si las cargas del servidor */}
+            {/* Mapear aquí tus facturas */}
           </select>
         </div>
 
+        {/* Cuenta */}
         <div>
           <label className="block mb-1">Cuenta contable</label>
           <select
@@ -72,10 +81,11 @@ export default function NuevoAsientoPage() {
             className="w-full border px-3 py-2 rounded"
           >
             <option value="">-- Selecciona cuenta --</option>
-            {/* Aquí mapearías tus cuentas */}
+            {/* Mapear aquí tus cuentas */}
           </select>
         </div>
 
+        {/* Descripción */}
         <div>
           <label className="block mb-1">Descripción</label>
           <input
@@ -87,6 +97,7 @@ export default function NuevoAsientoPage() {
           />
         </div>
 
+        {/* Debe / Haber */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block mb-1">Debe</label>
