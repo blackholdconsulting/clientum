@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseServer";
 
 interface LineaRaw {
-  factura_id: string;
   serie: string;
   numero: string;
   fecha: string;
@@ -12,7 +11,7 @@ interface LineaRaw {
   cantidad: number;
   precio: number;
   iva_porc: number;
-  cuenta_id: string;
+  cuenta_id: number;
 }
 
 interface Asiento {
@@ -30,15 +29,14 @@ export default function InformeAsientosPage() {
 
   useEffect(() => {
     (async () => {
-      // 1) Traer todas las líneas de todas las facturas del usuario
+      // 1) Obtener facturas con sus líneas
       const { data, error } = await supabase
-        .from<LineaRaw>("facturas")
+        .from("facturas")
         .select(`
-          id:serie || numero,
           serie,
           numero,
           fecha,
-          lineas:lineas (
+          lineas (
             descripcion,
             cantidad,
             precio,
@@ -54,34 +52,37 @@ export default function InformeAsientosPage() {
         return;
       }
 
-      // 2) Desenrollar las líneas y mapear a asiento contable
+      // 2) Mapear a asientos contables
       const rows: Asiento[] = [];
-      data?.forEach(f => {
+      data?.forEach((f: any) => {
         const facturaNum = `${f.serie}${f.numero}`;
-        const fecha       = f.fecha.split("T")[0];
+        const fecha = f.fecha.split("T")[0];
 
-        f.lineas.forEach(l => {
-          const base  = l.cantidad * l.precio;
-          const iva   = base * (l.iva_porc / 100);
-          // a) Débito: cliente (cuenta 430) por total factura
+        (f.lineas as LineaRaw[]).forEach(l => {
+          const base = l.cantidad * l.precio;
+          const iva = base * (l.iva_porc / 100);
+
+          // Débito cliente (430)
           rows.push({
             factura: facturaNum,
             fecha,
             cuenta: "430 CLIENTES",
             descripcion: l.descripcion,
             debe: +(base + iva).toFixed(2),
-            haber: 0
+            haber: 0,
           });
-          // b) Crédito: ventas (la cuenta de la línea) por base
+
+          // Crédito ventas (cuenta_id)
           rows.push({
             factura: facturaNum,
             fecha,
-            cuenta: l.cuenta_id,
+            cuenta: String(l.cuenta_id),
             descripcion: l.descripcion,
             debe: 0,
-            haber: +base.toFixed(2)
+            haber: +base.toFixed(2),
           });
-          // c) Crédito: IVA repercutido (cuenta 477) por importe IVA
+
+          // Crédito IVA repercutido (477)
           if (iva > 0) {
             rows.push({
               factura: facturaNum,
@@ -89,7 +90,7 @@ export default function InformeAsientosPage() {
               cuenta: "477 IVA REPERCUTIDO",
               descripcion: `${l.iva_porc}% IVA`,
               debe: 0,
-              haber: +iva.toFixed(2)
+              haber: +iva.toFixed(2),
             });
           }
         });
@@ -101,23 +102,23 @@ export default function InformeAsientosPage() {
   }, []);
 
   if (loading) return <div className="p-6">Cargando informe…</div>;
-  if (!asientos.length) return <div className="p-6">No hay datos para mostrar.</div>;
+  if (asientos.length === 0) return <div className="p-6">No hay datos.</div>;
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-4">Informe de Asientos Contables</h1>
-      <div className="overflow-auto">
-        <table className="min-w-full table-auto border-collapse">
+      <h1 className="text-2xl font-semibold mb-4">Informe Asientos Contables</h1>
+      <div className="overflow-x-auto">
+        <table className="w-full table-auto border-collapse">
           <thead>
             <tr className="bg-gray-100">
               {["Factura","Fecha","Cuenta","Descripción","Debe","Haber"].map(h => (
-                <th key={h} className="px-3 py-2 border text-left">{h}</th>
+                <th key={h} className="px-3 py-2 border">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {asientos.map((a,i) => (
-              <tr key={i} className={i % 2 ? "bg-white" : "bg-gray-50"}>
+            {asientos.map((a, i) => (
+              <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                 <td className="px-3 py-2 border">{a.factura}</td>
                 <td className="px-3 py-2 border">{a.fecha}</td>
                 <td className="px-3 py-2 border">{a.cuenta}</td>
