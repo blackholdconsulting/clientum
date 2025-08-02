@@ -1,13 +1,15 @@
+// app/contabilidad/asientos/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseServer";
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
 
 interface Asiento {
-  factura: string;
+  id: string;
   fecha: string;
+  factura: string;
   cuenta: string;
   descripcion: string;
   debe: number;
@@ -15,81 +17,122 @@ interface Asiento {
 }
 
 export default function AsientosPage() {
-  const router = useRouter();
   const [asientos, setAsientos] = useState<Asiento[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase
-        .from<"asiento_contable", Asiento>("asiento_contable")
-        .select("factura,fecha,cuenta,descripcion,debe,haber");
+        .from("asiento_contable")
+        .select(`
+          id,
+          fecha,
+          factura_id:factura_id (serie, numero),
+          cuenta_id:cuenta_id (nombre),
+          descripcion,
+          debe,
+          haber
+        `)
+        .order("fecha", { ascending: false });
+
       if (error) {
-        console.error(error);
-      } else {
-        setAsientos(data);
+        console.error("Error al cargar asientos:", error);
+      } else if (data) {
+        setAsientos(
+          data.map((row: any) => ({
+            id: row.id,
+            fecha: row.fecha,
+            factura: `${row.factura_id.serie}${row.factura_id.numero}`,
+            cuenta: row.cuenta_id.nombre,
+            descripcion: row.descripcion,
+            debe: row.debe,
+            haber: row.haber,
+          }))
+        );
       }
       setLoading(false);
     })();
   }, []);
 
-  const handleAdd = () => {
-    router.push("/contabilidad/asientos/nuevo");
-  };
-
-  const exportCsv = () => {
-    const headers = ["Fecha", "Factura", "Cuenta", "Descripción", "Debe", "Haber"];
+  const exportCSV = () => {
+    if (!asientos.length) return;
+    const header = ["Fecha", "Factura", "Cuenta", "Descripción", "Debe", "Haber"];
     const rows = asientos.map(a => [
       a.fecha,
       a.factura,
       a.cuenta,
       a.descripcion,
-      a.debe.toString(),
-      a.haber.toString(),
+      a.debe.toFixed(2),
+      a.haber.toFixed(2),
     ]);
+
     const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers, ...rows].map(r => r.join(",")).join("\n");
-    const link = document.createElement("a");
-    link.href = encodeURI(csvContent);
-    link.download = "asientos_contables.csv";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+      [header, ...rows]
+        .map(r => r.map(c => `"${c.replace(/"/g, '""')}"`).join(","))
+        .join("\n") + "\n";
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `asientos_contables_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
-  const exportPdf = () => {
-    const doc = new jsPDF();
+  const exportPDF = () => {
+    if (!asientos.length) return;
+    const doc = new jsPDF({ unit: "pt", format: "letter" });
     doc.setFontSize(14);
-    doc.text("Asientos Contables", 14, 20);
-    (doc as any).autoTable({
-      startY: 30,
-      head: [["Fecha","Factura","Cuenta","Descripción","Debe","Haber"]],
-      body: asientos.map(a => [a.fecha, a.factura, a.cuenta, a.descripcion, a.debe, a.haber]),
+    doc.text("Asientos Contables", 40, 40);
+
+    const tableColumn = ["Fecha", "Factura", "Cuenta", "Descripción", "Debe", "Haber"];
+    const tableRows = asientos.map(a => [
+      a.fecha,
+      a.factura,
+      a.cuenta,
+      a.descripcion,
+      a.debe.toFixed(2),
+      a.haber.toFixed(2),
+    ]);
+
+    // simple table
+    let startY = 60;
+    doc.setFontSize(10);
+    // header
+    tableColumn.forEach((col, i) => {
+      doc.text(col, 40 + i * 80, startY);
     });
-    doc.save("asientos_contables.pdf");
+    // rows
+    tableRows.forEach((row, ri) => {
+      row.forEach((cell, ci) => {
+        doc.text(cell, 40 + ci * 80, startY + 20 + ri * 20);
+      });
+    });
+
+    doc.save(`asientos_contables_${new Date().toISOString().slice(0,10)}.pdf`);
   };
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-semibold">Asientos Contables</h1>
         <div className="space-x-2">
-          <button
-            onClick={handleAdd}
-            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
+          <Link
+            href="/contabilidad/asientos/nuevo"
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded"
           >
             + Añadir Asiento
-          </button>
+          </Link>
           <button
-            onClick={exportCsv}
-            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
+            onClick={exportCSV}
+            className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded"
           >
             Exportar CSV
           </button>
           <button
-            onClick={exportPdf}
-            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+            onClick={exportPDF}
+            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded"
           >
             Exportar PDF
           </button>
@@ -98,31 +141,35 @@ export default function AsientosPage() {
 
       {loading ? (
         <p>Cargando...</p>
+      ) : asientos.length === 0 ? (
+        <p>No hay asientos registrados.</p>
       ) : (
-        <table className="w-full table-auto border">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="px-4 py-2">Fecha</th>
-              <th className="px-4 py-2">Factura</th>
-              <th className="px-4 py-2">Cuenta</th>
-              <th className="px-4 py-2">Descripción</th>
-              <th className="px-4 py-2">Debe</th>
-              <th className="px-4 py-2">Haber</th>
-            </tr>
-          </thead>
-          <tbody>
-            {asientos.map((a, i) => (
-              <tr key={i} className={i % 2 === 0 ? "" : "bg-gray-50"}>
-                <td className="px-4 py-2">{a.fecha}</td>
-                <td className="px-4 py-2">{a.factura}</td>
-                <td className="px-4 py-2">{a.cuenta}</td>
-                <td className="px-4 py-2">{a.descripcion}</td>
-                <td className="px-4 py-2 text-right">{a.debe.toFixed(2)}€</td>
-                <td className="px-4 py-2 text-right">{a.haber.toFixed(2)}€</td>
+        <div className="overflow-x-auto">
+          <table className="w-full table-auto border-collapse">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border px-2 py-1">Fecha</th>
+                <th className="border px-2 py-1">Factura</th>
+                <th className="border px-2 py-1">Cuenta</th>
+                <th className="border px-2 py-1">Descripción</th>
+                <th className="border px-2 py-1 text-right">Debe</th>
+                <th className="border px-2 py-1 text-right">Haber</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {asientos.map(a => (
+                <tr key={a.id}>
+                  <td className="border px-2 py-1">{a.fecha}</td>
+                  <td className="border px-2 py-1">{a.factura}</td>
+                  <td className="border px-2 py-1">{a.cuenta}</td>
+                  <td className="border px-2 py-1">{a.descripcion}</td>
+                  <td className="border px-2 py-1 text-right">{a.debe.toFixed(2)}</td>
+                  <td className="border px-2 py-1 text-right">{a.haber.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
