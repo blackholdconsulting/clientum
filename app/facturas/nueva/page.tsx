@@ -1,20 +1,14 @@
 "use client";
 
-import React, {
-  Fragment,
-  useState,
-  useEffect,
-  ChangeEvent,
-  FormEvent,
-  useRef,
-} from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, Fragment, FormEvent, useRef } from "react";
 import Link from "next/link";
 import { Dialog, Transition } from "@headlessui/react";
 import QRCode from "react-qr-code";
-import html2pdf from "html2pdf.js";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import { supabase } from "@/lib/supabaseClient";
 
-interface Cliente { id: string; nombre: string }
+interface Cliente { id: string; nombre: string; }
 interface Perfil {
   nombre_empresa: string;
   nif: string;
@@ -27,7 +21,7 @@ interface Perfil {
   email: string;
   web: string;
 }
-interface Cuenta { id: string; codigo: string; nombre: string }
+interface Cuenta { id: string; codigo: string; nombre: string; }
 interface Linea {
   id: number;
   descripcion: string;
@@ -38,143 +32,172 @@ interface Linea {
 }
 
 export default function NuevaFacturaPage() {
-  const router = useRouter();
-  const facturaRef = useRef<HTMLDivElement>(null);
+  const refFactura = useRef<HTMLDivElement>(null);
 
   // maestros
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [perfil, setPerfil] = useState<Perfil | null>(null);
-  const [cuentas, setCuentas] = useState<Cuenta[]>([]);
+  const [perfil, setPerfil]     = useState<Perfil|null>(null);
+  const [cuentas, setCuentas]   = useState<Cuenta[]>([]);
 
   // formulario
-  const [serie, setSerie] = useState("");
-  const [numero, setNumero] = useState("");
+  const [serie, setSerie]       = useState("");
+  const [numero, setNumero]     = useState("");
   const [clienteId, setClienteId] = useState("");
-  const [tipo, setTipo] = useState<"factura"|"simplificada">("factura");
-  const [lineas, setLineas] = useState<Linea[]>([
-    { id:Date.now(), descripcion:"", cantidad:1, precio:0, iva:21, cuentaId:"" }
+  const [tipo, setTipo]         = useState<"factura"|"simplificada">("factura");
+  const [lineas, setLineas]     = useState<Linea[]>([
+    { id: Date.now(), descripcion: "", cantidad: 1, precio: 0, iva: 21, cuentaId: "" }
   ]);
   const [customFields, setCustomFields] = useState(false);
   const [mensajeFinal, setMensajeFinal] = useState(false);
-  const [textoFinal, setTextoFinal] = useState("");
-  const [showQROption, setShowQROption] = useState(false);
-  const [catCuenta, setCatCuenta] = useState("");
-  const [qrOpen, setQROpen] = useState(false);
+  const [textoFinal, setTextoFinal]     = useState("");
+  const [showQR, setShowQR]             = useState(false);
+  const [catCuenta, setCatCuenta]       = useState("");
+  const [qrOpen, setQrOpen]             = useState(false);
 
   // totales
-  const subtotal = lineas.reduce((s,l)=>s + l.cantidad*l.precio,0);
-  const ivaTotal = lineas.reduce((s,l)=>s + l.cantidad*l.precio*(l.iva/100),0);
-  const total = subtotal + ivaTotal;
+  const subtotal = lineas.reduce((s,l)=> s + l.cantidad*l.precio, 0);
+  const ivaTotal = lineas.reduce((s,l)=> s + l.cantidad*l.precio*(l.iva/100), 0);
+  const total     = subtotal + ivaTotal;
 
-  // load inicial
+  // carga inicial
   useEffect(()=>{
-    fetch("/api/clientes").then(r=>r.json()).then(d=>setClientes(d.clientes||[]));
-    fetch("/api/usuario/perfil").then(r=>r.json()).then(d=>d.perfil && setPerfil(d.perfil));
-    fetch("/api/contabilidad/cuadro-de-cuentas").then(r=>r.json()).then(d=>setCuentas(d.cuentas||[]));
+    supabase.from("clientes").select("id,nombre")
+      .then(({ data }) => setClientes(data||[]));
+    supabase.from("perfil").select().single()
+      .then(({ data }) => data && setPerfil({
+        nombre_empresa: data.nombre_empresa,
+        nif:             data.nif,
+        direccion:       data.direccion,
+        ciudad:          data.ciudad,
+        provincia:       data.provincia,
+        cp:              data.cp,
+        pais:            data.pais,
+        telefono:        data.telefono,
+        email:           data.email,
+        web:             data.web,
+      }));
+    supabase.from("cuentas").select("id,codigo,nombre")
+      .then(({ data }) => setCuentas(data||[]));
   },[]);
 
-  // líneas handlers
-  const addLinea = ()=> setLineas(prev=>[...prev,{ id:Date.now(), descripcion:"", cantidad:1, precio:0, iva:21, cuentaId:"" }]);
-  const removeLinea = (id:number)=> setLineas(prev=>prev.filter(l=>l.id!==id));
-  const updateLinea = (id:number, field:keyof Omit<Linea,"id">, value:string|number)=>
-    setLineas(prev=>prev.map(l=>l.id===id ? {...l,[field]:value} : l));
+  // línea handlers
+  const addLinea = () => setLineas(l => [
+    ...l,
+    { id: Date.now(), descripcion:"", cantidad:1, precio:0, iva:21, cuentaId:"" }
+  ]);
+  const removeLinea = (id:number) => setLineas(l => l.filter(x=>x.id!==id));
+  const updateLinea = (id:number, field:keyof Omit<Linea,"id">, value:string|number) =>
+    setLineas(l => l.map(x=> x.id===id ? {...x,[field]:value} : x));
 
-  // submit e API
-  const handleSubmit = async(e:FormEvent)=>{
+  // guardar + generar QR
+  const handleGuardar = async(e:FormEvent) => {
     e.preventDefault();
-    const payload = {
+    const { data: { user } } = await supabase.auth.getUser();
+    if(!user?.id){
+      alert("Usuario no autenticado");
+      return;
+    }
+    // inserta factura
+    const { error } = await supabase.from("facturas").insert([{
+      user_id:        user.id,
       serie, numero,
-      cliente_id: clienteId,
-      tipo,
-      lineas: lineas.map(l=>({
+      cliente_id:     clienteId,
+      tipo:           tipo.toUpperCase(),
+      lineas:         lineas.map(l=>({
         descripcion:l.descripcion, cantidad:l.cantidad,
         precio:l.precio, iva_porc:l.iva, cuenta_id:l.cuentaId
       })),
-      custom_fields: customFields,
-      mensaje_final: mensajeFinal ? textoFinal : null,
-      show_qr: showQROption,
-      categoria_cuenta: catCuenta
-    };
-    const res = await fetch("/api/facturas",{
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if(!data.success){
-      alert("Error guardando factura: "+ data.error);
-      return;
+      custom_fields:  customFields,
+      mensaje_final:  mensajeFinal ? textoFinal : null,
+      show_qr:        showQR,
+      categoria_id:   catCuenta
+    }]);
+    if(error){
+      return alert("Error guardando factura: "+error.message);
     }
-    setQROpen(true);
+    setQrOpen(true);
   };
 
-  // exportar PDF
+  // exportar PDF con jsPDF + autoTable
   const exportPDF = () => {
-    if(!facturaRef.current) return;
-    html2pdf()
-      .set({ margin:10, filename:`${serie}${numero}.pdf`, html2canvas:{ scale:2 } })
-      .from(facturaRef.current)
-      .save();
+    if(!refFactura.current) return;
+
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("Factura "+serie+numero, 14, 20);
+
+    // remitente
+    doc.setFontSize(10);
+    perfil && doc.text(
+      [
+        perfil.nombre_empresa,
+        perfil.direccion,
+        `${perfil.cp} ${perfil.ciudad} (${perfil.provincia})`,
+        perfil.pais,
+        `NIF/CIF: ${perfil.nif}`,
+        `Tel: ${perfil.telefono}`,
+        `Email: ${perfil.email}`,
+        `Web: ${perfil.web}`,
+      ], 14, 30
+    );
+
+    // tabla líneas
+    autoTable(doc, {
+      startY: 70,
+      head: [["Desc.", "Cant.", "Precio", "IVA", "Total", "Cuenta"]],
+      body: lineas.map(l=>[
+        l.descripcion,
+        String(l.cantidad),
+        l.precio.toFixed(2),
+        `${l.iva}%`,
+        (l.cantidad*l.precio*(1+l.iva/100)).toFixed(2),
+        cuentas.find(c=>c.id===l.cuentaId)?.codigo||"",
+      ]),
+    });
+
+    // totales abajo
+    const finalY = doc.lastAutoTable.finalY || 100;
+    doc.text(`Subtotal: ${subtotal.toFixed(2)} €`, 140, finalY+10, { align:"right" });
+    doc.text(`IVA: ${ivaTotal.toFixed(2)} €`, 140, finalY+16, { align:"right" });
+    doc.setFontSize(12);
+    doc.text(`Total: ${total.toFixed(2)} €`, 140, finalY+24, { align:"right" });
+
+    // QR si corresponde
+    if(showQR){
+      const qrData = `${window.location.origin}/facturas/${serie}${numero}`;
+      doc.addImage(
+        QRCode.toDataURL(qrData), "PNG",
+        14, finalY+32, 40, 40
+      );
+    }
+
+    doc.save(`factura-${serie}${numero}.pdf`);
   };
 
   return (
     <div className="p-6">
-      <Link href="/facturas" className="text-blue-600 hover:underline mb-4 block">
+      <Link href="/facturas" className="text-blue-600 mb-4 inline-block">
         ← Volver a Facturas
       </Link>
       <h1 className="text-2xl font-semibold mb-6">Crear Factura</h1>
 
-      {/* Contenedor que convertiremos en PDF */}
-      <div ref={facturaRef} className="bg-white p-6 rounded shadow space-y-6">
+      <form onSubmit={handleGuardar} className="bg-white p-6 rounded shadow space-y-6" ref={refFactura}>
 
-        {/* Cabecera */}
+        {/* cabecera */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <input
-            value={serie} onChange={e=>setSerie(e.target.value)}
-            placeholder="Serie" className="border rounded px-3 py-2" required
-          />
-          <input
-            value={numero} onChange={e=>setNumero(e.target.value)}
-            placeholder="Número" className="border rounded px-3 py-2" required
-          />
-          <select
-            value={clienteId} onChange={e=>setClienteId(e.target.value)}
-            className="border rounded px-3 py-2" required
-          >
+          <input value={serie}       onChange={e=>setSerie(e.target.value)}       placeholder="Serie" className="border rounded px-3 py-2" required />
+          <input value={numero}      onChange={e=>setNumero(e.target.value)}      placeholder="Número" className="border rounded px-3 py-2" required />
+          <select value={clienteId}  onChange={e=>setClienteId(e.target.value)}  className="border rounded px-3 py-2" required>
             <option value="">Selecciona Cliente</option>
-            {clientes.map(c=>
-              <option key={c.id} value={c.id}>{c.nombre}</option>
-            )}
+            {clientes.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
-          <select
-            value={tipo} onChange={e=>setTipo(e.target.value as any)}
-            className="border rounded px-3 py-2"
-          >
+          <select value={tipo}       onChange={e=>setTipo(e.target.value as any)} className="border rounded px-3 py-2">
             <option value="factura">Factura</option>
-            <option value="simplificada">Factura Simplificada</option>
+            <option value="simplificada">Factura Simple</option>
           </select>
         </div>
 
-        {/* Datos remitente */}
-        {perfil ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-gray-700 text-sm">
-            <div>
-              <strong>{perfil.nombre_empresa}</strong><br/>
-              {perfil.direccion}<br/>
-              {perfil.cp} {perfil.ciudad} ({perfil.provincia})<br/>
-              {perfil.pais}
-            </div>
-            <div>
-              NIF/CIF: {perfil.nif}<br/>
-              Tel: {perfil.telefono}<br/>
-              Email: {perfil.email}<br/>
-              Web: {perfil.web}
-            </div>
-          </div>
-        ) : (
-          <p>Cargando datos del remitente…</p>
-        )}
-
-        {/* Líneas */}
+        {/* líneas */}
         {lineas.map(l=>(
           <div key={l.id} className="grid grid-cols-1 lg:grid-cols-6 gap-4 items-end">
             <input
@@ -182,7 +205,6 @@ export default function NuevaFacturaPage() {
               onChange={e=>updateLinea(l.id,"descripcion",e.target.value)}
               placeholder="Descripción"
               className="col-span-2 border rounded px-3 py-2"
-              required
             />
             <input
               type="number" min={1}
@@ -212,80 +234,40 @@ export default function NuevaFacturaPage() {
             >
               <option value="">Cuenta contable</option>
               {cuentas.map(c=>(
-                <option key={c.id} value={c.id}>
-                  {c.codigo} – {c.nombre}
-                </option>
+                <option key={c.id} value={c.id}>{c.codigo} – {c.nombre}</option>
               ))}
             </select>
-            <button
-              type="button"
-              onClick={()=>removeLinea(l.id)}
-              className="text-red-600 hover:underline"
-            >
-              Eliminar
-            </button>
+            <button type="button" onClick={()=>removeLinea(l.id)} className="text-red-600">Eliminar</button>
           </div>
         ))}
-        <button
-          type="button"
-          onClick={addLinea}
-          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-        >
-          + Añadir línea
-        </button>
+        <button type="button" onClick={addLinea} className="px-4 py-2 bg-green-500 text-white rounded">+ Añadir línea</button>
 
-        {/* Totales */}
-        <div className="text-right space-y-1 text-sm">
-          <div>Subtotal: {subtotal.toFixed(2)} €</div>
-          <div>IVA: {ivaTotal.toFixed(2)} €</div>
-          <div className="font-bold">Total: {total.toFixed(2)} €</div>
+        {/* totales + opciones */}
+        <div className="flex justify-between items-center">
+          <div className="space-y-1 text-sm text-gray-700">
+            <div>Subtotal: {subtotal.toFixed(2)} €</div>
+            <div>IVA: {ivaTotal.toFixed(2)} €</div>
+            <div className="font-semibold">Total: {total.toFixed(2)} €</div>
+          </div>
+          <div className="space-y-2">
+            <label><input type="checkbox" checked={customFields} onChange={()=>setCustomFields(!customFields)} className="mr-1"/>Campos personalizados</label>
+            <label><input type="checkbox" checked={mensajeFinal} onChange={()=>setMensajeFinal(!mensajeFinal)} className="mr-1"/>Mensaje final</label>
+            <label><input type="checkbox" checked={showQR} onChange={()=>setShowQR(!showQR)} className="mr-1"/>Mostrar QR</label>
+          </div>
         </div>
 
-        {/* Opciones extra */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-          <label className="inline-flex items-center">
-            <input
-              type="checkbox"
-              checked={customFields}
-              onChange={()=>setCustomFields(!customFields)}
-              className="mr-2"
-            />
-            Campos personalizados
-          </label>
-          <label className="inline-flex items-center">
-            <input
-              type="checkbox"
-              checked={mensajeFinal}
-              onChange={()=>setMensajeFinal(!mensajeFinal)}
-              className="mr-2"
-            />
-            Añadir mensaje al final
-          </label>
-          <label className="inline-flex items-center">
-            <input
-              type="checkbox"
-              checked={showQROption}
-              onChange={()=>setShowQROption(!showQROption)}
-              className="mr-2"
-            />
-            Mostrar QR acceso Portal
-          </label>
-        </div>
-        {customFields && (
-          <div className="border rounded p-4 text-sm">Aquí tus inputs personalizados</div>
-        )}
+        {customFields && <div className="border p-4 text-sm">[Tus inputs personalizados aquí]</div>}
         {mensajeFinal && (
           <textarea
             value={textoFinal}
             onChange={e=>setTextoFinal(e.target.value)}
-            placeholder="Tu mensaje al final"
+            placeholder="Texto al final"
             className="w-full border rounded px-3 py-2 text-sm"
           />
         )}
 
-        {/* Categorizar */}
         <div className="text-sm">
-          <label className="block mb-1">Categorizar (Cuenta contable global)</label>
+          <label className="block mb-1">Categorizar (global)</label>
           <select
             value={catCuenta}
             onChange={e=>setCatCuenta(e.target.value)}
@@ -293,93 +275,34 @@ export default function NuevaFacturaPage() {
           >
             <option value="">Selecciona cuenta</option>
             {cuentas.map(c=>(
-              <option key={c.id} value={c.id}>
-                {c.codigo} – {c.nombre}
-              </option>
+              <option key={c.id} value={c.id}>{c.codigo} – {c.nombre}</option>
             ))}
           </select>
         </div>
+      </form>
 
+      {/* acciones */}
+      <div className="mt-4 flex gap-3">
+        <button onClick={handleGuardar} className="px-6 py-2 bg-blue-600 text-white rounded">Guardar Factura</button>
+        <button onClick={exportPDF}    className="px-6 py-2 bg-yellow-600 text-white rounded">Exportar PDF</button>
+        {showQR && <button onClick={()=>setQrOpen(true)} className="px-6 py-2 bg-gray-600 text-white rounded">Ver QR</button>}
       </div>
 
-      {/* Botones de acción */}
-      <div className="flex space-x-4 mt-4">
-        <button
-          onClick={handleSubmit}
-          className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
-          Guardar Factura
-        </button>
-        <button
-          onClick={exportPDF}
-          className="px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
-        >
-          Exportar PDF
-        </button>
-        {showQROption && (
-          <button
-            onClick={()=>setQROpen(true)}
-            className="px-6 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-          >
-            Ver QR
-          </button>
-        )}
-      </div>
-
-      {/* Modal QR */}
-      <Transition appear show={qrOpen} as={Fragment}>
-        <Dialog
-          as="div"
-          className="fixed inset-0 z-40 overflow-y-auto"
-          onClose={()=>setQROpen(false)}
-        >
-          <div className="min-h-screen px-4 text-center">
-            {/* Backdrop */}
-            <Transition.Child
-              as={Fragment}
-              enter="ease-out duration-300"
-              enterFrom="opacity-0"
-              enterTo="opacity-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100"
-              leaveTo="opacity-0"
-            >
-              <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" />
-            </Transition.Child>
-            {/* Centering */}
-            <span className="inline-block h-screen align-middle" aria-hidden="true">
-              &#8203;
-            </span>
-            <Transition.Child
-              as={Fragment}
-              enter="ease-out duration-300"
-              enterFrom="opacity-0 scale-95"
-              enterTo="opacity-100 scale-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100 scale-100"
-              leaveTo="opacity-0 scale-95"
-            >
-              <Dialog.Panel className="inline-block w-full max-w-sm p-6 my-8 overflow-hidden text-left align-middle bg-white rounded shadow-xl">
-                <Dialog.Title as="h3" className="text-lg font-medium">
-                  Acceso a la factura
-                </Dialog.Title>
-                <div className="mt-4 text-center">
-                  <QRCode value={`${window.location.origin}/facturas/${serie}${numero}`} />
-                  <p className="mt-2 text-sm text-gray-500">
-                    Escanea para ver tu factura online
-                  </p>
-                </div>
-                <div className="mt-4 text-right">
-                  <button
-                    onClick={()=>setQROpen(false)}
-                    className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
-                  >
-                    Cerrar
-                  </button>
-                </div>
-              </Dialog.Panel>
-            </Transition.Child>
-          </div>
+      {/* modal QR */}
+      <Transition show={qrOpen} as={Fragment}>
+        <Dialog open onClose={()=>setQrOpen(false)} className="fixed inset-0 z-50 flex items-center justify-center">
+          <Transition.Child as={Fragment} enter="transition-opacity" enterFrom="opacity-0" enterTo="opacity-100">
+            <Dialog.Overlay className="fixed inset-0 bg-black bg-opacity-30"/>
+          </Transition.Child>
+          <Transition.Child as={Fragment} enter="transition-transform" enterFrom="scale-95" enterTo="scale-100">
+            <div className="bg-white p-6 rounded shadow text-center">
+              <Dialog.Title className="text-lg font-semibold mb-4">Acceso factura</Dialog.Title>
+              <QRCode value={`${window.location.origin}/facturas/${serie}${numero}`} />
+              <div className="mt-4">
+                <button onClick={()=>setQrOpen(false)} className="px-4 py-2 bg-gray-200 rounded">Cerrar</button>
+              </div>
+            </div>
+          </Transition.Child>
         </Dialog>
       </Transition>
     </div>
