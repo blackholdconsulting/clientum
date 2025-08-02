@@ -1,21 +1,39 @@
 // app/api/asiento_contable/route.ts
+
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 export async function GET() {
   const { data, error } = await supabaseServer
     .from("asiento_contable")
-    .select("*, cuentas:cuenta_id(codigo,nombre), facturas:id(serie,numero)")
-    .order("created_at", { ascending: false });
-  if (error) return NextResponse.json({ error }, { status: 500 });
-  return NextResponse.json(data);
+    .select("*")
+    .order("fecha", { ascending: false });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ asientos: data });
 }
 
 export async function POST(request: Request) {
-  const payload = await request.json();
-  const { data, error } = await supabaseServer
+  const {
+    user_id,
+    factura_id,
+    fecha,
+    cuenta_id,
+    descripcion,
+    debe,
+    haber,
+  } = await request.json();
+
+  const { error } = await supabaseServer
     .from("asiento_contable")
-    .insert([{ ...payload }]);
-  if (error) return NextResponse.json({ error }, { status: 500 });
-  return NextResponse.json(data[0]);
+    .insert([
+      { user_id, factura_id, fecha, cuenta_id, descripcion, debe, haber },
+    ]);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ success: true }, { status: 201 });
 }
