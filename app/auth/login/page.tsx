@@ -6,20 +6,17 @@ import { supabase } from "@/lib/supabaseBrowser";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       alert(error.message);
-    } else {
-      router.push("/");
+      return;
     }
+    router.push("/"); // o donde sea tu dashboard
   };
 
   return (
