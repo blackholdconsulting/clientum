@@ -1,62 +1,79 @@
+// app/auth/login/page.tsx
 "use client";
 
 import { useState } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseBrowser";
 
 export default function LoginPage() {
-  const supabase = createClientComponentClient();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setErrorMsg(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
+    setLoading(false);
+
     if (error) {
-      setError(error.message);
+      setErrorMsg(error.message);
     } else {
-      router.push("/dashboard");
+      // Si el login es exitoso, redirigimos al inicio
+      router.push("/");
     }
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8">
-      <h1 className="text-2xl font-semibold mb-6">Iniciar sesión</h1>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <form
-        onSubmit={handleLogin}
-        className="flex flex-col items-center space-y-4"
+        onSubmit={handleSubmit}
+        className="bg-white p-8 rounded shadow-md w-full max-w-md space-y-6"
       >
-        <input
-          className="border border-gray-300 p-2 rounded w-64"
-          type="email"
-          placeholder="Correo"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          className="border border-gray-300 p-2 rounded w-64"
-          type="password"
-          placeholder="Contraseña"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
+        <h1 className="text-2xl font-semibold text-center">Iniciar sesión</h1>
+        {errorMsg && (
+          <p className="text-red-600 text-sm text-center">{errorMsg}</p>
+        )}
+        <div>
+          <label className="block text-sm font-medium mb-1">Correo</label>
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Contraseña
+          </label>
+          <input
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring"
+          />
+        </div>
         <button
           type="submit"
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+          disabled={loading}
+          className={`w-full py-2 rounded text-white ${
+            loading ? "bg-blue-300" : "bg-blue-600 hover:bg-blue-700"
+          }`}
         >
-          Entrar
+          {loading ? "Cargando..." : "Entrar"}
         </button>
-        {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
       </form>
-    </main>
+    </div>
   );
 }
