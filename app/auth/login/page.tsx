@@ -16,33 +16,40 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Leer callbackUrl y redirigir si ya hay sesión
   useEffect(() => {
+    // lee callbackUrl de la query string (solo en cliente)
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const cb = params.get('callbackUrl');
       if (cb) setCallbackUrl(cb);
     }
+    // si ya hay sesión, redirige
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        router.replace(callbackUrl);
-      }
+      console.log('Existing session:', session);
+      if (session) router.replace(callbackUrl);
     });
   }, [router, supabase, callbackUrl]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Submitting login for', email);
     setLoading(true);
     setError(null);
 
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
+    try {
+      const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
+      console.log('Supabase response:', { data, err });
+      setLoading(false);
 
-    if (err) {
-      console.error('Login error:', err);
-      setError(err.message);
-    } else {
-      router.push(callbackUrl);
+      if (err) {
+        setError(err.message);
+      } else {
+        router.push(callbackUrl);
+      }
+    } catch (ex) {
+      console.error('Login exception:', ex);
+      setError((ex as Error).message);
+      setLoading(false);
     }
   };
 
@@ -51,9 +58,7 @@ export default function LoginPage() {
       <div className="max-w-md w-full bg-white p-8 rounded-lg shadow">
         <h1 className="text-2xl font-semibold mb-6 text-center">Iniciar sesión</h1>
         {error && (
-          <div className="mb-4 text-red-600 text-sm bg-red-100 p-2 rounded">
-            {error}
-          </div>
+          <div className="mb-4 text-red-600 text-sm bg-red-100 p-2 rounded">{error}</div>
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -61,10 +66,10 @@ export default function LoginPage() {
             <input
               id="email"
               type="email"
-              required
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="mt-1 block w-full border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full border-gray-300 rounded p-2"
+              required
             />
           </div>
           <div>
@@ -72,16 +77,18 @@ export default function LoginPage() {
             <input
               id="password"
               type="password"
-              required
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="mt-1 block w-full border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full border-gray-300 rounded p-2"
+              required
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-2 rounded text-white ${loading ? 'bg-blue-300' : 'bg-blue-600 hover:bg-blue-700'}`}
+            className={`w-full py-2 rounded text-white ${
+              loading ? 'bg-blue-300' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
