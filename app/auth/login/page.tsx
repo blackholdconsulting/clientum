@@ -1,6 +1,7 @@
+// app/auth/login/page.tsx
 'use client';
 
-// Fuerza que Next.js NO prerenderice y permita hooks de cliente
+// Evita que Next.js prerenderice o realice SSR en esta página
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
@@ -17,12 +18,15 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Tomamos la URL de retorno o usamos /dashboard por defecto
   const callbackUrl = searchParams.get('callbackUrl') ?? '/dashboard';
 
+  // Si ya hay sesión, redirigimos automáticamente
   useEffect(() => {
-    // redirige si ya tienes sesión
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) router.replace(callbackUrl);
+      if (session) {
+        router.replace(callbackUrl);
+      }
     });
   }, [router, supabase, callbackUrl]);
 
