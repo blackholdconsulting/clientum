@@ -1,11 +1,14 @@
 // app/auth/login/page.tsx
 'use client';
 
+// Evita que Next intente prerenderizar esta página y permita usar useSearchParams directamente
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 
-export default function Page() {
+export default function LoginPage() {
   const supabase = createPagesBrowserClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -32,7 +35,10 @@ export default function Page() {
     setLoading(true);
     setError(null);
 
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: err } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     setLoading(false);
 
     if (err) {
