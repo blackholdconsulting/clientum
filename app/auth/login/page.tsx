@@ -1,44 +1,47 @@
-'use client'
+// app/auth/login/page.tsx
+'use client';
 
-import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 
-export default function LoginPage() {
-  const supabase = createClientComponentClient()
-  const router = useRouter()
-  const search = useSearchParams()
+export default function Page() {
+  const supabase = createPagesBrowserClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  // Lee el callbackUrl (por defecto /dashboard)
-  const callbackUrl = search.get('callbackUrl') || '/dashboard'
+  // Lee callbackUrl o usa /dashboard por defecto
+  const callbackUrl = searchParams.get('callbackUrl') ?? '/dashboard';
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-    setLoading(false)
-
-    if (err) {
-      setError(err.message)
-    } else {
-      // Redirige tras login
-      router.push(callbackUrl)
-    }
-  }
-
-  // Si ya estás logueado, redirige inmediatamente
+  // Si ya tienes sesión, redirige inmediatamente
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) router.replace(callbackUrl)
-    })
-  }, [router, supabase, callbackUrl])
+      if (session) {
+        router.replace(callbackUrl);
+      }
+    });
+  }, [router, supabase, callbackUrl]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+
+    if (err) {
+      console.error('Login error:', err);
+      setError(err.message);
+    } else {
+      router.push(callbackUrl);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -82,5 +85,5 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
-  )
+  );
 }
