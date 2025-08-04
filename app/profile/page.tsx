@@ -22,7 +22,7 @@ interface Perfil {
   pais?: string;
   email?: string;
   web?: string;
-  firma?: string; // URL pública
+  firma?: string; // ruta en storage
 }
 
 export default function PerfilPage() {
@@ -35,51 +35,48 @@ export default function PerfilPage() {
   const [error, setError] = useState<string | null>(null);
   const [uploadingFirma, setUploadingFirma] = useState(false);
 
+  // Carga inicial (solo una vez)
   useEffect(() => {
-    const load = async () => {
-      // 1) Sesión
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         router.replace('/auth/login?callbackUrl=/profile');
         return;
       }
 
-      // 2) GET perfil
       const res = await fetch('/api/usuario/perfil');
       const json = await res.json();
       if (!json.success) {
         setError(json.error);
       } else if (json.perfil) {
-        setPerfil(json.perfil);
+        const p: Perfil = json.perfil;
+        // si tiene firma cargada en storage, obtenemos URL pública
+        if (p.firma) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('firmas')
+            .getPublicUrl(p.firma);
+          p.firma = publicUrl;
+        }
+        setPerfil(p);
       }
-
-      // 3) Si hay firma guardada en storage, carga su URL pública
-      if (json.perfil?.firma) {
-        const { data } = supabase.storage
-          .from('firmas')
-          .getPublicUrl(json.perfil.firma);
-        setPerfil((p) => ({ ...p, firma: data.publicUrl }));
-      }
-
       setLoading(false);
-    };
-    load();
+    })();
   }, [router, supabase]);
 
   const handleChange = (field: keyof Perfil, value: string) => {
-    setPerfil((p) => ({ ...p, [field]: value }));
+    setPerfil(p => ({ ...p, [field]: value }));
   };
 
   const handleSave = async () => {
     setSaving(true);
     setError(null);
 
+    // enviamos solo los campos que queramos
+    const payload = { ...perfil };
     const res = await fetch('/api/usuario/perfil', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(perfil),
+      body: JSON.stringify(payload),
     });
     const json = await res.json();
     if (!json.success) {
@@ -94,40 +91,29 @@ export default function PerfilPage() {
     setUploadingFirma(true);
     setError(null);
 
-    // 1) Sesión
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       setError('No estás autenticado');
       setUploadingFirma(false);
       return;
     }
 
-    // 2) Subida al bucket "firmas"
-    const filename = `${session.user.id}/firma-${Date.now()}.png`;
+    const filename = `${session.user.id}/firma.png`;
     const { error: uploadErr } = await supabase.storage
       .from('firmas')
       .upload(filename, file, { upsert: true });
 
     if (uploadErr) {
       setError(uploadErr.message);
-      setUploadingFirma(false);
-      return;
+    } else {
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('firmas').getPublicUrl(filename);
+
+      // Solo actualizamos el estado con la URL pública
+      setPerfil(p => ({ ...p, firma: publicUrl }));
     }
 
-    // 3) Obtén URL pública y actualiza estado & base de datos
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from('firmas').getPublicUrl(filename);
-    setPerfil((p) => ({ ...p, firma: filename }));
-    handleChange('firma', filename);
-
-    // Opcional: guarda inmediatamente el perfil con la nueva firma
-    await handleSave();
-
-    // Finalmente, carga la URL pública para mostrarla
-    setPerfil((p) => ({ ...p, firma: publicUrl }));
     setUploadingFirma(false);
   };
 
@@ -138,18 +124,37 @@ export default function PerfilPage() {
   return (
     <div className="p-6 max-w-3xl mx-auto bg-white rounded shadow space-y-6">
       <h1 className="text-2xl font-semibold">Mi perfil</h1>
-
       {error && (
         <div className="text-red-600 bg-red-100 p-2 rounded">{error}</div>
       )}
 
-      {/* Formulario resumido (campos previos ...) */}
-      {/* Datos personales, empresa, etc. */}
+      {/* Campos de ejemplo */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <label className="block">
+          Nombre
+          <input
+            type="text"
+            value={perfil.nombre || ''}
+            onChange={e => handleChange('nombre', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block">
+          Apellidos
+          <input
+            type="text"
+            value={perfil.apellidos || ''}
+            onChange={e => handleChange('apellidos', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        {/* … resto de campos … */}
+      </div>
 
       {/* Firma electrónica */}
       <div>
-        <h2 className="text-lg font-medium mb-2">Firma Electrónica</h2>
-        <div className="flex items-center gap-4">
+        <h2 className="text-lg font-medium">Firma Electrónica</h2>
+        <div className="flex items-center gap-4 mt-2">
           {perfil.firma ? (
             <img
               src={perfil.firma}
@@ -171,7 +176,6 @@ export default function PerfilPage() {
         </div>
       </div>
 
-      {/* Botón Guardar (para resto del perfil) */}
       <button
         onClick={handleSave}
         disabled={saving}
