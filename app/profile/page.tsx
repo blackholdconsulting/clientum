@@ -22,7 +22,7 @@ interface Perfil {
   pais?: string;
   email?: string;
   web?: string;
-  firma?: string; 
+  firma?: string;
 }
 
 export default function PerfilPage() {
@@ -39,10 +39,12 @@ export default function PerfilPage() {
 
   useEffect(() => {
     (async () => {
-      // 1) Comprobar sesión
+      console.log('🔍 Iniciando check de sesión');
       const { data: { session }, error: sessErr } = await supabase.auth.getSession();
+      console.log('🔍 Resultado sesión:', session, sessErr);
+
       if (sessErr || !session) {
-        // si no hay sesión y no estamos YA en /auth/login, redirigir
+        console.log('🚨 No hay sesión, redirigiendo');
         if (path !== '/auth/login') {
           router.replace(`/auth/login?callbackUrl=${encodeURIComponent('/profile')}`);
         }
@@ -50,15 +52,18 @@ export default function PerfilPage() {
         return;
       }
 
-      // 2) Cargar perfil de nuestra API
+      console.log('✅ Sesión OK, cargando perfil…');
       const res = await fetch('/api/usuario/perfil');
+      console.log('🌐 Fetch perfil status:', res.status);
       const json = await res.json();
+      console.log('🌐 JSON perfil:', json);
+
       if (!json.success) {
+        console.log('❌ Error API perfil:', json.error);
         setError(json.error);
       } else if (json.perfil) {
+        console.log('✅ Perfil existente:', json.perfil);
         const p: Perfil = json.perfil;
-
-        // 3) Si tiene firma en storage, obtenemos su URL pública
         if (p.firma) {
           const { data: { publicUrl } } = supabase.storage
             .from('firmas')
@@ -67,7 +72,7 @@ export default function PerfilPage() {
         }
         setPerfil(p);
       } else {
-        // no existía perfil: precargamos el email del usuario
+        console.log('ℹ️ No existe perfil en la tabla, inicializando email');
         setPerfil((p) => ({
           ...p,
           email: session.user.email ?? '',
@@ -75,6 +80,7 @@ export default function PerfilPage() {
       }
 
       setLoading(false);
+      console.log('🔚 Fin useEffect, loading=false');
     })();
   }, [router, supabase, path]);
 
@@ -136,7 +142,7 @@ export default function PerfilPage() {
       {error && <div className="text-red-600 bg-red-100 p-2 rounded">{error}</div>}
       {success && <div className="text-green-600 bg-green-100 p-2 rounded">Perfil guardado ✔️</div>}
 
-      {/* Todos tus campos aquí (nombre, apellidos, teléfono, idioma, empresa, etc.) */}
+      {/* Datos personales */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <label className="block">
           Nombre
@@ -156,7 +162,27 @@ export default function PerfilPage() {
             className="w-full border rounded p-2 mt-1"
           />
         </label>
-        {/* ... resto de campos ... */}
+        <label className="block sm:col-span-2">
+          Teléfono
+          <input
+            type="text"
+            value={perfil.telefono || ''}
+            onChange={(e) => handleChange('telefono', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block sm:col-span-2">
+          Idioma
+          <select
+            value={perfil.idioma || 'Español'}
+            onChange={(e) => handleChange('idioma', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          >
+            <option>Español</option>
+            <option>Inglés</option>
+            <option>Francés</option>
+          </select>
+        </label>
       </div>
 
       {/* Email readonly */}
@@ -168,6 +194,83 @@ export default function PerfilPage() {
           readOnly
           className="w-full border rounded p-2 bg-gray-100"
         />
+      </div>
+
+      {/* Datos empresa */}
+      <h2 className="text-lg font-medium mt-6">Datos de la Empresa</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <label className="block sm:col-span-2">
+          Razón Social
+          <input
+            type="text"
+            value={perfil.nombre_empresa || ''}
+            onChange={(e) => handleChange('nombre_empresa', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block">
+          NIF / CIF
+          <input
+            type="text"
+            value={perfil.nif || ''}
+            onChange={(e) => handleChange('nif', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block sm:col-span-2">
+          Dirección
+          <input
+            type="text"
+            value={perfil.direccion || ''}
+            onChange={(e) => handleChange('direccion', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block">
+          Ciudad
+          <input
+            type="text"
+            value={perfil.ciudad || ''}
+            onChange={(e) => handleChange('ciudad', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block">
+          Provincia
+          <input
+            type="text"
+            value={perfil.provincia || ''}
+            onChange={(e) => handleChange('provincia', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block">
+          C.P.
+          <input
+            type="text"
+            value={perfil.cp || ''}
+            onChange={(e) => handleChange('cp', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block sm:col-span-2">
+          País
+          <input
+            type="text"
+            value={perfil.pais || ''}
+            onChange={(e) => handleChange('pais', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block sm:col-span-2">
+          Web
+          <input
+            type="url"
+            value={perfil.web || ''}
+            onChange={(e) => handleChange('web', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
       </div>
 
       {/* Firma electrónica */}
