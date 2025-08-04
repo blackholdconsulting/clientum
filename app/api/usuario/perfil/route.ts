@@ -1,73 +1,84 @@
 // app/api/usuario/perfil/route.ts
-import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabaseServer";
+
+import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import type { Database } from '@/lib/database.types'
 
 export async function GET() {
+  // Inicializa Supabase con las cookies de Next.js
+  const supabase = createRouteHandlerClient<Database>({ cookies })
+
+  // Obtiene la sesión actual
   const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+    data: { session },
+    error: sessionError
+  } = await supabase.auth.getSession()
+
+  if (sessionError || !session) {
     return NextResponse.json(
-      { success: false, error: authError?.message || "No autenticado" },
+      { success: false, error: 'Auth session missing!' },
       { status: 401 }
-    );
+    )
   }
 
+  // Lee el perfil asociado al user_id de la sesión
   const { data: perfil, error } = await supabase
-    .from("perfil")
-    .select("*")
-    .eq("user_id", user.id)
-    .single();
+    .from('perfil')
+    .select('*')
+    .eq('user_id', session.user.id)
+    .single()
+
+  if (error && error.code === 'PGRST116' /* no rows */) {
+    // Si no hay registro aún, devolvemos perfil null
+    return NextResponse.json({ success: true, perfil: null })
+  }
 
   if (error) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    )
   }
 
-  return NextResponse.json({ success: true, perfil });
+  return NextResponse.json({ success: true, perfil })
 }
 
 export async function POST(request: Request) {
-  const body = await request.json();
+  const supabase = createRouteHandlerClient<Database>({ cookies })
 
   const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+    data: { session },
+    error: sessionError
+  } = await supabase.auth.getSession()
+
+  if (sessionError || !session) {
     return NextResponse.json(
-      { success: false, error: authError?.message || "No autenticado" },
+      { success: false, error: 'Auth session missing!' },
       { status: 401 }
-    );
+    )
   }
 
-  const payload = {
-    user_id: user.id,
-    nombre: body.nombre,
-    apellidos: body.apellidos,
-    telefono: body.telefono,
-    idioma: body.idioma,
-    nombre_empresa: body.nombre_empresa,
-    nif: body.nif,
-    direccion: body.direccion,
-    ciudad: body.ciudad,
-    provincia: body.provincia,
-    cp: body.cp,
-    pais: body.pais,
-    email: body.email,
-    web: body.web,
-    firma: body.firma,
-    updated_at: new Date().toISOString(),
-  };
+  const body = await request.json()
 
-  const { data, error } = await supabase
-    .from("perfil")
-    .upsert(payload, { onConflict: "user_id" })
-    .single();
+  // Prepara el payload, forzando user_id
+  const payload = {
+    ...body,
+    user_id: session.user.id,
+    updated_at: new Date().toISOString(),
+  }
+
+  // Upsert: inserta o actualiza el registro según user_id
+  const { error } = await supabase
+    .from('perfil')
+    .upsert(payload, { onConflict: 'user_id' })
 
   if (error) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    )
   }
 
-  return NextResponse.json({ success: true, perfil: data });
+  return NextResponse.json({ success: true })
 }
