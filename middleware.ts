@@ -1,53 +1,45 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
+// middleware.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { getToken } from 'next-auth/jwt'
 
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next();
-  const supabase = createMiddlewareClient({ req, res });
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const { pathname } = req.nextUrl
 
-  // Rutas que requieren autenticación
-  const protectedRoutes = [
-    "/dashboard",
-    "/facturas",
-    "/clientes",
-    "/proveedores",
-    "/presupuestos",
-    "/negocio",
-    "/NOP",
-    "/impuestos",
-    "/tesoreria",
-    "/contabilidad",
-    "/chat",
-    "/RR.HH"
-  ];
-
-  if (protectedRoutes.some((route) => req.nextUrl.pathname.startsWith(route))) {
-    if (!session) {
-      const loginUrl = new URL("/auth/login", req.url);
-      return NextResponse.redirect(loginUrl);
-    }
+  // 1. Rutas públicas que no protegemos:
+  if (
+    // - Ayuda y Soporte
+    pathname === '/help' ||
+    pathname.startsWith('/help/') ||
+    // - Archivos internos de Next.js
+    pathname.startsWith('/_next/') ||
+    // - Favicon
+    pathname === '/favicon.ico' ||
+    // - Rutas de Next-Auth (login, callback, etc)
+    pathname.startsWith('/api/auth/')
+  ) {
+    return NextResponse.next()
   }
 
-  return res;
+  // 2. Comprobamos si hay sesión/token válido
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET,
+    // name: 'next-auth.session-token', // solo si cambiaste el nombre de la cookie
+  })
+
+  // 3. Si no hay token, redirigimos a login
+  if (!token) {
+    const loginUrl = new URL('/login', req.url)
+    // opcional: guarda la URL original para callback
+    loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  // 4. Si todo OK, dejamos pasar
+  return NextResponse.next()
 }
 
+// 5. Configuración: ejecutamos middleware en TODAS las rutas
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/facturas/:path*",
-    "/clientes/:path*",
-    "/proveedores/:path*",
-    "/presupuestos/:path*",
-    "/negocio/:path*",
-    "/NOP/:path*",
-    "/impuestos/:path*",
-    "/tesoreria/:path*",
-    "/contabilidad/:path*",
-    "/chat/:path*",
-    "/RR.HH/:path*",
-  ],
-};
+  matcher: '/:path*',
+}
