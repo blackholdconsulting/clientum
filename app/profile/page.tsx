@@ -35,43 +35,54 @@ export default function PerfilPage() {
   const [error, setError] = useState<string | null>(null);
   const [uploadingFirma, setUploadingFirma] = useState(false);
 
-  // Carga inicial (solo una vez)
   useEffect(() => {
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      // 1) comprueba sesión
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
         router.replace('/auth/login?callbackUrl=/profile');
         return;
       }
 
+      // 2) intenta leer perfil
       const res = await fetch('/api/usuario/perfil');
       const json = await res.json();
       if (!json.success) {
         setError(json.error);
-      } else if (json.perfil) {
-        const p: Perfil = json.perfil;
-        // si tiene firma cargada en storage, obtenemos URL pública
-        if (p.firma) {
-          const { data: { publicUrl } } = supabase.storage
-            .from('firmas')
-            .getPublicUrl(p.firma);
-          p.firma = publicUrl;
+      } else {
+        if (json.perfil) {
+          const p: Perfil = json.perfil;
+
+          // si había firma, obtén su URL pública
+          if (p.firma) {
+            const {
+              data: { publicUrl },
+            } = supabase.storage.from('firmas').getPublicUrl(p.firma);
+            p.firma = publicUrl;
+          }
+          setPerfil(p);
+        } else {
+          // no hay perfil: inicializa email desde session.user
+          setPerfil((p) => ({
+            ...p,
+            email: session.user.email ?? '',
+          }));
         }
-        setPerfil(p);
       }
       setLoading(false);
     })();
   }, [router, supabase]);
 
   const handleChange = (field: keyof Perfil, value: string) => {
-    setPerfil(p => ({ ...p, [field]: value }));
+    setPerfil((p) => ({ ...p, [field]: value }));
   };
 
   const handleSave = async () => {
     setSaving(true);
     setError(null);
 
-    // enviamos solo los campos que queramos
     const payload = { ...perfil };
     const res = await fetch('/api/usuario/perfil', {
       method: 'POST',
@@ -81,6 +92,9 @@ export default function PerfilPage() {
     const json = await res.json();
     if (!json.success) {
       setError(json.error);
+    } else {
+      // una vez guardado, recarga la página para reflejar datos reales
+      router.reload();
     }
     setSaving(false);
   };
@@ -91,7 +105,9 @@ export default function PerfilPage() {
     setUploadingFirma(true);
     setError(null);
 
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session) {
       setError('No estás autenticado');
       setUploadingFirma(false);
@@ -109,11 +125,8 @@ export default function PerfilPage() {
       const {
         data: { publicUrl },
       } = supabase.storage.from('firmas').getPublicUrl(filename);
-
-      // Solo actualizamos el estado con la URL pública
-      setPerfil(p => ({ ...p, firma: publicUrl }));
+      setPerfil((p) => ({ ...p, firma: publicUrl }));
     }
-
     setUploadingFirma(false);
   };
 
@@ -124,18 +137,19 @@ export default function PerfilPage() {
   return (
     <div className="p-6 max-w-3xl mx-auto bg-white rounded shadow space-y-6">
       <h1 className="text-2xl font-semibold">Mi perfil</h1>
+
       {error && (
         <div className="text-red-600 bg-red-100 p-2 rounded">{error}</div>
       )}
 
-      {/* Campos de ejemplo */}
+      {/* Campos personales */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <label className="block">
           Nombre
           <input
             type="text"
             value={perfil.nombre || ''}
-            onChange={e => handleChange('nombre', e.target.value)}
+            onChange={(e) => handleChange('nombre', e.target.value)}
             className="w-full border rounded p-2 mt-1"
           />
         </label>
@@ -144,11 +158,21 @@ export default function PerfilPage() {
           <input
             type="text"
             value={perfil.apellidos || ''}
-            onChange={e => handleChange('apellidos', e.target.value)}
+            onChange={(e) => handleChange('apellidos', e.target.value)}
             className="w-full border rounded p-2 mt-1"
           />
         </label>
-        {/* … resto de campos … */}
+      </div>
+
+      {/* Email (readonly) */}
+      <div>
+        <label className="block text-sm font-medium">Email</label>
+        <input
+          type="email"
+          value={perfil.email || ''}
+          readOnly
+          className="w-full border rounded p-2 bg-gray-100"
+        />
       </div>
 
       {/* Firma electrónica */}
