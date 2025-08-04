@@ -54,7 +54,6 @@ export default function PerfilPage() {
       } else {
         if (json.perfil) {
           const p: Perfil = json.perfil;
-
           // si había firma, obtén su URL pública
           if (p.firma) {
             const {
@@ -93,7 +92,6 @@ export default function PerfilPage() {
     if (!json.success) {
       setError(json.error);
     } else {
-      // una vez guardado, refresca la ruta actual para recargar datos
       router.refresh();
     }
     setSaving(false);
@@ -142,7 +140,7 @@ export default function PerfilPage() {
         <div className="text-red-600 bg-red-100 p-2 rounded">{error}</div>
       )}
 
-      {/* Campos personales */}
+      {/* Datos personales */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <label className="block">
           Nombre
@@ -162,9 +160,30 @@ export default function PerfilPage() {
             className="w-full border rounded p-2 mt-1"
           />
         </label>
+        <label className="block sm:col-span-2">
+          Teléfono
+          <input
+            type="text"
+            value={perfil.telefono || ''}
+            onChange={(e) => handleChange('telefono', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block sm:col-span-2">
+          Idioma
+          <select
+            value={perfil.idioma || 'Español'}
+            onChange={(e) => handleChange('idioma', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          >
+            <option>Español</option>
+            <option>Inglés</option>
+            <option>Francés</option>
+          </select>
+        </label>
       </div>
 
-      {/* Email (readonly) */}
+      {/* Email readonly */}
       <div>
         <label className="block text-sm font-medium">Email</label>
         <input
@@ -175,29 +194,104 @@ export default function PerfilPage() {
         />
       </div>
 
-      {/* Firma electrónica */}
-      <div>
-        <h2 className="text-lg font-medium">Firma Electrónica</h2>
-        <div className="flex items-center gap-4 mt-2">
-          {perfil.firma ? (
-            <img
-              src={perfil.firma}
-              alt="Firma"
-              className="h-24 object-contain border"
-            />
-          ) : (
-            <div className="h-24 w-48 bg-gray-100 flex items-center justify-center border">
-              Sin firma
-            </div>
-          )}
+      {/* Datos empresa */}
+      <h2 className="text-lg font-medium mt-6">Datos de la Empresa</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <label className="block sm:col-span-2">
+          Razón Social
           <input
-            type="file"
-            accept="image/*"
-            onChange={handleFirmaUpload}
-            disabled={uploadingFirma}
-            className="border rounded p-2"
+            type="text"
+            value={perfil.nombre_empresa || ''}
+            onChange={(e) => handleChange('nombre_empresa', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
           />
-        </div>
+        </label>
+        <label className="block">
+          NIF / CIF
+          <input
+            type="text"
+            value={perfil.nif || ''}
+            onChange={(e) => handleChange('nif', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block sm:col-span-2">
+          Dirección
+          <input
+            type="text"
+            value={perfil.direccion || ''}
+            onChange={(e) => handleChange('direccion', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block">
+          Ciudad
+          <input
+            type="text"
+            value={perfil.ciudad || ''}
+            onChange={(e) => handleChange('ciudad', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block">
+          Provincia
+          <input
+            type="text"
+            value={perfil.provincia || ''}
+            onChange={(e) => handleChange('provincia', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block">
+          C.P.
+          <input
+            type="text"
+            value={perfil.cp || ''}
+            onChange={(e) => handleChange('cp', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block sm:col-span-2">
+          País
+          <input
+            type="text"
+            value={perfil.pais || ''}
+            onChange={(e) => handleChange('pais', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block sm:col-span-2">
+          Web
+          <input
+            type="url"
+            value={perfil.web || ''}
+            onChange={(e) => handleChange('web', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+      </div>
+
+      {/* Firma electrónica */}
+      <h2 className="text-lg font-medium mt-6">Firma Electrónica</h2>
+      <div className="flex items-center gap-4 mt-2">
+        {perfil.firma ? (
+          <img
+            src={perfil.firma}
+            alt="Firma"
+            className="h-24 object-contain border"
+          />
+        ) : (
+          <div className="h-24 w-48 bg-gray-100 flex items-center justify-center border">
+            Sin firma
+          </div>
+        )}
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleFirmaUpload}
+          disabled={uploadingFirma}
+          className="border rounded p-2"
+        />
       </div>
 
       <button
