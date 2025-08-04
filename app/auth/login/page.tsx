@@ -1,28 +1,28 @@
 // app/auth/login/page.tsx
 'use client';
-
-// Evita que Next.js prerenderice o realice SSR en esta página
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 
 export default function LoginPage() {
   const supabase = createPagesBrowserClient();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
+  const [callbackUrl, setCallbackUrl] = useState('/dashboard');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Tomamos la URL de retorno o usamos /dashboard por defecto
-  const callbackUrl = searchParams.get('callbackUrl') ?? '/dashboard';
-
-  // Si ya hay sesión, redirigimos automáticamente
+  // Leer callbackUrl y redirigir si ya hay sesión
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const cb = params.get('callbackUrl');
+      if (cb) setCallbackUrl(cb);
+    }
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         router.replace(callbackUrl);
