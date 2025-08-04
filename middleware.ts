@@ -1,45 +1,48 @@
 // middleware.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { getToken } from 'next-auth/jwt'
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
 
 export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl
+  const { pathname } = req.nextUrl;
 
-  // 1. Rutas públicas que no protegemos:
+  // 1️⃣ Rutas públicas (sin protección):
+  //    • Ayuda y Soporte: /ayuda, /soporte o la que uses
+  //    • API de autenticación: /api/
+  //    • Activos de Next.js: /_next/
+  //    • Favicon
+  //    • Página de login (para evitar bucle)
   if (
-    // - Ayuda y Soporte
-    pathname === '/help' ||
-    pathname.startsWith('/help/') ||
-    // - Archivos internos de Next.js
-    pathname.startsWith('/_next/') ||
-    // - Favicon
-    pathname === '/favicon.ico' ||
-    // - Rutas de Next-Auth (login, callback, etc)
-    pathname.startsWith('/api/auth/')
+    pathname.startsWith("/ayuda") ||
+    pathname.startsWith("/soporte") ||
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/_next/") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/login"
   ) {
-    return NextResponse.next()
+    return NextResponse.next();
   }
 
-  // 2. Comprobamos si hay sesión/token válido
-  const token = await getToken({
-    req,
-    secret: process.env.NEXTAUTH_SECRET,
-    // name: 'next-auth.session-token', // solo si cambiaste el nombre de la cookie
-  })
+  // 2️⃣ Obtiene la sesión de Supabase
+  const res = NextResponse.next();
+  const supabase = createMiddlewareClient({ req, res });
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  // 3. Si no hay token, redirigimos a login
-  if (!token) {
-    const loginUrl = new URL('/login', req.url)
-    // opcional: guarda la URL original para callback
-    loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname)
-    return NextResponse.redirect(loginUrl)
+  // 3️⃣ Si no hay sesión, redirige a /login con callbackUrl
+  if (!session) {
+    const loginUrl = req.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.searchParams.set("callbackUrl", pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
-  // 4. Si todo OK, dejamos pasar
-  return NextResponse.next()
+  // 4️⃣ Si hay sesión, deja pasar
+  return res;
 }
 
-// 5. Configuración: ejecutamos middleware en TODAS las rutas
+// 5️⃣ Aplica este middleware a TODAS las rutas excepto las públicas
 export const config = {
-  matcher: '/:path*',
-}
+  matcher: ["/((?!_next|api|login|ayuda|soporte).*)"],
+};
