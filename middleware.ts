@@ -4,45 +4,39 @@ import type { NextRequest } from "next/server";
 import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
 
 export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  const { pathname, origin } = req.nextUrl;
 
-  // 1️⃣ Rutas públicas (sin protección):
-  //    • Ayuda y Soporte: /ayuda, /soporte o la que uses
-  //    • API de autenticación: /api/
-  //    • Activos de Next.js: /_next/
-  //    • Favicon
-  //    • Página de login (para evitar bucle)
+  // 1️⃣ RUTAS PÚBLICAS: no aplicamos protección
   if (
-    pathname.startsWith("/ayuda") ||
-    pathname.startsWith("/soporte") ||
-    pathname.startsWith("/api/") ||
-    pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico" ||
-    pathname === "/login"
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/api/") ||
+    pathname === "/login" ||
+    pathname.startsWith("/ayuda") ||
+    pathname.startsWith("/soporte")
   ) {
     return NextResponse.next();
   }
 
-  // 2️⃣ Obtiene la sesión de Supabase
+  // 2️⃣ Creamos cliente Supabase y comprobamos sesión
   const res = NextResponse.next();
   const supabase = createMiddlewareClient({ req, res });
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  // 3️⃣ Si no hay sesión, redirige a /login con callbackUrl
+  // 3️⃣ Si NO hay sesión, redirigimos al login con callback
   if (!session) {
-    const loginUrl = req.nextUrl.clone();
-    loginUrl.pathname = "/login";
+    const loginUrl = new URL("/login", origin);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // 4️⃣ Si hay sesión, deja pasar
+  // 4️⃣ Si hay sesión, dejamos pasar
   return res;
 }
 
-// 5️⃣ Aplica este middleware a TODAS las rutas excepto las públicas
+// 5️⃣ Matcher: aplica middleware a TODO excepto rutas públicas
 export const config = {
-  matcher: ["/((?!_next|api|login|ayuda|soporte).*)"],
+  matcher: ["/((?!_next/|api/|login$|ayuda|soporte).*)"],
 };
