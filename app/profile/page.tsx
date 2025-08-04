@@ -93,8 +93,8 @@ export default function PerfilPage() {
     if (!json.success) {
       setError(json.error);
     } else {
-      // una vez guardado, recarga la página para reflejar datos reales
-      router.reload();
+      // una vez guardado, refresca la ruta actual para recargar datos
+      router.refresh();
     }
     setSaving(false);
   };
