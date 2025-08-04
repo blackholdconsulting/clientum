@@ -7,7 +7,7 @@ import React, {
   useEffect,
   Fragment,
   FormEvent,
-  useRef
+  useRef,
 } from 'react';
 import Link from 'next/link';
 import { Dialog, Transition } from '@headlessui/react';
@@ -15,7 +15,7 @@ import ReactQRCode from 'react-qr-code';
 import { toDataURL } from 'qrcode';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { supabase } from '@/lib/supabaseClient';
+import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 
 interface Cliente { id: string; nombre: string; }
 interface Perfil {
@@ -41,19 +41,23 @@ interface Linea {
 }
 
 export default function NuevaFacturaPage() {
+  const supabase = createPagesBrowserClient();
   const refFactura = useRef<HTMLFormElement>(null);
 
+  // Estado de origen (para QR)
   const [origin, setOrigin] = useState('');
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setOrigin(window.location.origin);
-    }
+    // Esto solo corre en cliente
+    setOrigin(window.location.origin);
   }, []);
 
+  // Datos maestros
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  // Campos de factura
   const [serie, setSerie] = useState('');
   const [numero, setNumero] = useState('');
   const [clienteId, setClienteId] = useState('');
@@ -68,37 +72,46 @@ export default function NuevaFacturaPage() {
   const [catCuenta, setCatCuenta] = useState('');
   const [qrOpen, setQrOpen] = useState(false);
 
+  // Totales
   const subtotal = lineas.reduce((s, l) => s + l.cantidad * l.precio, 0);
   const ivaTotal = lineas.reduce((s, l) => s + l.cantidad * l.precio * (l.iva / 100), 0);
   const total = subtotal + ivaTotal;
 
+  // Carga inicial de datos
   useEffect(() => {
-    supabase.from('clientes').select('id,nombre').then(({ data }) => setClientes(data || []));
-    supabase.from('perfil').select().single().then(({ data }) => {
-      if (data) {
+    (async () => {
+      const { data: clientesData } = await supabase.from('clientes').select('id,nombre');
+      setClientes(clientesData || []);
+
+      const { data: perfilData } = await supabase.from('perfil').select().single();
+      if (perfilData) {
         setPerfil({
-          nombre_empresa: data.nombre_empresa,
-          nif: data.nif,
-          direccion: data.direccion,
-          ciudad: data.ciudad,
-          provincia: data.provincia,
-          cp: data.cp,
-          pais: data.pais,
-          telefono: data.telefono,
-          email: data.email,
-          web: data.web,
+          nombre_empresa: perfilData.nombre_empresa,
+          nif: perfilData.nif,
+          direccion: perfilData.direccion,
+          ciudad: perfilData.ciudad,
+          provincia: perfilData.provincia,
+          cp: perfilData.cp,
+          pais: perfilData.pais,
+          telefono: perfilData.telefono,
+          email: perfilData.email,
+          web: perfilData.web,
         });
       }
-    });
-    supabase.from('cuentas').select('id,codigo,nombre').then(({ data }) => setCuentas(data || []));
-  }, []);
+
+      const { data: cuentasData } = await supabase.from('cuentas').select('id,codigo,nombre');
+      setCuentas(cuentasData || []);
+
+      setLoading(false);
+    })();
+  }, [supabase]);
 
   const addLinea = () =>
-    setLineas(l => [...l, { id: Date.now(), descripcion: '', cantidad: 1, precio: 0, iva: 21, cuentaId: '' }]);
+    setLineas(ls => [...ls, { id: Date.now(), descripcion: '', cantidad: 1, precio: 0, iva: 21, cuentaId: '' }]);
   const removeLinea = (id: number) =>
-    setLineas(l => l.filter(x => x.id !== id));
-  const updateLinea = (id: number, field: keyof Omit<Linea, 'id'>, value: string | number) =>
-    setLineas(l => l.map(x => x.id === id ? { ...x, [field]: value } : x));
+    setLineas(ls => ls.filter(x => x.id !== id));
+  const updateLinea = (id: number, field: keyof Omit<Linea, 'id'>, value: any) =>
+    setLineas(ls => ls.map(x => x.id === id ? { ...x, [field]: value } : x));
 
   const handleGuardar = async (e: FormEvent) => {
     e.preventDefault();
@@ -107,6 +120,7 @@ export default function NuevaFacturaPage() {
       alert('Usuario no autenticado');
       return;
     }
+
     const { error } = await supabase.from('facturas').insert([{
       user_id: user.id,
       serie,
@@ -125,11 +139,12 @@ export default function NuevaFacturaPage() {
       show_qr: showQR,
       categoria_id: catCuenta
     }]);
+
     if (error) {
       alert('Error guardando factura: ' + error.message);
-      return;
+    } else {
+      setQrOpen(true);
     }
-    setQrOpen(true);
   };
 
   const exportPDF = async () => {
@@ -154,7 +169,7 @@ export default function NuevaFacturaPage() {
     // @ts-ignore
     autoTable(doc, {
       startY: 70,
-      head: [['Descripción', 'Cant.', 'Precio', 'IVA', 'Total', 'Cuenta']],
+      head: [['Desc.', 'Cant.', 'Precio', 'IVA', 'Total', 'Cuenta']],
       body: lineas.map(l => [
         l.descripcion,
         String(l.cantidad),
@@ -181,6 +196,10 @@ export default function NuevaFacturaPage() {
     doc.save(`factura-${serie}${numero}.pdf`);
   };
 
+  if (loading) {
+    return <div className="p-6">Cargando datos…</div>;
+  }
+
   return (
     <div className="p-6">
       <Link href="/facturas" className="text-blue-600 mb-4 inline-block">
@@ -188,16 +207,157 @@ export default function NuevaFacturaPage() {
       </Link>
       <h1 className="text-2xl font-semibold mb-6">Crear Factura</h1>
 
-      <form
-        onSubmit={handleGuardar}
-        className="bg-white p-6 rounded shadow space-y-6"
-        ref={refFactura}
-      >
-        {/* ...resto del formulario... */}
-      </form>
+      <form onSubmit={handleGuardar} ref={refFactura} className="bg-white p-6 rounded shadow space-y-6">
+        {/* Serie y número */}
+        <div className="flex gap-4">
+          <input
+            type="text"
+            placeholder="Serie"
+            value={serie}
+            onChange={e => setSerie(e.target.value)}
+            className="border rounded p-2 flex-1"
+          />
+          <input
+            type="text"
+            placeholder="Número"
+            value={numero}
+            onChange={e => setNumero(e.target.value)}
+            className="border rounded p-2 flex-1"
+          />
+        </div>
 
-      {/* Acciones */}
-      {/* ...botones guardar, exportar, etc... */}
+        {/* Cliente y tipo */}
+        <div className="flex gap-4">
+          <select
+            value={clienteId}
+            onChange={e => setClienteId(e.target.value)}
+            className="border rounded p-2 flex-1"
+          >
+            <option value="">Selecciona cliente</option>
+            {clientes.map(c => (
+              <option key={c.id} value={c.id}>{c.nombre}</option>
+            ))}
+          </select>
+          <select
+            value={tipo}
+            onChange={e => setTipo(e.target.value as any)}
+            className="border rounded p-2 flex-1"
+          >
+            <option value="factura">Factura Completa</option>
+            <option value="simplificada">Factura Simplificada</option>
+          </select>
+        </div>
+
+        {/* Líneas */}
+        {lineas.map((l, idx) => (
+          <div key={l.id} className="grid grid-cols-6 gap-2 items-end">
+            <input
+              type="text"
+              placeholder="Descripción"
+              value={l.descripcion}
+              onChange={e => updateLinea(l.id, 'descripcion', e.target.value)}
+              className="col-span-2 border rounded p-2"
+            />
+            <input
+              type="number"
+              placeholder="Cant."
+              value={l.cantidad}
+              onChange={e => updateLinea(l.id, 'cantidad', Number(e.target.value))}
+              className="border rounded p-2"
+            />
+            <input
+              type="number"
+              placeholder="Precio"
+              value={l.precio}
+              onChange={e => updateLinea(l.id, 'precio', Number(e.target.value))}
+              className="border rounded p-2"
+            />
+            <select
+              value={l.iva}
+              onChange={e => updateLinea(l.id, 'iva', Number(e.target.value))}
+              className="border rounded p-2"
+            >
+              {[4, 10, 21].map(t => <option key={t} value={t}>{t}%</option>)}
+            </select>
+            <select
+              value={l.cuentaId}
+              onChange={e => updateLinea(l.id, 'cuentaId', e.target.value)}
+              className="border rounded p-2"
+            >
+              <option value="">Cuenta</option>
+              {cuentas.map(c => <option key={c.id} value={c.id}>{c.codigo} – {c.nombre}</option>)}
+            </select>
+            <button
+              type="button"
+              onClick={() => removeLinea(l.id)}
+              className="text-red-600"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <button type="button" onClick={addLinea} className="text-blue-600">
+          + Añadir línea
+        </button>
+
+        {/* Opciones finales */}
+        <div className="flex items-center gap-4">
+          <label>
+            <input
+              type="checkbox"
+              checked={customFields}
+              onChange={e => setCustomFields(e.target.checked)}
+            /> Campos extra
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={mensajeFinal}
+              onChange={e => setMensajeFinal(e.target.checked)}
+            /> Mensaje final
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={showQR}
+              onChange={e => setShowQR(e.target.checked)}
+            /> Mostrar QR
+          </label>
+          <select
+            value={catCuenta}
+            onChange={e => setCatCuenta(e.target.value)}
+            className="border rounded p-2 ml-auto"
+          >
+            <option value="">Categoría</option>
+            {cuentas.map(c => (
+              <option key={c.id} value={c.id}>{c.codigo}</option>
+            ))}
+          </select>
+        </div>
+
+        {mensajeFinal && (
+          <textarea
+            placeholder="Texto final..."
+            value={textoFinal}
+            onChange={e => setTextoFinal(e.target.value)}
+            className="w-full border rounded p-2"
+          />
+        )}
+
+        <div className="flex justify-between items-center">
+          <div>
+            <p>Subtotal: {subtotal.toFixed(2)}€</p>
+            <p>IVA: {ivaTotal.toFixed(2)}€</p>
+            <p className="font-bold">Total: {total.toFixed(2)}€</p>
+          </div>
+          <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">
+            Guardar Factura
+          </button>
+          <button type="button" onClick={exportPDF} className="px-4 py-2 bg-gray-200 rounded">
+            Exportar PDF
+          </button>
+        </div>
+      </form>
 
       {/* Modal QR */}
       <Transition show={qrOpen} as={Fragment}>
@@ -222,19 +382,17 @@ export default function NuevaFacturaPage() {
           >
             <div className="bg-white p-6 rounded shadow text-center">
               <Dialog.Title className="text-lg font-semibold mb-4">
-                Acceso factura
+                Acceso a tu factura
               </Dialog.Title>
               {origin && (
                 <ReactQRCode value={`${origin}/facturas/${serie}${numero}`} />
               )}
-              <div className="mt-4">
-                <button
-                  onClick={() => setQrOpen(false)}
-                  className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
-                >
-                  Cerrar
-                </button>
-              </div>
+              <button
+                onClick={() => setQrOpen(false)}
+                className="mt-4 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+              >
+                Cerrar
+              </button>
             </div>
           </Transition.Child>
         </Dialog>
