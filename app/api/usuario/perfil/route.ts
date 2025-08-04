@@ -1,4 +1,5 @@
 // app/api/usuario/perfil/route.ts
+
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
@@ -6,18 +7,22 @@ import type { Database } from '@/lib/database.types'
 
 export async function POST(request: Request) {
   const supabase = createRouteHandlerClient<Database>({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) {
+  const {
+    data: { session },
+    error: sessErr
+  } = await supabase.auth.getSession()
+
+  if (sessErr || !session) {
     return NextResponse.json({ success: false, error: 'Auth session missing!' }, { status: 401 })
   }
 
   const body = await request.json()
   const userId = session.user.id
 
-  // 1) ¿Existe ya un perfil?
+  // Comprobamos si ya existe
   const { count, error: countErr } = await supabase
     .from('perfil')
-    .select('id', { count: 'exact', head: true })
+    .select('id', { head: true, count: 'exact' })
     .eq('user_id', userId)
 
   if (countErr) {
@@ -25,17 +30,17 @@ export async function POST(request: Request) {
   }
 
   if (count! > 0) {
-    // 2a) Hay perfil: actualizar
+    // Actualizar
     const { error: updErr } = await supabase
       .from('perfil')
-      .update(body)
+      .update({ ...body, updated_at: new Date().toISOString() })
       .eq('user_id', userId)
 
     if (updErr) {
       return NextResponse.json({ success: false, error: updErr.message }, { status: 500 })
     }
   } else {
-    // 2b) No hay perfil: insertar
+    // Insertar
     const { error: insErr } = await supabase
       .from('perfil')
       .insert([{ ...body, user_id: userId }])
