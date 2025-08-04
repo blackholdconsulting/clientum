@@ -22,7 +22,7 @@ interface Perfil {
   pais?: string;
   email?: string;
   web?: string;
-  firma?: string;
+  firma?: string; 
 }
 
 export default function PerfilPage() {
@@ -30,58 +30,53 @@ export default function PerfilPage() {
   const router = useRouter();
   const path = usePathname();
 
-  const [sessionChecked, setSessionChecked] = useState(false);
   const [perfil, setPerfil] = useState<Perfil>({ idioma: 'Español' });
-  const [loadingPerfil, setLoadingPerfil] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [uploadingFirma, setUploadingFirma] = useState(false);
 
-  // 1) Comprueba sesión UNA SOLA VEZ
   useEffect(() => {
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        // Solo redirige si no estás ya en login
+      // 1) Comprobar sesión
+      const { data: { session }, error: sessErr } = await supabase.auth.getSession();
+      if (sessErr || !session) {
+        // si no hay sesión y no estamos YA en /auth/login, redirigir
         if (path !== '/auth/login') {
           router.replace(`/auth/login?callbackUrl=${encodeURIComponent('/profile')}`);
         }
-      } else {
-        // Si hay sesión, procedemos a cargar perfil
-        setSessionChecked(true);
+        setLoading(false);
+        return;
       }
-    })();
-  }, [router, supabase, path]);
 
-  // 2) Cuando sepamos que hay sesión, carga el perfil
-  useEffect(() => {
-    if (!sessionChecked) return;
-    (async () => {
-      setLoadingPerfil(true);
+      // 2) Cargar perfil de nuestra API
       const res = await fetch('/api/usuario/perfil');
       const json = await res.json();
-      if (json.success) {
-        if (json.perfil) {
-          const p: Perfil = json.perfil;
-          if (p.firma) {
-            const {
-              data: { publicUrl },
-            } = supabase.storage.from('firmas').getPublicUrl(p.firma);
-            p.firma = publicUrl;
-          }
-          setPerfil(p);
-        } else {
-          // inicializa email
-          const { data: { session } } = await supabase.auth.getSession();
-          setPerfil({ ...perfil, email: session?.user.email || '', idioma: 'Español' });
-        }
-      } else {
+      if (!json.success) {
         setError(json.error);
+      } else if (json.perfil) {
+        const p: Perfil = json.perfil;
+
+        // 3) Si tiene firma en storage, obtenemos su URL pública
+        if (p.firma) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('firmas')
+            .getPublicUrl(p.firma);
+          p.firma = publicUrl;
+        }
+        setPerfil(p);
+      } else {
+        // no existía perfil: precargamos el email del usuario
+        setPerfil((p) => ({
+          ...p,
+          email: session.user.email ?? '',
+        }));
       }
-      setLoadingPerfil(false);
+
+      setLoading(false);
     })();
-  }, [sessionChecked]);
+  }, [router, supabase, path]);
 
   const handleChange = (field: keyof Perfil, value: string) =>
     setPerfil((p) => ({ ...p, [field]: value }));
@@ -111,32 +106,27 @@ export default function PerfilPage() {
     setUploadingFirma(true);
     setError(null);
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       setError('No estás autenticado');
       setUploadingFirma(false);
       return;
     }
 
-    const pathKey = `${session.user.id}/firma.png`;
+    const key = `${session.user.id}/firma.png`;
     const { error: uploadErr } = await supabase.storage
       .from('firmas')
-      .upload(pathKey, file, { upsert: true });
-
+      .upload(key, file, { upsert: true });
     if (uploadErr) {
       setError(uploadErr.message);
     } else {
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from('firmas').getPublicUrl(pathKey);
+      const { data: { publicUrl } } = supabase.storage.from('firmas').getPublicUrl(key);
       setPerfil((p) => ({ ...p, firma: publicUrl }));
     }
     setUploadingFirma(false);
   };
 
-  if (!sessionChecked || loadingPerfil) {
+  if (loading) {
     return <div className="p-6">Cargando perfil…</div>;
   }
 
@@ -146,14 +136,61 @@ export default function PerfilPage() {
       {error && <div className="text-red-600 bg-red-100 p-2 rounded">{error}</div>}
       {success && <div className="text-green-600 bg-green-100 p-2 rounded">Perfil guardado ✔️</div>}
 
-      {/* Aquí van todos tus campos como antes */}
+      {/* Todos tus campos aquí (nombre, apellidos, teléfono, idioma, empresa, etc.) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* ... */}
+        <label className="block">
+          Nombre
+          <input
+            type="text"
+            value={perfil.nombre || ''}
+            onChange={(e) => handleChange('nombre', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        <label className="block">
+          Apellidos
+          <input
+            type="text"
+            value={perfil.apellidos || ''}
+            onChange={(e) => handleChange('apellidos', e.target.value)}
+            className="w-full border rounded p-2 mt-1"
+          />
+        </label>
+        {/* ... resto de campos ... */}
       </div>
 
-      {/* Firma */}
+      {/* Email readonly */}
       <div>
-        {/* ... */}
+        <label className="block text-sm font-medium">Email</label>
+        <input
+          type="email"
+          value={perfil.email || ''}
+          readOnly
+          className="w-full border rounded p-2 bg-gray-100"
+        />
+      </div>
+
+      {/* Firma electrónica */}
+      <h2 className="text-lg font-medium mt-6">Firma Electrónica</h2>
+      <div className="flex items-center gap-4 mt-2">
+        {perfil.firma ? (
+          <img
+            src={perfil.firma}
+            alt="Firma"
+            className="h-24 object-contain border"
+          />
+        ) : (
+          <div className="h-24 w-48 bg-gray-100 flex items-center justify-center border">
+            Sin firma
+          </div>
+        )}
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleFirmaUpload}
+          disabled={uploadingFirma}
+          className="border rounded p-2"
+        />
       </div>
 
       <button
