@@ -1,13 +1,14 @@
 // app/api/usuario/perfil/route.ts
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import type { Database } from '../../../../types/supabase';
 
 export async function GET(request: Request) {
-  const supabase = createRouteHandlerClient<Database>({
-    cookies: () => request.headers.get('cookie') ?? '',
-  });
-  const { data: { session }, error: sessErr } = await supabase.auth.getSession();
+  const supabase = createRouteHandlerClient({ cookies: () => request.headers.get('cookie') ?? '' });
+  const {
+    data: { session },
+    error: sessErr,
+  } = await supabase.auth.getSession();
+
   if (sessErr || !session) {
     return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 });
   }
@@ -30,15 +31,15 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient<Database>({
-    cookies: () => request.headers.get('cookie') ?? '',
-  });
+  const supabase = createRouteHandlerClient({ cookies: () => request.headers.get('cookie') ?? '' });
   const body = await request.json().catch(() => null);
   if (!body) {
     return NextResponse.json({ success: false, error: 'JSON inválido' }, { status: 400 });
   }
 
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session) {
     return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 });
   }
