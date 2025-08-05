@@ -3,10 +3,9 @@
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
-import type { Database } from '../../../types/supabase' // Ajusta la ruta si tu types está en otro lugar
 
 export default function NuevoClientePage() {
-  const supabase = createPagesBrowserClient<Database>()
+  const supabase = createPagesBrowserClient()
   const router = useRouter()
 
   const [nombre, setNombre] = useState('')
@@ -26,16 +25,14 @@ export default function NuevoClientePage() {
     setLoading(true)
 
     try {
-      // 1) Obtener el user_id
+      // 1) Obtenemos el user actual
       const {
         data: { user },
         error: userErr,
       } = await supabase.auth.getUser()
-      if (userErr || !user) {
-        throw new Error(userErr?.message || 'No se obtuvo el usuario')
-      }
+      if (userErr || !user) throw new Error(userErr?.message || 'No se obtuvo usuario')
 
-      // 2) Insertar el nuevo cliente
+      // 2) Insertamos el cliente
       const { error: insertErr } = await supabase
         .from('clientes')
         .insert({
@@ -52,14 +49,11 @@ export default function NuevoClientePage() {
           telefono: telefono === '' ? null : telefono,
         })
 
-      if (insertErr) {
-        throw insertErr
-      }
+      if (insertErr) throw insertErr
 
-      // 3) Redirigir al listado de clientes
+      // 3) Redirigimos al listado de clientes
       router.push('/clientes')
     } catch (err: any) {
-      // Mostrar el mensaje real de error
       alert(`Error al crear el cliente:\n${err.message || JSON.stringify(err)}`)
     } finally {
       setLoading(false)
@@ -116,7 +110,6 @@ export default function NuevoClientePage() {
             className="mt-1 block w-full border rounded px-3 py-2"
           />
         </div>
-
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block font-medium">Código postal</label>
@@ -137,7 +130,6 @@ export default function NuevoClientePage() {
             />
           </div>
         </div>
-
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block font-medium">Provincia</label>
@@ -158,7 +150,6 @@ export default function NuevoClientePage() {
             />
           </div>
         </div>
-
         <div>
           <label className="block font-medium">Teléfono</label>
           <input
@@ -168,7 +159,6 @@ export default function NuevoClientePage() {
             className="mt-1 block w-full border rounded px-3 py-2 bg-gray-50"
           />
         </div>
-
         <button
           type="submit"
           disabled={loading}
