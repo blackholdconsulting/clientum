@@ -1,3 +1,4 @@
+// app/profile/page.tsx
 'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
@@ -23,8 +24,9 @@ export default function ProfilePage() {
   const supabase = useSupabaseClient();
   const session = useSession();
 
+  const [checked, setChecked] = useState(false);
   const [perfil, setPerfil] = useState<Perfil | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingPerfil, setLoadingPerfil] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [nombre, setNombre] = useState('');
@@ -33,13 +35,20 @@ export default function ProfilePage() {
   const [idioma, setIdioma] = useState('Español');
   const [firmaFile, setFirmaFile] = useState<File | null>(null);
 
+  // 1) esperar a que session se resuelva
   useEffect(() => {
-    if (!session) {
+    if (session === undefined) return; // aún cargando
+    setChecked(true);
+    if (session === null) {
       router.push('/auth/login?callbackUrl=/profile');
-      return;
     }
+  }, [session, router]);
+
+  // 2) una vez comprobada sesión válida, cargar perfil
+  useEffect(() => {
+    if (!checked || !session) return;
     const loadPerfil = async () => {
-      setLoading(true);
+      setLoadingPerfil(true);
       const { data, error } = await supabase
         .from('perfil')
         .select('*')
@@ -54,10 +63,17 @@ export default function ProfilePage() {
         setTelefono(data.telefono ?? '');
         setIdioma(data.idioma ?? 'Español');
       }
-      setLoading(false);
+      setLoadingPerfil(false);
     };
     loadPerfil();
-  }, [session, supabase, router]);
+  }, [checked, session, supabase]);
+
+  if (!checked) {
+    return <p className="p-6">Comprobando sesión…</p>;
+  }
+  if (loadingPerfil) {
+    return <p className="p-6">Cargando perfil…</p>;
+  }
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -104,10 +120,6 @@ export default function ProfilePage() {
       );
     }
   };
-
-  if (loading) {
-    return <p className="p-6">Cargando perfil…</p>;
-  }
 
   return (
     <main className="p-6 max-w-lg mx-auto bg-white rounded shadow">
