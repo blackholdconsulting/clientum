@@ -1,9 +1,10 @@
 // app/api/usuario/perfil/route.ts
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';                // <-- importa cookies
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 export async function GET(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies: () => request.headers.get('cookie') ?? '' });
+  const supabase = createRouteHandlerClient({ cookies });  // <-- pásalo directamente
   const {
     data: { session },
     error: sessErr,
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies: () => request.headers.get('cookie') ?? '' });
+  const supabase = createRouteHandlerClient({ cookies });  // <-- aquí también
   const body = await request.json().catch(() => null);
   if (!body) {
     return NextResponse.json({ success: false, error: 'JSON inválido' }, { status: 400 });
