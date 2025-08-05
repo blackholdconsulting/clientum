@@ -29,9 +29,17 @@ export default function ProfilePage() {
   const [idioma, setIdioma] = useState('Español');
   const [firmaFile, setFirmaFile] = useState<File | null>(null);
 
-  // Carga el perfil una sola vez
   useEffect(() => {
-    if (!session) return; // espera que middleware haya validado
+    // Mientras session sea undefined, seguimos "cargando"
+    if (session === undefined) return;
+
+    // Si no hay sesión válida, derribamos el loading
+    if (!session) {
+      setLoading(false);
+      return;
+    }
+
+    // Ya tenemos session válida, traemos perfil
     (async () => {
       setLoading(true);
       const { data, error } = await supabase
@@ -54,9 +62,17 @@ export default function ProfilePage() {
     return <p className="p-6">Cargando perfil…</p>;
   }
 
+  // Si no hay session, mostramos aviso
+  if (!session) {
+    return (
+      <main className="p-6">
+        <p className="text-red-600">Debes iniciar sesión para ver tu perfil.</p>
+      </main>
+    );
+  }
+
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
-    if (!session) return;
     setSaving(true);
 
     let firmaPath = perfil?.firma ?? null;
@@ -101,6 +117,7 @@ export default function ProfilePage() {
     <main className="p-6 max-w-lg mx-auto bg-white rounded shadow">
       <h1 className="text-2xl font-semibold mb-4">Mi perfil</h1>
       <form onSubmit={handleSave} className="space-y-4">
+        {/* Nombre */}
         <label className="block">
           Nombre
           <input
@@ -109,6 +126,7 @@ export default function ProfilePage() {
             className="w-full border p-2 rounded mt-1"
           />
         </label>
+        {/* Apellidos */}
         <label className="block">
           Apellidos
           <input
@@ -117,6 +135,7 @@ export default function ProfilePage() {
             className="w-full border p-2 rounded mt-1"
           />
         </label>
+        {/* Teléfono */}
         <label className="block">
           Teléfono
           <input
@@ -125,6 +144,7 @@ export default function ProfilePage() {
             className="w-full border p-2 rounded mt-1"
           />
         </label>
+        {/* Idioma */}
         <label className="block">
           Idioma
           <select
@@ -136,6 +156,7 @@ export default function ProfilePage() {
             <option>Inglés</option>
           </select>
         </label>
+        {/* Email */}
         <label className="block">
           Email (no editable)
           <input
@@ -144,18 +165,16 @@ export default function ProfilePage() {
             className="w-full bg-gray-100 border p-2 rounded mt-1"
           />
         </label>
+        {/* Firma Digital */}
         <label className="block">
           Firma Digital
           <div className="flex items-center space-x-4 mt-1">
             <div className="w-32 h-24 border flex items-center justify-center text-gray-500">
               {perfil?.firma ? (
                 <img
-                  src={
-                    supabase.storage
-                      .from('firmas')
-                      .getPublicUrl(perfil.firma)
-                      .data.publicUrl
-                  }
+                  src={supabase.storage
+                    .from('firmas')
+                    .getPublicUrl(perfil.firma).data.publicUrl}
                   alt="firma"
                 />
               ) : (
@@ -169,6 +188,7 @@ export default function ProfilePage() {
             />
           </div>
         </label>
+        {/* Botón Guardar */}
         <button
           type="submit"
           disabled={saving}
