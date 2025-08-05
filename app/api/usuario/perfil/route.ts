@@ -1,54 +1,55 @@
 // app/api/usuario/perfil/route.ts
+import { NextResponse } from 'next/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import type { Database } from '../../../../types/supabase';
 
-import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import type { Database } from '@/lib/database.types'
+export async function GET(request: Request) {
+  const supabase = createRouteHandlerClient<Database>({
+    cookies: () => request.headers.get('cookie') ?? '',
+  });
+  const { data: { session }, error: sessErr } = await supabase.auth.getSession();
+  if (sessErr || !session) {
+    return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 });
+  }
+
+  const { data: perfil, error } = await supabase
+    .from('perfil')
+    .select('*')
+    .eq('user_id', session.user.id)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+
+  if (!perfil) {
+    return NextResponse.json({ success: true });
+  }
+
+  return NextResponse.json({ success: true, perfil });
+}
 
 export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient<Database>({ cookies })
-  const {
-    data: { session },
-    error: sessErr
-  } = await supabase.auth.getSession()
-
-  if (sessErr || !session) {
-    return NextResponse.json({ success: false, error: 'Auth session missing!' }, { status: 401 })
+  const supabase = createRouteHandlerClient<Database>({
+    cookies: () => request.headers.get('cookie') ?? '',
+  });
+  const body = await request.json().catch(() => null);
+  if (!body) {
+    return NextResponse.json({ success: false, error: 'JSON inválido' }, { status: 400 });
   }
 
-  const body = await request.json()
-  const userId = session.user.id
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 });
+  }
 
-  // Comprobamos si ya existe
-  const { count, error: countErr } = await supabase
+  const { error } = await supabase
     .from('perfil')
-    .select('id', { head: true, count: 'exact' })
-    .eq('user_id', userId)
+    .upsert({ ...body, user_id: session.user.id }, { onConflict: 'user_id' });
 
-  if (countErr) {
-    return NextResponse.json({ success: false, error: countErr.message }, { status: 500 })
+  if (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 
-  if (count! > 0) {
-    // Actualizar
-    const { error: updErr } = await supabase
-      .from('perfil')
-      .update({ ...body, updated_at: new Date().toISOString() })
-      .eq('user_id', userId)
-
-    if (updErr) {
-      return NextResponse.json({ success: false, error: updErr.message }, { status: 500 })
-    }
-  } else {
-    // Insertar
-    const { error: insErr } = await supabase
-      .from('perfil')
-      .insert([{ ...body, user_id: userId }])
-
-    if (insErr) {
-      return NextResponse.json({ success: false, error: insErr.message }, { status: 500 })
-    }
-  }
-
-  return NextResponse.json({ success: true })
+  return NextResponse.json({ success: true });
 }
