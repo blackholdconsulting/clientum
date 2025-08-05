@@ -3,15 +3,11 @@
 
 import React, { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  useSupabaseClient,
-  useUser
-} from '@supabase/auth-helpers-react';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
 
 export default function NuevoClientePage() {
   const router = useRouter();
   const supabase = useSupabaseClient();
-  const user = useUser();
 
   const [nombre, setNombre] = useState('');
   const [razonSocial, setRazonSocial] = useState('');
@@ -27,16 +23,27 @@ export default function NuevoClientePage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!user) {
-      alert('Debes iniciar sesión para crear un cliente.');
+    setLoading(true);
+
+    // obtenemos la sesión activa para extraer user.id
+    const {
+      data: { session },
+      error: sessErr,
+    } = await supabase.auth.getSession();
+
+    if (sessErr || !session?.user) {
+      setLoading(false);
+      alert('Tu sesión ha caducado. Por favor, vuelve a iniciar sesión.');
+      router.push('/auth/login');
       return;
     }
-    setLoading(true);
+
+    const userId = session.user.id;
 
     const { error } = await supabase
       .from('clientes')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         nombre,
         razon_social: razonSocial,
         nif,
@@ -54,7 +61,6 @@ export default function NuevoClientePage() {
     if (error) {
       alert('Error creando cliente: ' + error.message);
     } else {
-      // Al crear correctamente, volvemos a la lista de clientes
       router.push('/clientes');
     }
   }
@@ -110,7 +116,9 @@ export default function NuevoClientePage() {
           <input
             type="number"
             value={codigoPostal}
-            onChange={(e) => setCodigoPostal(e.target.value === '' ? '' : parseInt(e.target.value))}
+            onChange={(e) =>
+              setCodigoPostal(e.target.value === '' ? '' : parseInt(e.target.value))
+            }
             className="w-full border p-2 rounded mt-1"
           />
         </label>
@@ -143,7 +151,9 @@ export default function NuevoClientePage() {
           <input
             type="number"
             value={telefono}
-            onChange={(e) => setTelefono(e.target.value === '' ? '' : parseInt(e.target.value))}
+            onChange={(e) =>
+              setTelefono(e.target.value === '' ? '' : parseInt(e.target.value))
+            }
             className="w-full border p-2 rounded mt-1"
           />
         </label>
