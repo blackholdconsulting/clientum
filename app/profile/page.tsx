@@ -1,93 +1,82 @@
 'use client'
 
-import { useState, useEffect, ChangeEvent } from 'react'
+import { useState, useEffect, ChangeEvent, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
-import type { Session } from '@supabase/auth-helpers-nextjs'
 
 export default function ProfilePage() {
   const router = useRouter()
   const supabase = createPagesBrowserClient()
 
-  const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [perfil, setPerfil] = useState({
+    nombre: '',
+    apellidos: '',
+    telefono: '',
+    idioma: 'Español',
+    email: '',
+    nombre_empresa: '',
+    nif: '',
+    direccion: '',
+    ciudad: '',
+    provincia: '',
+    cp: '',
+    pais: '',
+    web: '',
+    firma: null as File | null,
+  })
 
-  // Campos requeridos por Verifactu/Facturae
-  const [nombre, setNombre] = useState('')
-  const [apellidos, setApellidos] = useState('')
-  const [telefono, setTelefono] = useState('')
-  const [idioma, setIdioma] = useState('es')
-  const [email, setEmail] = useState('')
-  const [empresa, setEmpresa] = useState('')
-  const [nif, setNif] = useState('')
-  const [direccion, setDireccion] = useState('')
-  const [ciudad, setCiudad] = useState('')
-  const [provincia, setProvincia] = useState('')
-  const [cp, setCp] = useState('')
-  const [pais, setPais] = useState('España')
-  const [web, setWeb] = useState('')
-  const [firmaFile, setFirmaFile] = useState<File | null>(null)
-
+  // Carga el perfil al montar
   useEffect(() => {
-    async function load() {
-      // 1) Comprueba sesión
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         alert('Debes iniciar sesión para ver tu perfil.')
-        router.push('/auth/login')
+        router.push('/auth/login?callbackUrl=/profile')
         return
       }
-      setSession(session)
 
-      // 2) Carga perfil
-      const { data: perfil } = await supabase
+      supabase
         .from('perfil')
         .select('*')
         .eq('user_id', session.user.id)
         .single()
+        .then(({ data }) => {
+          if (data) {
+            setPerfil({
+              ...perfil,
+              ...data,
+              firma: null, // no cargamos el file en el state
+            })
+          }
+        })
+        .finally(() => setLoading(false))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-      if (perfil) {
-        setNombre(perfil.nombre ?? '')
-        setApellidos(perfil.apellidos ?? '')
-        setTelefono(perfil.telefono ?? '')
-        setIdioma(perfil.idioma ?? 'es')
-        setEmail(perfil.email ?? session.user.email ?? '')
-        setEmpresa(perfil.nombre_empr ?? '')
-        setNif(perfil.nif ?? '')
-        setDireccion(perfil.direccion ?? '')
-        setCiudad(perfil.ciudad ?? '')
-        setProvincia(perfil.provincia ?? '')
-        setCp(perfil.cp ?? '')
-        setPais(perfil.pais ?? 'España')
-        setWeb(perfil.web ?? '')
-      }
-      setLoading(false)
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setPerfil((p) => ({ ...p, [name]: value }))
+  }
+
+  const handleFile = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      setPerfil((p) => ({ ...p, firma: e.target.files![0] }))
     }
-    load()
-  }, [supabase, router])
-
-  if (loading) {
-    return <div className="p-8">Cargando perfil…</div>
   }
 
-  const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.length) setFirmaFile(e.target.files[0])
-  }
-
-  const saveProfile = async () => {
-    if (!session) return
+  const savePerfil = async (e: FormEvent) => {
+    e.preventDefault()
     setSaving(true)
 
-    let firmaPath: string | null = null
-    if (firmaFile) {
+    // 1) sube firma si la hay
+    let firmaPath = null
+    if (perfil.firma) {
       const { data, error } = await supabase.storage
         .from('firmas')
-        .upload(`${session.user.id}/${firmaFile.name}`, firmaFile, {
-          upsert: true,
-        })
+        .upload(`firma-${Date.now()}`, perfil.firma, { upsert: true })
+
       if (error) {
         alert('Error subiendo firma: ' + error.message)
         setSaving(false)
@@ -96,192 +85,197 @@ export default function ProfilePage() {
       firmaPath = data.path
     }
 
-    const { error } = await supabase
+    // 2) guarda datos
+    const { data: sess } = await supabase.auth.getSession()
+    const user_id = sess?.session?.user.id
+    if (!user_id) {
+      alert('Sesión inválida.')
+      setSaving(false)
+      return
+    }
+
+    const { error: upErr } = await supabase
       .from('perfil')
       .upsert(
         {
-          user_id: session.user.id,
-          nombre,
-          apellidos,
-          telefono,
-          idioma,
-          email,
-          nombre_empr: empresa,
-          nif,
-          direccion,
-          ciudad,
-          provincia,
-          cp,
-          pais,
-          web,
+          user_id,
+          nombre: perfil.nombre,
+          apellidos: perfil.apellidos,
+          telefono: perfil.telefono,
+          idioma: perfil.idioma,
+          email: perfil.email,
+          nombre_empresa: perfil.nombre_empresa,
+          nif: perfil.nif,
+          direccion: perfil.direccion,
+          ciudad: perfil.ciudad,
+          provincia: perfil.provincia,
+          cp: perfil.cp,
+          pais: perfil.pais,
+          web: perfil.web,
           firma: firmaPath,
         },
         { onConflict: 'user_id' }
       )
 
-    if (error) {
-      alert('Error guardando perfil: ' + error.message)
+    if (upErr) {
+      alert('Error guardando perfil: ' + upErr.message)
       setSaving(false)
       return
     }
 
-    // redirige al dashboard
+    // 3) cierra modal o redirige
+    alert('Perfil guardado.')
     router.push('/dashboard')
   }
 
+  if (loading) return <div className="p-8">Cargando perfil…</div>
+
   return (
-    <div className="max-w-4xl mx-auto p-8">
-      <h1 className="text-2xl font-semibold mb-6">Mi perfil</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Columna izquierda */}
-        <div className="space-y-4">
-          <label className="block">
-            <span className="font-medium">Nombre</span>
-            <input
-              type="text"
-              value={nombre}
-              onChange={e => setNombre(e.target.value)}
-              className="mt-1 block w-full border rounded px-3 py-2"
-            />
-          </label>
-          <label className="block">
-            <span className="font-medium">Apellidos</span>
-            <input
-              type="text"
-              value={apellidos}
-              onChange={e => setApellidos(e.target.value)}
-              className="mt-1 block w-full border rounded px-3 py-2"
-            />
-          </label>
-          <label className="block">
-            <span className="font-medium">Teléfono</span>
-            <input
-              type="text"
-              value={telefono}
-              onChange={e => setTelefono(e.target.value)}
-              className="mt-1 block w-full border rounded px-3 py-2"
-            />
-          </label>
-          <label className="block">
-            <span className="font-medium">Idioma</span>
-            <select
-              value={idioma}
-              onChange={e => setIdioma(e.target.value)}
-              className="mt-1 block w-full border rounded px-3 py-2"
-            >
-              <option value="es">Español</option>
-              <option value="en">Inglés</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="font-medium">Email</span>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="mt-1 block w-full bg-gray-100 border rounded px-3 py-2"
-              disabled
-            />
-          </label>
+    <div className="max-w-3xl mx-auto p-8 bg-white shadow rounded">
+      <h1 className="text-2xl mb-6">Mi perfil</h1>
+      <form onSubmit={savePerfil} className="space-y-4">
+        <div>
+          <label>Nombre</label>
+          <input
+            name="nombre"
+            value={perfil.nombre}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+          />
         </div>
-
-        {/* Columna derecha */}
-        <div className="space-y-4">
-          <label className="block">
-            <span className="font-medium">Empresa / Razón Social</span>
+        <div>
+          <label>Apellidos</label>
+          <input
+            name="apellidos"
+            value={perfil.apellidos}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+          />
+        </div>
+        <div>
+          <label>Teléfono</label>
+          <input
+            name="telefono"
+            value={perfil.telefono}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+          />
+        </div>
+        <div>
+          <label>Idioma</label>
+          <select
+            name="idioma"
+            value={perfil.idioma}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+          >
+            <option>Español</option>
+            <option>Inglés</option>
+          </select>
+        </div>
+        <div>
+          <label>Email</label>
+          <input
+            name="email"
+            value={perfil.email}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded bg-gray-100"
+            disabled
+          />
+        </div>
+        <div>
+          <label>Razón Social</label>
+          <input
+            name="nombre_empresa"
+            value={perfil.nombre_empresa}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+          />
+        </div>
+        <div>
+          <label>NIF / CIF</label>
+          <input
+            name="nif"
+            value={perfil.nif}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+          />
+        </div>
+        <div>
+          <label>Dirección</label>
+          <input
+            name="direccion"
+            value={perfil.direccion}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label>Ciudad</label>
             <input
-              type="text"
-              value={empresa}
-              onChange={e => setEmpresa(e.target.value)}
-              className="mt-1 block w-full border rounded px-3 py-2"
+              name="ciudad"
+              value={perfil.ciudad}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
             />
-          </label>
-          <label className="block">
-            <span className="font-medium">NIF / CIF</span>
-            <input
-              type="text"
-              value={nif}
-              onChange={e => setNif(e.target.value)}
-              className="mt-1 block w-full border rounded px-3 py-2"
-            />
-          </label>
-          <label className="block">
-            <span className="font-medium">Dirección</span>
-            <input
-              type="text"
-              value={direccion}
-              onChange={e => setDireccion(e.target.value)}
-              className="mt-1 block w-full border rounded px-3 py-2"
-            />
-          </label>
-          <label className="block">
-            <span className="font-medium">Ciudad</span>
-            <input
-              type="text"
-              value={ciudad}
-              onChange={e => setCiudad(e.target.value)}
-              className="mt-1 block w-full border rounded px-3 py-2"
-            />
-          </label>
-          <label className="block">
-            <span className="font-medium">Provincia</span>
-            <input
-              type="text"
-              value={provincia}
-              onChange={e => setProvincia(e.target.value)}
-              className="mt-1 block w-full border rounded px-3 py-2"
-            />
-          </label>
-          <div className="flex gap-4">
-            <label className="block flex-1">
-              <span className="font-medium">Código Postal</span>
-              <input
-                type="text"
-                value={cp}
-                onChange={e => setCp(e.target.value)}
-                className="mt-1 block w-full border rounded px-3 py-2"
-              />
-            </label>
-            <label className="block flex-1">
-              <span className="font-medium">País</span>
-              <input
-                type="text"
-                value={pais}
-                onChange={e => setPais(e.target.value)}
-                className="mt-1 block w-full border rounded px-3 py-2"
-              />
-            </label>
           </div>
-          <label className="block">
-            <span className="font-medium">Web</span>
+          <div>
+            <label>Provincia</label>
             <input
-              type="text"
-              value={web}
-              onChange={e => setWeb(e.target.value)}
-              className="mt-1 block w-full border rounded px-3 py-2"
+              name="provincia"
+              value={perfil.provincia}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
             />
-          </label>
-          <label className="block">
-            <span className="font-medium">Firma Digital (PDF/PNG)</span>
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              onChange={onFileChange}
-              className="mt-1 block w-full"
-            />
-          </label>
+          </div>
         </div>
-      </div>
-
-      <div className="mt-6">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label>Código Postal</label>
+            <input
+              name="cp"
+              value={perfil.cp}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+            />
+          </div>
+          <div>
+            <label>País</label>
+            <input
+              name="pais"
+              value={perfil.pais}
+              onChange={handleChange}
+              className="w-full border px-3 py-2 rounded"
+            />
+          </div>
+        </div>
+        <div>
+          <label>Web</label>
+          <input
+            name="web"
+            value={perfil.web}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+          />
+        </div>
+        <div>
+          <label>Firma Digital (PDF FNMT)</label>
+          <input
+            type="file"
+            accept=".pdf"
+            onChange={handleFile}
+            className="w-full border px-3 py-2 rounded"
+          />
+        </div>
         <button
-          onClick={saveProfile}
+          type="submit"
           disabled={saving}
-          className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+          className="bg-blue-600 text-white px-6 py-2 rounded disabled:opacity-50"
         >
-          {saving ? 'Guardando…' : 'Guardar perfil'}
+          {saving ? 'Guardando...' : 'Guardar perfil'}
         </button>
-      </div>
+      </form>
     </div>
   )
 }
