@@ -1,242 +1,153 @@
-'use client';
+'use client'
 
-import { useState, useEffect, ChangeEvent, SyntheticEvent } from 'react';
-import { useRouter } from 'next/navigation';
-import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
-import type { Database } from '../../types/supabase';
-
-export type Perfil = {
-  id: string;
-  user_id: string;
-  nombre: string;
-  apellidos: string;
-  telefono: string;
-  idioma: string;
-  email: string;
-  firma: string | null;
-};
+import { useState, useEffect, ChangeEvent } from 'react'
+import { useRouter } from 'next/navigation'
+import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
+import type { Session } from '@supabase/auth-helpers-nextjs'
 
 export default function ProfilePage() {
-  const router = useRouter();
-  const supabase = createPagesBrowserClient<Database>();
+  const router = useRouter()
+  const supabase = createPagesBrowserClient()
 
-  const [perfil, setPerfil] = useState<Perfil | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [session, setSession] = useState<Session | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
 
-  // Form state
-  const [nombre, setNombre] = useState('');
-  const [apellidos, setApellidos] = useState('');
-  const [telefono, setTelefono] = useState('');
-  const [idioma, setIdioma] = useState('Español');
-  const [firmaFile, setFirmaFile] = useState<File | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [nombre, setNombre] = useState('')
+  const [apellidos, setApellidos] = useState('')
+  const [telefono, setTelefono] = useState('')
+  const [idioma, setIdioma] = useState('Español')
+  const [firmaFile, setFirmaFile] = useState<File | null>(null)
 
-  // Carga inicial del perfil
+  // 1) Cargamos sesión + perfil al montar
   useEffect(() => {
-    async function load() {
-      setLoading(true);
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
-        // no autenticado
-        return;
+        alert('Debes iniciar sesión para ver tu perfil.')
+        router.push('/login')
+        return
       }
+      setSession(session)
 
-      const { data, error } = await supabase
+      // traemos datos de perfil
+      supabase
         .from('perfil')
         .select('*')
         .eq('user_id', session.user.id)
-        .single();
+        .single()
+        .then(({ data, error }) => {
+          if (data) {
+            setNombre(data.nombre || '')
+            setApellidos(data.apellidos || '')
+            setTelefono(data.telefono || '')
+            setIdioma(data.idioma || 'Español')
+            // no pre-cargamos firma aquí para simplificar
+          }
+        })
+        .finally(() => setLoading(false))
+    })
+  }, [])
 
-      if (error && error.code === 'PGRST116') {
-        // no existe perfil aún
-        setPerfil(null);
-      } else if (data) {
-        setPerfil(data);
-      }
-
-      setLoading(false);
-    }
-    load();
-  }, []);
-
-  // Abrir modal y precargar formulario
-  function openModal() {
-    if (!perfil) return;
-    setNombre(perfil.nombre);
-    setApellidos(perfil.apellidos);
-    setTelefono(perfil.telefono);
-    setIdioma(perfil.idioma);
-    setModalOpen(true);
+  if (loading) {
+    return <p>Cargando perfil…</p>
   }
 
-  // Cerrar modal y redirigir al dashboard
-  function closeModalAndGoDashboard() {
-    setModalOpen(false);
-    router.push('/dashboard');
+  // 2) Handler de subir archivo
+  const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      setFirmaFile(e.target.files[0])
+    }
   }
 
-  // Guardar cambios
-  async function handleSave(e: SyntheticEvent) {
-    e.preventDefault();
-    setSaving(true);
+  // 3) Guardar perfil + firma
+  const saveProfile = async () => {
+    if (!session) return
+    setSaving(true)
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) {
-      alert('Sesión expirada');
-      return;
-    }
-
-    // Si hay fichero de firma, súbelo primero
-    let firmaPath: string | null = perfil?.firma ?? null;
+    // subimos firma si hay archivo
+    let firmaPath: string | null = null
     if (firmaFile) {
-      const { data: up, error: errUp } = await supabase.storage
+      const { data, error: upErr } = await supabase.storage
         .from('firmas')
         .upload(`${session.user.id}/${firmaFile.name}`, firmaFile, {
-          upsert: true,
-        });
-      if (errUp) {
-        console.error(errUp);
-      } else {
-        firmaPath = up.path;
+          upsert: true
+        })
+      if (upErr) {
+        alert(`Error subiendo firma: ${upErr.message}`)
+        setSaving(false)
+        return
       }
+      firmaPath = data.path
     }
 
-    // Upsert del perfil
-    const { error: upsertError } = await supabase
+    // upsert perfil
+    const { error: perfErr } = await supabase
       .from('perfil')
-      .upsert(
-        {
-          user_id: session.user.id,
-          nombre,
-          apellidos,
-          telefono,
-          idioma,
-          email: session.user.email,
-          firma: firmaPath,
-        },
-        { onConflict: 'user_id' }
-      );
-
-    if (upsertError) {
-      alert(`Error guardando perfil: ${upsertError.message}`);
-    } else {
-      // recarga datos UI opcional
-      setPerfil({
-        id: perfil?.id ?? '',
+      .upsert({
         user_id: session.user.id,
         nombre,
         apellidos,
         telefono,
         idioma,
-        email: session.user.email!,
-        firma: firmaPath,
-      });
-      // cierra modal y redirige
-      closeModalAndGoDashboard();
+        firma: firmaPath
+      }, { onConflict: 'user_id' })
+
+    if (perfErr) {
+      alert(`Error guardando perfil: ${perfErr.message}`)
+      setSaving(false)
+      return
     }
 
-    setSaving(false);
-  }
-
-  if (loading) {
-    return <p>Cargando perfil…</p>;
+    // una vez guardado, volvemos al dashboard
+    router.push('/dashboard')
   }
 
   return (
-    <>
+    <main style={{ padding: 20 }}>
       <h1>Mi perfil</h1>
-
-      {modalOpen ? (
-        <div className="modal-backdrop">
-          <div className="modal">
-            <h2>Editar perfil</h2>
-            <form onSubmit={handleSave}>
-              <label>
-                Nombre
-                <input
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  required
-                />
-              </label>
-              <label>
-                Apellidos
-                <input
-                  value={apellidos}
-                  onChange={(e) => setApellidos(e.target.value)}
-                  required
-                />
-              </label>
-              <label>
-                Teléfono
-                <input
-                  value={telefono}
-                  onChange={(e) => setTelefono(e.target.value)}
-                />
-              </label>
-              <label>
-                Idioma
-                <select
-                  value={idioma}
-                  onChange={(e) => setIdioma(e.target.value)}
-                >
-                  <option>Español</option>
-                  <option>English</option>
-                </select>
-              </label>
-              <label>
-                Firma digital (PNG/PDF)
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    setFirmaFile(e.target.files?.[0] ?? null)
-                  }
-                />
-              </label>
-              <button type="submit" disabled={saving}>
-                {saving ? 'Guardando…' : 'Guardar perfil'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                disabled={saving}
-              >
-                Cancelar
-              </button>
-            </form>
-          </div>
-        </div>
-      ) : (
-        <div>
-          <p>
-            Nombre: <strong>{perfil?.nombre}</strong>
-          </p>
-          <p>
-            Apellidos: <strong>{perfil?.apellidos}</strong>
-          </p>
-          <p>
-            Teléfono: <strong>{perfil?.telefono}</strong>
-          </p>
-          <p>
-            Idioma: <strong>{perfil?.idioma}</strong>
-          </p>
-          <p>
-            Email: <strong>{perfil?.email}</strong>
-          </p>
-          <p>
-            Firma:{' '}
-            <strong>{perfil?.firma ? perfil.firma.split('/').pop() : 'Sin firma'}</strong>
-          </p>
-          <button onClick={openModal}>Editar perfil</button>
-        </div>
-      )}
-    </>
-  );
+      <label>
+        Nombre<br/>
+        <input
+          value={nombre}
+          onChange={e => setNombre(e.target.value)}
+        />
+      </label>
+      <br/><br/>
+      <label>
+        Apellidos<br/>
+        <input
+          value={apellidos}
+          onChange={e => setApellidos(e.target.value)}
+        />
+      </label>
+      <br/><br/>
+      <label>
+        Teléfono<br/>
+        <input
+          value={telefono}
+          onChange={e => setTelefono(e.target.value)}
+        />
+      </label>
+      <br/><br/>
+      <label>
+        Idioma<br/>
+        <select
+          value={idioma}
+          onChange={e => setIdioma(e.target.value)}
+        >
+          <option>Español</option>
+          <option>Inglés</option>
+        </select>
+      </label>
+      <br/><br/>
+      <label>
+        Firma Digital<br/>
+        <input type="file" accept="image/*" onChange={onFileChange} />
+      </label>
+      <br/><br/>
+      <button onClick={saveProfile} disabled={saving}>
+        {saving ? 'Guardando…' : 'Guardar perfil'}
+      </button>
+    </main>
+  )
 }
