@@ -2,11 +2,7 @@
 'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-  useSupabaseClient,
-  useSession
-} from '@supabase/auth-helpers-react';
+import { useSupabaseClient, useSession } from '@supabase/auth-helpers-react';
 
 type Perfil = {
   id: string;
@@ -20,13 +16,11 @@ type Perfil = {
 };
 
 export default function ProfilePage() {
-  const router = useRouter();
   const supabase = useSupabaseClient();
   const session = useSession();
 
-  const [checked, setChecked] = useState(false);
   const [perfil, setPerfil] = useState<Perfil | null>(null);
-  const [loadingPerfil, setLoadingPerfil] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [nombre, setNombre] = useState('');
@@ -35,43 +29,28 @@ export default function ProfilePage() {
   const [idioma, setIdioma] = useState('Español');
   const [firmaFile, setFirmaFile] = useState<File | null>(null);
 
-  // 1) esperar a que session se resuelva
+  // Carga el perfil una sola vez
   useEffect(() => {
-    if (session === undefined) return; // aún cargando
-    setChecked(true);
-    if (session === null) {
-      router.push('/auth/login?callbackUrl=/profile');
-    }
-  }, [session, router]);
-
-  // 2) una vez comprobada sesión válida, cargar perfil
-  useEffect(() => {
-    if (!checked || !session) return;
-    const loadPerfil = async () => {
-      setLoadingPerfil(true);
+    if (!session) return; // espera que middleware haya validado
+    (async () => {
+      setLoading(true);
       const { data, error } = await supabase
         .from('perfil')
         .select('*')
         .eq('user_id', session.user.id)
         .single();
-      if (error && error.code !== 'PGRST116') {
-        alert('Error cargando perfil: ' + error.message);
-      } else if (data) {
+      if (!error && data) {
         setPerfil(data);
         setNombre(data.nombre ?? '');
         setApellidos(data.apellidos ?? '');
         setTelefono(data.telefono ?? '');
         setIdioma(data.idioma ?? 'Español');
       }
-      setLoadingPerfil(false);
-    };
-    loadPerfil();
-  }, [checked, session, supabase]);
+      setLoading(false);
+    })();
+  }, [session, supabase]);
 
-  if (!checked) {
-    return <p className="p-6">Comprobando sesión…</p>;
-  }
-  if (loadingPerfil) {
+  if (loading) {
     return <p className="p-6">Cargando perfil…</p>;
   }
 
@@ -89,12 +68,9 @@ export default function ProfilePage() {
           firmaFile,
           { upsert: true }
         );
-      if (upErr) {
-        alert('Error al subir firma: ' + upErr.message);
-        setSaving(false);
-        return;
+      if (!upErr && up) {
+        firmaPath = up.path;
       }
-      firmaPath = up.path;
     }
 
     const { error } = await supabase
