@@ -1,256 +1,196 @@
 'use client'
 
-import { useEffect, useState, ChangeEvent } from 'react'
+import { useState, useEffect, ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
-import type { Database } from '../../types/supabase'  // Ajusta ruta si tu types están en otro lugar
+
+type Perfil = {
+  id: string
+  user_id: string
+  nombre: string
+  apellidos: string
+  telefono: string
+  idioma: string
+  nombre_empr: string
+  nif: string
+  direccion: string
+  ciudad: string
+  provincia: string
+  cp: string
+  pais: string
+  email: string
+  web: string
+  firma: string | null
+  updated_at: string
+  pwd: string | null
+}
 
 export default function ProfilePage() {
-  const supabase = createPagesBrowserClient<Database>()
+  const supabase = createPagesBrowserClient()
   const router = useRouter()
 
-  // Estado general
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [perfil, setPerfil] = useState<Perfil | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  // Perfil
-  const [perfilId, setPerfilId] = useState<string | null>(null)
-  const [userId, setUserId] = useState<string>('')
-
-  // Campos
+  // campos del formulario
   const [nombre, setNombre] = useState('')
   const [apellidos, setApellidos] = useState('')
   const [telefono, setTelefono] = useState('')
   const [idioma, setIdioma] = useState('Español')
-  const [nombreEmpr, setNombreEmpr] = useState('')
-  const [nif, setNif] = useState('')
-  const [direccion, setDireccion] = useState('')
-  const [ciudad, setCiudad] = useState('')
-  const [provincia, setProvincia] = useState('')
-  const [cp, setCp] = useState('')
-  const [pais, setPais] = useState('')
-  const [email, setEmail] = useState('')
-  const [web, setWeb] = useState('')
-
-  // Firma digital (.p12)
-  const [p12File, setP12File] = useState<File | null>(null)
+  // ...
+  const [firmaFile, setFirmaFile] = useState<File | null>(null)
   const [pwd, setPwd] = useState('')
 
   useEffect(() => {
-    async function loadPerfil() {
-      setLoading(true)
-      const {
-        data: { session }
-      } = await supabase.auth.getSession()
-
+    setLoading(true)
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
-        alert('Debes iniciar sesión para ver tu perfil.')
-        router.push('/auth/login')
+        setError('Debes iniciar sesión para ver tu perfil.')
+        setLoading(false)
         return
       }
-      setUserId(session.user.id)
-
-      const { data, error } = await supabase
+      supabase
         .from('perfil')
         .select('*')
         .eq('user_id', session.user.id)
         .single()
+        .then(({ data, error }) => {
+          if (error && error.code !== 'PGRST116') {
+            setError(error.message)
+            return
+          }
+          if (data) {
+            setPerfil(data)
+            setNombre(data.nombre)
+            setApellidos(data.apellidos)
+            setTelefono(data.telefono)
+            setIdioma(data.idioma)
+            // ... inicializar el resto de campos
+          }
+        })
+        .finally(() => setLoading(false))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-      if (error && error.code !== 'PGRST116') {
-        alert('Error cargando perfil: ' + error.message)
-      }
-      if (data) {
-        setPerfilId(data.id)
-        setNombre(data.nombre || '')
-        setApellidos(data.apellidos || '')
-        setTelefono(data.telefono || '')
-        setIdioma(data.idioma || 'Español')
-        setNombreEmpr(data.nombre_empr || '')
-        setNif(data.nif || '')
-        setDireccion(data.direccion || '')
-        setCiudad(data.ciudad || '')
-        setProvincia(data.provincia || '')
-        setCp(data.cp || '')
-        setPais(data.pais || '')
-        setEmail(data.email || '')
-        setWeb(data.web || '')
-      }
-
-      setLoading(false)
-    }
-    loadPerfil()
-  }, [supabase, router])
-
-  const handleP12 = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) setP12File(e.target.files[0])
+  const handleFirmaChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setFirmaFile(e.target.files?.[0] ?? null)
   }
 
-  const handleSave = async () => {
-    setSaving(true)
+  const handleSubmit = async () => {
+    setLoading(true)
+    setError(null)
 
-    // 1) Sube .p12 si hay nuevo
-    let firmaPath: string | null = null
-    if (p12File) {
-      const { data: up, error: upErr } = await supabase.storage
-        .from('certs')
-        .upload(`p12/${userId}.p12`, p12File, { upsert: true })
-      if (upErr) {
-        alert('Error al subir P12: ' + upErr.message)
-        setSaving(false)
+    // 1) subir la firma al storage si hay archivo
+    let firmaPath = perfil?.firma || null
+    if (firmaFile) {
+      const { data, error: uploadErr } = await supabase.storage
+        .from('firmas')
+        .upload(`firmas/${Date.now()}_${firmaFile.name}`, firmaFile, {
+          upsert: true,
+        })
+      if (uploadErr) {
+        setError(uploadErr.message)
+        setLoading(false)
         return
       }
-      firmaPath = up.path
+      firmaPath = data.path
     }
 
-    // 2) Inserta o actualiza
-    const payload = {
-      id: perfilId ?? undefined,
-      user_id: userId,
-      nombre,
-      apellidos,
-      telefono,
-      idioma,
-      nombre_empr: nombreEmpr,
-      nif,
-      direccion,
-      ciudad,
-      provincia,
-      cp,
-      pais,
-      email,
-      web,
-      firma: firmaPath ?? undefined,
-      updated_at: new Date().toISOString(),
-      // guarda pwd solo si lo rellenó
-      ...(pwd ? { pwd } : {})
-    }
-
-    const { error: eqErr } = await supabase
+    // 2) hacer upsert en la tabla
+    const { error: upsertErr } = await supabase
       .from('perfil')
-      .upsert(payload, { onConflict: 'user_id' })
-
-    if (eqErr) {
-      alert('Error guardando perfil: ' + eqErr.message)
-    } else {
-      // tras guardar, vuelve al dashboard
-      router.push('/dashboard')
+      .upsert({
+        user_id: perfil?.user_id ?? supabase.auth.getSession().then(r => r.data.session!.user.id),
+        nombre,
+        apellidos,
+        telefono,
+        idioma,
+        // ... resto de campos
+        firma: firmaPath,
+        pwd: pwd || null,
+      })
+      .eq('user_id', perfil?.user_id ?? '')
+    if (upsertErr) {
+      setError(upsertErr.message)
+      setLoading(false)
+      return
     }
 
-    setSaving(false)
+    // cerrar modal / recargar o redirigir al dashboard
+    router.push('/dashboard')
   }
 
-  if (loading) return <p className="p-8">Cargando perfil…</p>
+  if (loading) return <p>Cargando perfil…</p>
+  if (error) return <p style={{ color: 'red' }}>{error}</p>
 
   return (
-    <div className="p-8 bg-white rounded shadow">
-      <h1 className="text-2xl mb-6">Mi perfil</h1>
-      <div className="grid grid-cols-2 gap-4">
+    <div className="p-6 bg-white shadow rounded">
+      <h1 className="text-2xl mb-4">Mi perfil</h1>
+      <label className="block mb-2">
+        Nombre
         <input
-          className="border p-2 col-span-2"
-          placeholder="Nombre"
+          type="text"
           value={nombre}
           onChange={e => setNombre(e.target.value)}
+          className="mt-1 block w-full border px-2 py-1 rounded"
         />
+      </label>
+      <label className="block mb-2">
+        Apellidos
         <input
-          className="border p-2 col-span-2"
-          placeholder="Apellidos"
+          type="text"
           value={apellidos}
           onChange={e => setApellidos(e.target.value)}
+          className="mt-1 block w-full border px-2 py-1 rounded"
         />
+      </label>
+      <label className="block mb-2">
+        Teléfono
         <input
-          className="border p-2 col-span-2"
-          placeholder="Teléfono"
+          type="text"
           value={telefono}
           onChange={e => setTelefono(e.target.value)}
+          className="mt-1 block w-full border px-2 py-1 rounded"
         />
+      </label>
+      <label className="block mb-2">
+        Idioma
         <select
-          className="border p-2 col-span-2"
           value={idioma}
           onChange={e => setIdioma(e.target.value)}
+          className="mt-1 block w-full border px-2 py-1 rounded"
         >
           <option>Español</option>
           <option>Inglés</option>
         </select>
-
-        {/* Empresa */}
-        <input
-          className="border p-2"
-          placeholder="Razón social"
-          value={nombreEmpr}
-          onChange={e => setNombreEmpr(e.target.value)}
-        />
-        <input
-          className="border p-2"
-          placeholder="NIF / CIF"
-          value={nif}
-          onChange={e => setNif(e.target.value)}
-        />
-        <input
-          className="border p-2 col-span-2"
-          placeholder="Dirección"
-          value={direccion}
-          onChange={e => setDireccion(e.target.value)}
-        />
-        <input
-          className="border p-2"
-          placeholder="Ciudad"
-          value={ciudad}
-          onChange={e => setCiudad(e.target.value)}
-        />
-        <input
-          className="border p-2"
-          placeholder="Provincia"
-          value={provincia}
-          onChange={e => setProvincia(e.target.value)}
-        />
-        <input
-          className="border p-2"
-          placeholder="Código postal"
-          value={cp}
-          onChange={e => setCp(e.target.value)}
-        />
-        <input
-          className="border p-2"
-          placeholder="País"
-          value={pais}
-          onChange={e => setPais(e.target.value)}
-        />
-        <input
-          className="border p-2 col-span-2"
-          placeholder="Email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-        />
-        <input
-          className="border p-2 col-span-2"
-          placeholder="Web"
-          value={web}
-          onChange={e => setWeb(e.target.value)}
-        />
-
-        {/* Firma digital FNMT */}
-        <label className="col-span-2 mt-4 font-medium">Firma Digital FNMT (.p12)</label>
+      </label>
+      {/* ... agrega aquí los demás campos necesarios para Verifactu / Facturae ... */}
+      <label className="block mb-4">
+        Firma Digital FNMT
         <input
           type="file"
-          accept=".p12"
-          onChange={handleP12}
-          className="border p-2 col-span-2"
+          onChange={handleFirmaChange}
+          accept=".p12,.pfx"
+          className="mt-1"
         />
+      </label>
+      <label className="block mb-4">
+        Contraseña del P12
         <input
           type="password"
-          placeholder="Contraseña del P12"
           value={pwd}
           onChange={e => setPwd(e.target.value)}
-          className="border p-2 col-span-2"
+          className="mt-1 block w-full border px-2 py-1 rounded"
         />
-      </div>
-
+      </label>
       <button
-        onClick={handleSave}
-        disabled={saving}
-        className={`mt-6 px-6 py-2 bg-blue-600 text-white rounded ${saving ? 'opacity-50' : ''}`}
+        onClick={handleSubmit}
+        disabled={loading}
+        className="bg-blue-600 text-white px-4 py-2 rounded"
       >
-        {saving ? 'Guardando…' : 'Guardar perfil'}
+        Guardar perfil
       </button>
     </div>
   )
