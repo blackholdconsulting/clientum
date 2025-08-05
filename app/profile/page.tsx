@@ -1,169 +1,50 @@
 'use client'
-
-import { useState, useEffect, ChangeEvent, FormEvent } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
 
 export default function ProfilePage() {
+  const [p12, setP12] = useState<File|null>(null)
+  const [pass, setPass] = useState('')
+  const [signed, setSigned] = useState<string|null>(null)
   const router = useRouter()
-  const supabase = createPagesBrowserClient()
 
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [perfil, setPerfil] = useState({
-    nombre: '',
-    apellidos: '',
-    telefono: '',
-    idioma: 'Español',
-    email: '',
-    nombre_empresa: '',
-    nif: '',
-    direccion: '',
-    ciudad: '',
-    provincia: '',
-    cp: '',
-    pais: '',
-    web: '',
-    firma: null as File | null,
-  })
+  const handleSign = async () => {
+    if (!p12 || !pass) return alert('Selecciona tu .p12 y contraseña')
 
-  // Carga el perfil al montar
-  useEffect(() => {
-    async function fetchPerfil() {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (!session) {
-          alert('Debes iniciar sesión para ver tu perfil.')
-          router.push('/auth/login?callbackUrl=/profile')
-          return
-        }
+    const form = new FormData()
+    form.append('p12', p12)
+    form.append('pass', pass)
+    form.append('payload', '<Facturae>…tu XML aquí…</Facturae>')
 
-        const { data } = await supabase
-          .from('perfil')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .single()
+    const res = await fetch('/api/profile/sign', { method: 'POST', body: form })
+    const json = await res.json()
+    if (json.error) return alert('ERROR: ' + json.error)
 
-        if (data) {
-          setPerfil({
-            ...perfil,
-            ...data,
-            firma: null,
-          })
-        }
-      } catch (e) {
-        console.error(e)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchPerfil()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setPerfil((p) => ({ ...p, [name]: value }))
+    setSigned(json.signature)
+    // aquí puedas subir `json.signature` y `json.cert` a Supabase Storage
+    // y hacer upsert en tu tabla `perfil`
   }
-
-  const handleFile = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      setPerfil((p) => ({ ...p, firma: e.target.files![0] }))
-    }
-  }
-
-  const savePerfil = async (e: FormEvent) => {
-    e.preventDefault()
-    setSaving(true)
-
-    try {
-      // 1) sube firma si la hay
-      let firmaPath: string | null = null
-      if (perfil.firma) {
-        const { data: uploadData, error: uploadErr } = await supabase.storage
-          .from('firmas')
-          .upload(`firma-${Date.now()}`, perfil.firma, { upsert: true })
-        if (uploadErr) throw uploadErr
-        firmaPath = uploadData.path
-      }
-
-      // 2) guarda datos
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const user_id = session?.user.id
-      if (!user_id) throw new Error('Sesión inválida.')
-
-      const { error: upErr } = await supabase
-        .from('perfil')
-        .upsert(
-          {
-            user_id,
-            nombre: perfil.nombre,
-            apellidos: perfil.apellidos,
-            telefono: perfil.telefono,
-            idioma: perfil.idioma,
-            email: perfil.email,
-            nombre_empresa: perfil.nombre_empresa,
-            nif: perfil.nif,
-            direccion: perfil.direccion,
-            ciudad: perfil.ciudad,
-            provincia: perfil.provincia,
-            cp: perfil.cp,
-            pais: perfil.pais,
-            web: perfil.web,
-            firma: firmaPath,
-          },
-          { onConflict: 'user_id' }
-        )
-      if (upErr) throw upErr
-
-      alert('Perfil guardado.')
-      router.push('/dashboard')
-    } catch (err: any) {
-      alert('Error guardando perfil: ' + err.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (loading) return <div className="p-8">Cargando perfil…</div>
 
   return (
-    <div className="max-w-3xl mx-auto p-8 bg-white shadow rounded">
-      <h1 className="text-2xl mb-6">Mi perfil</h1>
-      <form onSubmit={savePerfil} className="space-y-4">
-        {/* Campos como antes... copia y pega todos los inputs/selects aquí */}
+    <div style={{ maxWidth: 600, margin: '2rem auto' }}>
+      <h1>Mi perfil: Firma Digital FNMT</h1>
+      <label>
+        Selecciona P12 FNMT:
+        <input type="file" accept=".p12" onChange={e=>setP12(e.target.files?.[0]||null)} />
+      </label>
+      <label>
+        Contraseña:
+        <input type="password" value={pass} onChange={e=>setPass(e.target.value)} />
+      </label>
+      <button onClick={handleSign}>Firmar XML</button>
+
+      {signed && (
         <div>
-          <label>Nombre</label>
-          <input
-            name="nombre"
-            value={perfil.nombre}
-            onChange={handleChange}
-            className="w-full border px-3 py-2 rounded"
-          />
+          <h2>Firma (Base64):</h2>
+          <textarea readOnly style={{ width: '100%', height: 200 }} value={signed} />
+          <button onClick={()=>router.push('/')}>Volver al dashboard</button>
         </div>
-        {/* ... resto de campos ... */}
-        <div>
-          <label>Firma Digital (PDF FNMT)</label>
-          <input
-            type="file"
-            accept=".pdf"
-            onChange={handleFile}
-            className="w-full border px-3 py-2 rounded"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={saving}
-          className="bg-blue-600 text-white px-6 py-2 rounded disabled:opacity-50"
-        >
-          {saving ? 'Guardando...' : 'Guardar perfil'}
-        </button>
-      </form>
+      )}
     </div>
   )
 }
