@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useSupabaseClient } from '@supabase/auth-helpers-react'
+import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
 
 type Cliente = {
@@ -22,17 +22,16 @@ type Cliente = {
 }
 
 export default function ClientesPage() {
-  const supabase = useSupabaseClient()
+  const supabase = createPagesBrowserClient()
   const router = useRouter()
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Carga lista de clientes
   useEffect(() => {
     async function fetchClientes() {
       setLoading(true)
       const { data, error } = await supabase
-        .from<Cliente>('clientes')
+        .from<'clientes', Cliente>('clientes')
         .select('*')
         .order('created_at', { ascending: false })
       setLoading(false)
@@ -62,7 +61,6 @@ export default function ClientesPage() {
         </div>
       </header>
 
-      {/* Filtros estilo Holded (simplificado) */}
       <div className="flex space-x-2 mb-6">
         <button className="px-3 py-1 bg-blue-100 text-blue-800 rounded">Todos</button>
         <button className="px-3 py-1 border rounded">Empresas</button>
@@ -74,7 +72,6 @@ export default function ClientesPage() {
         <button className="px-3 py-1 text-blue-600">+ Filtro</button>
       </div>
 
-      {/* Tarjeta de bienvenida */}
       {clientes.length === 0 && !loading && (
         <div className="bg-white shadow rounded p-6 flex items-center justify-between">
           <div>
@@ -93,7 +90,6 @@ export default function ClientesPage() {
         </div>
       )}
 
-      {/* Tabla de clientes */}
       {!loading && clientes.length > 0 && (
         <div className="overflow-x-auto bg-white shadow rounded">
           <table className="w-full table-auto">
@@ -125,7 +121,6 @@ export default function ClientesPage() {
         </div>
       )}
 
-      {/* Loading */}
       {loading && (
         <div className="text-center py-10 text-gray-500">Cargando contactos…</div>
       )}
