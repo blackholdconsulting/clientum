@@ -23,26 +23,30 @@ export default function ClientesPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'todos' | 'empresa' | 'persona'>('todos')
 
-  // Carga inicial de datos
   useEffect(() => {
-    setLoading(true)
-    supabase
-      .from('clientes')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
+    const fetchClientes = async () => {
+      setLoading(true)
+      try {
+        const { data, error } = await supabase
+          .from('clientes')
+          .select('*')
+          .order('created_at', { ascending: false })
+
         if (error) {
           alert(`Error cargando clientes: ${error.message}`)
         } else {
           setClientes(data || [])
         }
-      })
-      .finally(() => {
+      } catch (err: any) {
+        alert(`Error inesperado: ${err.message}`)
+      } finally {
         setLoading(false)
-      })
-  }, [])
+      }
+    }
 
-  // Filtra según tipo
+    fetchClientes()
+  }, [supabase])
+
   const filtered = clientes.filter(c => {
     if (filter === 'empresa') return c.tipo === 'empresa'
     if (filter === 'persona') return c.tipo === 'persona'
