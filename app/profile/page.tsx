@@ -1,12 +1,10 @@
+// app/profile/page.tsx
 'use client'
 
 import { useState, useEffect, ChangeEvent, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  createPagesBrowserClient,
-  Session
-} from '@supabase/auth-helpers-nextjs'
-import type { Database } from '../../types/supabase'
+import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
+import { Session } from '@supabase/auth-helpers-nextjs'
 
 export type Perfil = {
   id: string
@@ -15,11 +13,12 @@ export type Perfil = {
   apellidos: string | null
   telefono: string | null
   idioma: string | null
+  email: string
   firma: string | null
 }
 
 export default function ProfilePage() {
-  const supabase = createPagesBrowserClient<Database>()
+  const supabase = createPagesBrowserClient()
   const router = useRouter()
 
   const [session, setSession] = useState<Session | null>(null)
@@ -38,7 +37,6 @@ export default function ProfilePage() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
-        alert('Debes iniciar sesión para ver tu perfil.')
         router.push('/auth/login?callbackUrl=/profile')
       } else {
         setSession(session)
@@ -77,20 +75,18 @@ export default function ProfilePage() {
       })
   }, [session, supabase])
 
-  // 3) Manejadores de campos
   const handleChangeFile = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       setFirmaFile(e.target.files[0])
     }
   }
 
-  // 4) Guardar/upsert perfil
+  // 3) Guardar/upsert perfil
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!session) return
     setSaving(true)
 
-    // 4.a) subir firma si hay
     let firmaKey: string | null = perfil?.firma ?? null
     if (firmaFile) {
       const { data: uploadData, error: uploadError } = await supabase
@@ -109,7 +105,6 @@ export default function ProfilePage() {
       firmaKey = uploadData.path
     }
 
-    // 4.b) insertar o actualizar perfil
     const { error: upsertError } = await supabase
       .from<Perfil>('perfil')
       .upsert(
@@ -129,15 +124,13 @@ export default function ProfilePage() {
       return
     }
 
-    // 4.c) refrescar datos en pantalla
+    // refrescar datos
     const { data: refreshed, error: refError } = await supabase
       .from<Perfil>('perfil')
       .select('*')
       .eq('user_id', session.user.id)
       .single()
-    if (refError) {
-      alert('Error refrescando perfil: ' + refError.message)
-    } else if (refreshed) {
+    if (refreshed) {
       setPerfil(refreshed)
       if (refreshed.firma) {
         const { data: urlData } = supabase
@@ -150,68 +143,71 @@ export default function ProfilePage() {
     setSaving(false)
   }
 
-  // 5) Render
   if (loading) {
     return <p className="p-4">Cargando perfil…</p>
   }
 
   return (
-    <main className="p-8">
-      <h1 className="text-2xl mb-6">Mi perfil</h1>
-      <form onSubmit={handleSubmit} className="space-y-4 max-w-xl">
+    <main className="p-8 max-w-lg mx-auto">
+      <h1 className="text-2xl font-bold mb-6">Mi perfil</h1>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Nombre */}
         <div>
           <label>Nombre</label>
           <input
             type="text"
             value={nombre}
             onChange={e => setNombre(e.target.value)}
-            className="w-full border px-2 py-1"
+            className="w-full border px-2 py-1 rounded"
           />
         </div>
+        {/* Apellidos */}
         <div>
           <label>Apellidos</label>
           <input
             type="text"
             value={apellidos}
             onChange={e => setApellidos(e.target.value)}
-            className="w-full border px-2 py-1"
+            className="w-full border px-2 py-1 rounded"
           />
         </div>
+        {/* Teléfono */}
         <div>
           <label>Teléfono</label>
           <input
             type="text"
             value={telefono}
             onChange={e => setTelefono(e.target.value)}
-            className="w-full border px-2 py-1"
+            className="w-full border px-2 py-1 rounded"
           />
         </div>
+        {/* Idioma */}
         <div>
           <label>Idioma</label>
           <select
             value={idioma}
             onChange={e => setIdioma(e.target.value)}
-            className="w-full border px-2 py-1"
+            className="w-full border px-2 py-1 rounded"
           >
             <option>Español</option>
             <option>Inglés</option>
           </select>
         </div>
-
+        {/* Email */}
         <div>
           <label>Email</label>
           <input
             type="text"
             value={session?.user.email ?? ''}
             disabled
-            className="w-full bg-gray-100 px-2 py-1"
+            className="w-full bg-gray-100 px-2 py-1 rounded"
           />
         </div>
-
+        {/* Firma digital */}
         <div>
           <label>Firma Digital</label>
           <div className="flex items-center space-x-4">
-            <div className="w-40 h-24 bg-gray-200 flex items-center justify-center">
+            <div className="w-40 h-24 border bg-gray-50 flex items-center justify-center">
               {firmaUrl ? (
                 <img src={firmaUrl} alt="firma" className="max-h-full" />
               ) : (
@@ -221,11 +217,11 @@ export default function ProfilePage() {
             <input type="file" accept="image/*" onChange={handleChangeFile} />
           </div>
         </div>
-
+        {/* Botón */}
         <button
           type="submit"
           disabled={saving}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
         >
           {saving ? 'Guardando…' : 'Guardar perfil'}
         </button>
