@@ -33,21 +33,21 @@ export default function ProfilePage() {
   const [idioma, setIdioma] = useState('Español');
   const [firmaFile, setFirmaFile] = useState<File | null>(null);
 
-  // 1) Redirigir si no hay sesión
+  // Si no hay sesión, redirige a login
   useEffect(() => {
     if (session === null) {
       router.replace('/login');
     }
   }, [session, router]);
 
-  // 2) Cargar perfil
+  // Carga perfil al montar
   useEffect(() => {
     if (!session) return;
     (async () => {
       setLoading(true);
       const { data, error } = await supabase
-        .from<'perfil', Perfil>('perfil')
-        .select('*')
+        .from('perfil')
+        .select<Perfil>()
         .eq('user_id', session.user.id)
         .single();
 
@@ -69,9 +69,9 @@ export default function ProfilePage() {
     if (!session) return;
     setSaving(true);
 
-    let firmaPath = perfil?.firma || null;
+    // Ruta de firma existente o nueva
+    let firmaPath = perfil?.firma ?? null;
 
-    // 3) Subir nueva firma si la hay
     if (firmaFile) {
       const fileName = `${session.user.id}-${Date.now()}`;
       const { error: uploadError } = await supabase.storage
@@ -85,10 +85,10 @@ export default function ProfilePage() {
       firmaPath = fileName;
     }
 
-    // 4) Upsert perfil
+    // Upsert perfil (inserta o actualiza)
     const { error: upsertError } = await supabase
-      .from<'perfil', Perfil>('perfil')
-      .upsert(
+      .from('perfil')
+      .upsert<Perfil>(
         {
           user_id: session.user.id,
           nombre,
@@ -106,10 +106,10 @@ export default function ProfilePage() {
       return;
     }
 
-    // 5) Recargar datos
+    // Refresca datos
     const { data: refreshed } = await supabase
-      .from<'perfil', Perfil>('perfil')
-      .select('*')
+      .from('perfil')
+      .select<Perfil>()
       .eq('user_id', session.user.id)
       .single();
     if (refreshed) {
@@ -124,6 +124,7 @@ export default function ProfilePage() {
     return <div className="p-8">Cargando perfil…</div>;
   }
 
+  // URL pública de la firma
   const firmaUrl =
     perfil?.firma
       ? supabase
@@ -137,7 +138,6 @@ export default function ProfilePage() {
       <h1 className="text-2xl font-bold mb-6">Mi perfil</h1>
 
       <div className="space-y-4">
-        {/* Nombre */}
         <div>
           <label className="block mb-1">Nombre</label>
           <input
@@ -147,8 +147,6 @@ export default function ProfilePage() {
             className="w-full border px-3 py-2 rounded"
           />
         </div>
-
-        {/* Apellidos */}
         <div>
           <label className="block mb-1">Apellidos</label>
           <input
@@ -158,8 +156,6 @@ export default function ProfilePage() {
             className="w-full border px-3 py-2 rounded"
           />
         </div>
-
-        {/* Teléfono */}
         <div>
           <label className="block mb-1">Teléfono</label>
           <input
@@ -169,8 +165,6 @@ export default function ProfilePage() {
             className="w-full border px-3 py-2 rounded"
           />
         </div>
-
-        {/* Idioma */}
         <div>
           <label className="block mb-1">Idioma</label>
           <select
@@ -183,18 +177,16 @@ export default function ProfilePage() {
           </select>
         </div>
 
-        {/* Email */}
         <div>
           <label className="block mb-1">Email (no editable)</label>
           <input
             type="email"
-            value={session.user.email || ''}
+            value={session.user.email ?? ''}
             disabled
             className="w-full bg-gray-100 border px-3 py-2 rounded"
           />
         </div>
 
-        {/* Firma digital */}
         <div>
           <label className="block mb-1">Firma Digital</label>
           <div className="flex items-center space-x-4">
@@ -213,13 +205,12 @@ export default function ProfilePage() {
               type="file"
               accept="image/*"
               onChange={e =>
-                setFirmaFile(e.target.files ? e.target.files[0] : null)
+                setFirmaFile(e.target.files?.[0] ?? null)
               }
             />
           </div>
         </div>
 
-        {/* Botón guardar */}
         <button
           onClick={handleSave}
           disabled={saving}
