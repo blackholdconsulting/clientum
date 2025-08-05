@@ -5,14 +5,13 @@ import './globals.css';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ReactNode } from 'react';
+import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 import {
-  createPagesBrowserClient,
   SessionContextProvider,
-} from '@supabase/auth-helpers-nextjs';
-import type { Database } from '../types/supabase'; // Ajusta la ruta a tus tipos
+} from '@supabase/auth-helpers-react';
+import type { Database } from '../types/supabase';
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  // Creamos el cliente sólo una vez
   const supabase = createPagesBrowserClient<Database>();
   const router = useRouter();
   const pathname = usePathname() ?? '/';
@@ -32,11 +31,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="es">
       <body className="bg-gray-50 text-gray-800 flex h-screen overflow-hidden">
-        {/* Inyectamos la sesión de Supabase a todo el árbol */}
         <SessionContextProvider supabaseClient={supabase}>
-          {/* Sidebar */}
           <aside className="w-64 bg-white border-r shadow flex flex-col">
-            <div className="p-6 font-bold text-xl text-indigo-600">Clientum</div>
+            <div className="p-6 font-bold text-xl text-indigo-600">
+              Clientum
+            </div>
             <nav className="flex-1 overflow-y-auto px-4 space-y-1 text-sm">
               <Link href="/dashboard" className={linkClass('/dashboard')}>
                 📊 Dashboard
@@ -44,17 +43,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <Link href="/clientes" className={linkClass('/clientes')}>
                 👥 Clientes
               </Link>
-              {/* … resto de enlaces … */}
+              <Link href="/facturas" className={linkClass('/facturas')}>
+                📄 Facturas
+              </Link>
               <Link href="/negocio/continuar-proyecto" className={linkClass('/negocio/continuar-proyecto')}>
                 ▶️ Continuar Proyecto
               </Link>
-              {/* … */}
               <Link href="/help" className={linkClass('/help')}>
                 🆘 Ayuda y Soporte
               </Link>
             </nav>
-
-            {/* Profile & logout */}
             <div className="px-4 mt-auto border-t pt-2 space-y-1">
               <Link
                 href="/profile"
@@ -84,8 +82,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </button>
             </div>
           </aside>
-
-          {/* Content */}
           <main className="flex-1 p-8 overflow-y-auto bg-gray-100">
             {children}
           </main>
