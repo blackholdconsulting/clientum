@@ -1,161 +1,160 @@
 // app/clientes/nuevo/page.tsx
 'use client';
 
-import React, { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
-import { useSupabaseClient, useUser } from "@supabase/auth-helpers-react";
+import React, { useState, FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  useSupabaseClient,
+  useUser
+} from '@supabase/auth-helpers-react';
 
-export default function NewClientPage() {
+export default function NuevoClientePage() {
   const router = useRouter();
   const supabase = useSupabaseClient();
   const user = useUser();
 
-  const [razonSocial, setRazonSocial] = useState("");
-  const [nombre, setNombre] = useState("");
-  const [nif, setNif] = useState("");
-  const [email, setEmail] = useState("");
-  const [domicilio, setDomicilio] = useState("");
-  const [codigoPostal, setCodigoPostal] = useState<number | "">("");
-  const [localidad, setLocalidad] = useState("");
-  const [provincia, setProvincia] = useState("");
-  const [pais, setPais] = useState("");
-  const [telefono, setTelefono] = useState<number | "">("");
+  const [nombre, setNombre] = useState('');
+  const [razonSocial, setRazonSocial] = useState('');
+  const [nif, setNif] = useState('');
+  const [email, setEmail] = useState('');
+  const [domicilio, setDomicilio] = useState('');
+  const [codigoPostal, setCodigoPostal] = useState<number | ''>('');
+  const [localidad, setLocalidad] = useState('');
+  const [provincia, setProvincia] = useState('');
+  const [pais, setPais] = useState('');
+  const [telefono, setTelefono] = useState<number | ''>('');
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!user) {
-      alert("Debes iniciar sesión para crear un cliente");
+      alert('Debes iniciar sesión para crear un cliente.');
       return;
     }
     setLoading(true);
 
-    const { error } = await supabase.from("clientes").insert({
-      user_id: user.id,
-      nombre,
-      razon_social: razonSocial,
-      nif,
-      email,
-      domicilio,
-      codigo_postal: codigoPostal === "" ? null : codigoPostal,
-      localidad,
-      provincia,
-      pais,
-      telefono: telefono === "" ? null : telefono,
-    });
+    const { error } = await supabase
+      .from('clientes')
+      .insert({
+        user_id: user.id,
+        nombre,
+        razon_social: razonSocial,
+        nif,
+        email,
+        domicilio,
+        codigo_postal: codigoPostal === '' ? null : codigoPostal,
+        localidad,
+        provincia,
+        pais,
+        telefono: telefono === '' ? null : telefono,
+      });
 
     setLoading(false);
+
     if (error) {
-      alert("Error creando cliente: " + error.message);
+      alert('Error creando cliente: ' + error.message);
     } else {
-      // <<< aquí la ruta en minúsculas
-      router.push("/clientes");
+      // Al crear correctamente, volvemos a la lista de clientes
+      router.push('/clientes');
     }
   }
 
   return (
-    <main className="p-6 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Nuevo Cliente</h1>
+    <main className="p-6 max-w-md mx-auto bg-white rounded shadow space-y-4">
+      <h1 className="text-2xl font-semibold">Nuevo cliente</h1>
       <form onSubmit={handleSubmit} className="space-y-3">
-        <div>
-          <label>Razón social</label>
-          <input
-            required
-            value={razonSocial}
-            onChange={e => setRazonSocial(e.target.value)}
-            className="border w-full px-2 py-1"
-          />
-        </div>
-        <div>
-          <label>Nombre contacto</label>
+        <label className="block">
+          Nombre contacto
           <input
             required
             value={nombre}
-            onChange={e => setNombre(e.target.value)}
-            className="border w-full px-2 py-1"
+            onChange={(e) => setNombre(e.target.value)}
+            className="w-full border p-2 rounded mt-1"
           />
-        </div>
-        <div>
-          <label>NIF / CIF</label>
+        </label>
+        <label className="block">
+          Razón social
           <input
-            required
-            value={nif}
-            onChange={e => setNif(e.target.value)}
-            className="border w-full px-2 py-1"
+            value={razonSocial}
+            onChange={(e) => setRazonSocial(e.target.value)}
+            className="w-full border p-2 rounded mt-1"
           />
-        </div>
-        <div>
-          <label>Email</label>
+        </label>
+        <label className="block">
+          NIF / CIF
+          <input
+            value={nif}
+            onChange={(e) => setNif(e.target.value)}
+            className="w-full border p-2 rounded mt-1"
+          />
+        </label>
+        <label className="block">
+          Email
           <input
             type="email"
-            required
             value={email}
-            onChange={e => setEmail(e.target.value)}
-            className="border w-full px-2 py-1"
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full border p-2 rounded mt-1"
           />
-        </div>
-        <div>
-          <label>Domicilio fiscal</label>
+        </label>
+        <label className="block">
+          Domicilio
           <input
-            required
             value={domicilio}
-            onChange={e => setDomicilio(e.target.value)}
-            className="border w-full px-2 py-1"
+            onChange={(e) => setDomicilio(e.target.value)}
+            className="w-full border p-2 rounded mt-1"
           />
-        </div>
-        <div>
-          <label>Código postal</label>
+        </label>
+        <label className="block">
+          Código postal
           <input
             type="number"
-            required
             value={codigoPostal}
-            onChange={e => setCodigoPostal(e.target.value === "" ? "" : parseInt(e.target.value))}
-            className="border w-full px-2 py-1"
+            onChange={(e) => setCodigoPostal(e.target.value === '' ? '' : parseInt(e.target.value))}
+            className="w-full border p-2 rounded mt-1"
           />
-        </div>
-        <div>
-          <label>Localidad</label>
+        </label>
+        <label className="block">
+          Localidad
           <input
-            required
             value={localidad}
-            onChange={e => setLocalidad(e.target.value)}
-            className="border w-full px-2 py-1"
+            onChange={(e) => setLocalidad(e.target.value)}
+            className="w-full border p-2 rounded mt-1"
           />
-        </div>
-        <div>
-          <label>Provincia</label>
+        </label>
+        <label className="block">
+          Provincia
           <input
-            required
             value={provincia}
-            onChange={e => setProvincia(e.target.value)}
-            className="border w-full px-2 py-1"
+            onChange={(e) => setProvincia(e.target.value)}
+            className="w-full border p-2 rounded mt-1"
           />
-        </div>
-        <div>
-          <label>País</label>
+        </label>
+        <label className="block">
+          País
           <input
-            required
             value={pais}
-            onChange={e => setPais(e.target.value)}
-            className="border w-full px-2 py-1"
+            onChange={(e) => setPais(e.target.value)}
+            className="w-full border p-2 rounded mt-1"
           />
-        </div>
-        <div>
-          <label>Teléfono</label>
+        </label>
+        <label className="block">
+          Teléfono
           <input
             type="number"
-            required
             value={telefono}
-            onChange={e => setTelefono(e.target.value === "" ? "" : parseInt(e.target.value))}
-            className="border w-full px-2 py-1"
+            onChange={(e) => setTelefono(e.target.value === '' ? '' : parseInt(e.target.value))}
+            className="w-full border p-2 rounded mt-1"
           />
-        </div>
+        </label>
         <button
           type="submit"
           disabled={loading}
-          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          className={`w-full py-2 rounded text-white ${
+            loading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
+          }`}
         >
-          {loading ? "Creando…" : "Crear Cliente"}
+          {loading ? 'Creando…' : 'Crear cliente'}
         </button>
       </form>
     </main>
