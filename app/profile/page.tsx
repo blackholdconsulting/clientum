@@ -16,7 +16,6 @@ type Perfil = {
   idioma: string | null;
   email: string;
   firma: string | null;
-  // añade aquí otros campos de tu tabla perfil...
 };
 
 export default function ProfilePage() {
@@ -28,14 +27,12 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Campos de formulario
   const [nombre, setNombre] = useState('');
   const [apellidos, setApellidos] = useState('');
   const [telefono, setTelefono] = useState('');
   const [idioma, setIdioma] = useState('Español');
   const [firmaFile, setFirmaFile] = useState<File | null>(null);
 
-  // 1) Carga perfil al montar
   useEffect(() => {
     if (!session) {
       router.push('/auth/login?callbackUrl=/profile');
@@ -62,13 +59,11 @@ export default function ProfilePage() {
     loadPerfil();
   }, [session, supabase, router]);
 
-  // 2) Guarda cambios (upsert)
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     if (!session) return;
     setSaving(true);
 
-    // Subir firma si hay archivo
     let firmaPath = perfil?.firma ?? null;
     if (firmaFile) {
       const { data: up, error: upErr } = await supabase.storage
@@ -102,7 +97,6 @@ export default function ProfilePage() {
       alert('Error guardando perfil: ' + error.message);
     } else {
       alert('Perfil guardado correctamente');
-      // actualiza estado local sin recargar la página
       setPerfil((p) =>
         p
           ? { ...p, nombre, apellidos, telefono, idioma, firma: firmaPath }
@@ -171,7 +165,8 @@ export default function ProfilePage() {
                   src={
                     supabase.storage
                       .from('firmas')
-                      .getPublicUrl(perfil.firma).publicUrl
+                      .getPublicUrl(perfil.firma)
+                      .data.publicUrl
                   }
                   alt="firma"
                 />
