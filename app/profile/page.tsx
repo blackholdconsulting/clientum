@@ -16,7 +16,7 @@ type Perfil = {
   idioma: string | null;
   email: string;
   firma: string | null;
-  // añade aquí los demás campos que tengas en la tabla perfil...
+  // añade aquí otros campos de tu tabla perfil...
 };
 
 export default function ProfilePage() {
@@ -28,52 +28,48 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // estados para el formulario:
+  // Campos de formulario
   const [nombre, setNombre] = useState('');
   const [apellidos, setApellidos] = useState('');
   const [telefono, setTelefono] = useState('');
   const [idioma, setIdioma] = useState('Español');
   const [firmaFile, setFirmaFile] = useState<File | null>(null);
 
-  // 1) on mount, fetch perfil
+  // 1) Carga perfil al montar
   useEffect(() => {
     if (!session) {
       router.push('/auth/login?callbackUrl=/profile');
       return;
     }
-
-    async function loadPerfil() {
+    const loadPerfil = async () => {
       setLoading(true);
       const { data, error } = await supabase
-        .from<Perfil>('perfil')
+        .from('perfil')
         .select('*')
         .eq('user_id', session.user.id)
         .single();
-
       if (error && error.code !== 'PGRST116') {
         alert('Error cargando perfil: ' + error.message);
       } else if (data) {
         setPerfil(data);
-        setNombre(data.nombre || '');
-        setApellidos(data.apellidos || '');
-        setTelefono(data.telefono || '');
-        setIdioma(data.idioma || 'Español');
+        setNombre(data.nombre ?? '');
+        setApellidos(data.apellidos ?? '');
+        setTelefono(data.telefono ?? '');
+        setIdioma(data.idioma ?? 'Español');
       }
       setLoading(false);
-    }
-
+    };
     loadPerfil();
   }, [session, supabase, router]);
 
-  // 2) guardar cambios
-  async function handleSave(e: FormEvent) {
+  // 2) Guarda cambios (upsert)
+  const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     if (!session) return;
-
     setSaving(true);
 
-    // subir firma si hay fichero
-    let firmaPath: string | null = perfil?.firma || null;
+    // Subir firma si hay archivo
+    let firmaPath = perfil?.firma ?? null;
     if (firmaFile) {
       const { data: up, error: upErr } = await supabase.storage
         .from('firmas')
@@ -102,15 +98,18 @@ export default function ProfilePage() {
       });
 
     setSaving(false);
-
     if (error) {
       alert('Error guardando perfil: ' + error.message);
     } else {
       alert('Perfil guardado correctamente');
-      // recarga local:
-      setPerfil((p) => p && ({ ...p, nombre, apellidos, telefono, idioma, firma: firmaPath }));
+      // actualiza estado local sin recargar la página
+      setPerfil((p) =>
+        p
+          ? { ...p, nombre, apellidos, telefono, idioma, firma: firmaPath }
+          : p
+      );
     }
-  }
+  };
 
   if (loading) {
     return <p className="p-6">Cargando perfil…</p>;
@@ -169,7 +168,11 @@ export default function ProfilePage() {
             <div className="w-32 h-24 border flex items-center justify-center text-gray-500">
               {perfil?.firma ? (
                 <img
-                  src={supabase.storage.from('firmas').getPublicUrl(perfil.firma).publicUrl}
+                  src={
+                    supabase.storage
+                      .from('firmas')
+                      .getPublicUrl(perfil.firma).publicUrl
+                  }
                   alt="firma"
                 />
               ) : (
@@ -179,7 +182,7 @@ export default function ProfilePage() {
             <input
               type="file"
               accept="image/*"
-              onChange={(e) => setFirmaFile(e.target.files?.[0] || null)}
+              onChange={(e) => setFirmaFile(e.target.files?.[0] ?? null)}
             />
           </div>
         </label>
@@ -196,4 +199,3 @@ export default function ProfilePage() {
     </main>
   );
 }
-
