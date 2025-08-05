@@ -19,9 +19,12 @@ export default function ProfilePage() {
   const [idioma, setIdioma] = useState('Español')
   const [firmaFile, setFirmaFile] = useState<File | null>(null)
 
-  // 1) Cargamos sesión + perfil al montar
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    async function load() {
+      const {
+        data: { session }
+      } = await supabase.auth.getSession()
+
       if (!session) {
         alert('Debes iniciar sesión para ver tu perfil.')
         router.push('/login')
@@ -29,42 +32,37 @@ export default function ProfilePage() {
       }
       setSession(session)
 
-      // traemos datos de perfil
-      supabase
+      const { data, error } = await supabase
         .from('perfil')
         .select('*')
         .eq('user_id', session.user.id)
         .single()
-        .then(({ data, error }) => {
-          if (data) {
-            setNombre(data.nombre || '')
-            setApellidos(data.apellidos || '')
-            setTelefono(data.telefono || '')
-            setIdioma(data.idioma || 'Español')
-            // no pre-cargamos firma aquí para simplificar
-          }
-        })
-        .finally(() => setLoading(false))
-    })
-  }, [])
+
+      if (data) {
+        setNombre(data.nombre || '')
+        setApellidos(data.apellidos || '')
+        setTelefono(data.telefono || '')
+        setIdioma(data.idioma || 'Español')
+      }
+      setLoading(false)
+    }
+    load()
+  }, [supabase, router])
 
   if (loading) {
     return <p>Cargando perfil…</p>
   }
 
-  // 2) Handler de subir archivo
   const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       setFirmaFile(e.target.files[0])
     }
   }
 
-  // 3) Guardar perfil + firma
   const saveProfile = async () => {
     if (!session) return
     setSaving(true)
 
-    // subimos firma si hay archivo
     let firmaPath: string | null = null
     if (firmaFile) {
       const { data, error: upErr } = await supabase.storage
@@ -80,17 +78,19 @@ export default function ProfilePage() {
       firmaPath = data.path
     }
 
-    // upsert perfil
     const { error: perfErr } = await supabase
       .from('perfil')
-      .upsert({
-        user_id: session.user.id,
-        nombre,
-        apellidos,
-        telefono,
-        idioma,
-        firma: firmaPath
-      }, { onConflict: 'user_id' })
+      .upsert(
+        {
+          user_id: session.user.id,
+          nombre,
+          apellidos,
+          telefono,
+          idioma,
+          firma: firmaPath
+        },
+        { onConflict: 'user_id' }
+      )
 
     if (perfErr) {
       alert(`Error guardando perfil: ${perfErr.message}`)
@@ -98,7 +98,6 @@ export default function ProfilePage() {
       return
     }
 
-    // una vez guardado, volvemos al dashboard
     router.push('/dashboard')
   }
 
@@ -106,31 +105,31 @@ export default function ProfilePage() {
     <main style={{ padding: 20 }}>
       <h1>Mi perfil</h1>
       <label>
-        Nombre<br/>
-        <input
-          value={nombre}
-          onChange={e => setNombre(e.target.value)}
-        />
+        Nombre<br />
+        <input value={nombre} onChange={e => setNombre(e.target.value)} />
       </label>
-      <br/><br/>
+      <br />
+      <br />
       <label>
-        Apellidos<br/>
+        Apellidos<br />
         <input
           value={apellidos}
           onChange={e => setApellidos(e.target.value)}
         />
       </label>
-      <br/><br/>
+      <br />
+      <br />
       <label>
-        Teléfono<br/>
+        Teléfono<br />
         <input
           value={telefono}
           onChange={e => setTelefono(e.target.value)}
         />
       </label>
-      <br/><br/>
+      <br />
+      <br />
       <label>
-        Idioma<br/>
+        Idioma<br />
         <select
           value={idioma}
           onChange={e => setIdioma(e.target.value)}
@@ -139,12 +138,14 @@ export default function ProfilePage() {
           <option>Inglés</option>
         </select>
       </label>
-      <br/><br/>
+      <br />
+      <br />
       <label>
-        Firma Digital<br/>
+        Firma Digital<br />
         <input type="file" accept="image/*" onChange={onFileChange} />
       </label>
-      <br/><br/>
+      <br />
+      <br />
       <button onClick={saveProfile} disabled={saving}>
         {saving ? 'Guardando…' : 'Guardar perfil'}
       </button>
