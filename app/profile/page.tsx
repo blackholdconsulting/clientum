@@ -33,45 +33,49 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // campos del formulario
   const [nombre, setNombre] = useState('')
   const [apellidos, setApellidos] = useState('')
   const [telefono, setTelefono] = useState('')
   const [idioma, setIdioma] = useState('Español')
-  // ...
+  // ... inicializa tus otros campos aquí
   const [firmaFile, setFirmaFile] = useState<File | null>(null)
   const [pwd, setPwd] = useState('')
 
   useEffect(() => {
     setLoading(true)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        setError('Debes iniciar sesión para ver tu perfil.')
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (!session) {
+          setError('Debes iniciar sesión para ver tu perfil.')
+          return
+        }
+        return supabase
+          .from('perfil')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .single()
+          .then(({ data, error }) => {
+            if (error && error.code !== 'PGRST116') {
+              setError(error.message)
+              return
+            }
+            if (data) {
+              setPerfil(data)
+              setNombre(data.nombre)
+              setApellidos(data.apellidos)
+              setTelefono(data.telefono)
+              setIdioma(data.idioma)
+              // ... asigna aquí el resto de campos
+            }
+          })
+      })
+      .catch(err => {
+        setError(err.message)
+      })
+      .then(() => {
         setLoading(false)
-        return
-      }
-      supabase
-        .from('perfil')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .single()
-        .then(({ data, error }) => {
-          if (error && error.code !== 'PGRST116') {
-            setError(error.message)
-            return
-          }
-          if (data) {
-            setPerfil(data)
-            setNombre(data.nombre)
-            setApellidos(data.apellidos)
-            setTelefono(data.telefono)
-            setIdioma(data.idioma)
-            // ... inicializar el resto de campos
-          }
-        })
-        .finally(() => setLoading(false))
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      })
   }, [])
 
   const handleFirmaChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -82,7 +86,6 @@ export default function ProfilePage() {
     setLoading(true)
     setError(null)
 
-    // 1) subir la firma al storage si hay archivo
     let firmaPath = perfil?.firma || null
     if (firmaFile) {
       const { data, error: uploadErr } = await supabase.storage
@@ -98,27 +101,32 @@ export default function ProfilePage() {
       firmaPath = data.path
     }
 
-    // 2) hacer upsert en la tabla
+    const { data: sessionData } = await supabase.auth.getSession()
+    const userId = sessionData.session?.user.id
+
     const { error: upsertErr } = await supabase
       .from('perfil')
-      .upsert({
-        user_id: perfil?.user_id ?? supabase.auth.getSession().then(r => r.data.session!.user.id),
-        nombre,
-        apellidos,
-        telefono,
-        idioma,
-        // ... resto de campos
-        firma: firmaPath,
-        pwd: pwd || null,
-      })
-      .eq('user_id', perfil?.user_id ?? '')
+      .upsert(
+        {
+          user_id: perfil?.user_id || userId,
+          nombre,
+          apellidos,
+          telefono,
+          idioma,
+          // ... resto de campos
+          firma: firmaPath,
+          pwd: pwd || null,
+        },
+        { onConflict: 'user_id' }
+      )
+      .eq('user_id', perfil?.user_id || userId || '')
+
     if (upsertErr) {
       setError(upsertErr.message)
       setLoading(false)
       return
     }
 
-    // cerrar modal / recargar o redirigir al dashboard
     router.push('/dashboard')
   }
 
@@ -166,9 +174,11 @@ export default function ProfilePage() {
           <option>Inglés</option>
         </select>
       </label>
-      {/* ... agrega aquí los demás campos necesarios para Verifactu / Facturae ... */}
+
+      {/* ... añade aquí los campos extra de Verifactu / Facturae ... */}
+
       <label className="block mb-4">
-        Firma Digital FNMT
+        Firma Digital FNMT (P12/PFX)
         <input
           type="file"
           onChange={handleFirmaChange}
@@ -185,6 +195,7 @@ export default function ProfilePage() {
           className="mt-1 block w-full border px-2 py-1 rounded"
         />
       </label>
+
       <button
         onClick={handleSubmit}
         disabled={loading}
