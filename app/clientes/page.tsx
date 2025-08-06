@@ -1,177 +1,89 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useSupabaseClient } from '@supabase/auth-helpers-react'
+import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
 
-export default function NuevoClientePage() {
-  const supabase = useSupabaseClient()
+type Cliente = {
+  id: string
+  user_id: string
+  nombre: string
+  razon_social: string
+  nif: string
+  email: string
+  domicilio: string
+  codigo_postal: string
+  localidad: string
+  provincia: string
+  pais: string
+  telefono: string
+  created_at: string
+}
+
+export default function ClientesPage() {
+  const supabase = createPagesBrowserClient()
   const router = useRouter()
 
-  const [nombre, setNombre] = useState('')
-  const [razon_social, setRazonSocial] = useState('')
-  const [nif, setNif] = useState('')
-  const [email, setEmail] = useState('')
-  const [domicilio, setDomicilio] = useState('')
-  const [codigo_postal, setCodigoPostal] = useState('')
-  const [localidad, setLocalidad] = useState('')
-  const [provincia, setProvincia] = useState('')
-  const [pais, setPais] = useState('')
-  const [telefono, setTelefono] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [clientes, setClientes] = useState<Cliente[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    try {
-      // obtenemos la sesión
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      if (!session) {
-        alert('Tienes que iniciar sesión')
-        router.push('/auth/login')
-        return
-      }
-
-      // insertamos/upsert en tabla "clientes"
-      const { error } = await supabase
-        .from('clientes')
-        .upsert({
-          user_id: session.user.id,
-          nombre,
-          razon_social,
-          nif,
-          email,
-          domicilio,
-          codigo_postal,   // <–– aquí ya coincide con tu columna
-          localidad,
-          provincia,
-          pais,
-          telefono,
-        })
-
-      if (error) throw error
-
-      // si todo OK, volvemos al listado
-      router.push('/clientes')
-    } catch (err: any) {
-      alert('Ha ocurrido un error inesperado: ' + err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
+  useEffect(() => {
+    supabase
+      .from('clientes')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) {
+          alert('Error cargando clientes: ' + error.message)
+        } else {
+          setClientes(data || [])
+        }
+      })
+      .finally(() => setLoading(false))
+  }, [])
 
   return (
-    <div className="p-6 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Nuevo cliente</h1>
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-3xl">Contactos</h1>
         <div>
-          <label className="block mb-1">Nombre contacto</label>
-          <input
-            className="w-full border px-3 py-2 rounded"
-            value={nombre}
-            onChange={e => setNombre(e.target.value)}
-            required
-          />
+          <button
+            onClick={() => router.push('/clientes/nuevo')}
+            className="bg-blue-600 text-white px-4 py-2 rounded mr-2"
+          >
+            + Nuevo contacto
+          </button>
+          <button className="border px-4 py-2 rounded">Importar contactos</button>
         </div>
+      </div>
 
-        <div>
-          <label className="block mb-1">Razón social</label>
-          <input
-            className="w-full border px-3 py-2 rounded"
-            value={razon_social}
-            onChange={e => setRazonSocial(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label className="block mb-1">NIF / CIF</label>
-          <input
-            className="w-full border px-3 py-2 rounded"
-            value={nif}
-            onChange={e => setNif(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label className="block mb-1">Email</label>
-          <input
-            type="email"
-            className="w-full border px-3 py-2 rounded"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label className="block mb-1">Domicilio</label>
-          <input
-            className="w-full border px-3 py-2 rounded"
-            value={domicilio}
-            onChange={e => setDomicilio(e.target.value)}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block mb-1">Código postal</label>
-            <input
-              type="number"
-              className="w-full border px-3 py-2 rounded"
-              value={codigo_postal}
-              onChange={e => setCodigoPostal(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block mb-1">Localidad</label>
-            <input
-              className="w-full border px-3 py-2 rounded"
-              value={localidad}
-              onChange={e => setLocalidad(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block mb-1">Provincia</label>
-            <input
-              className="w-full border px-3 py-2 rounded"
-              value={provincia}
-              onChange={e => setProvincia(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block mb-1">País</label>
-            <input
-              className="w-full border px-3 py-2 rounded"
-              value={pais}
-              onChange={e => setPais(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block mb-1">Teléfono</label>
-          <input
-            type="tel"
-            className="w-full border px-3 py-2 rounded"
-            value={telefono}
-            onChange={e => setTelefono(e.target.value)}
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className={`w-full px-4 py-2 rounded text-white ${
-            loading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
-          }`}
-        >
-          {loading ? 'Creando…' : '+ Crear cliente'}
-        </button>
-      </form>
+      {loading ? (
+        <p>Cargando…</p>
+      ) : clientes.length === 0 ? (
+        <p>No tienes contactos aún.</p>
+      ) : (
+        <table className="min-w-full bg-white rounded shadow overflow-hidden">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="px-4 py-2 text-left">Nombre</th>
+              <th className="px-4 py-2 text-left">Razón social</th>
+              <th className="px-4 py-2 text-left">NIF</th>
+              <th className="px-4 py-2 text-left">Email</th>
+              <th className="px-4 py-2 text-left">Teléfono</th>
+            </tr>
+          </thead>
+          <tbody>
+            {clientes.map(c => (
+              <tr key={c.id} className="border-t hover:bg-gray-50">
+                <td className="px-4 py-2">{c.nombre}</td>
+                <td className="px-4 py-2">{c.razon_social}</td>
+                <td className="px-4 py-2">{c.nif}</td>
+                <td className="px-4 py-2">{c.email}</td>
+                <td className="px-4 py-2">{c.telefono}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
-  )
 }
