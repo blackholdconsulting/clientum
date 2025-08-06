@@ -1,7 +1,7 @@
 // app/negocio/plan-futuro/page.tsx
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, ChangeEvent, FormEvent } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -71,8 +71,11 @@ export default function PlanFuturoPage() {
             height={192}
             className="mb-6"
           />
-          <p className="text-gray-600 mb-4">Define tus objetivos a largo plazo con plazos y controla su estado.</p>
+          <p className="text-gray-600 mb-4">
+            Define tus objetivos a largo plazo con plazos y controla su estado.
+          </p>
           <button
+            type="button"
             onClick={abrirModal}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
           >
@@ -108,12 +111,14 @@ export default function PlanFuturoPage() {
                   </td>
                   <td className="px-4 py-2 text-right space-x-2">
                     <button
+                      type="button"
                       onClick={() => toggleConseguido(o.id)}
                       className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 text-xs"
                     >
                       {o.conseguido ? 'Reabrir' : 'Marcar logrado'}
                     </button>
                     <button
+                      type="button"
                       onClick={() => eliminarObjetivo(o.id)}
                       className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-xs"
                     >
@@ -126,6 +131,7 @@ export default function PlanFuturoPage() {
           </table>
           <div className="mt-4 text-right">
             <button
+              type="button"
               onClick={abrirModal}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
             >
@@ -171,12 +177,14 @@ export default function PlanFuturoPage() {
             </div>
             <div className="flex justify-end space-x-3 mt-6">
               <button
+                type="button"
                 onClick={cerrarModal}
                 className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
               >
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={guardarObjetivo}
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
               >
