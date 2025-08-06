@@ -1,181 +1,126 @@
 'use client'
 
-import { useState, FormEvent } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
+import type { Database } from '../../../types/supabase'
+
+type ClienteInsert = {
+  user_id: string
+  nombre: string
+  razon_social: string
+  nif: string
+  email: string
+  domicilio: string
+  codigo_postal: string
+  localidad: string
+  provincia: string
+  pais: string
+  telefono: string
+}
 
 export default function NuevoClientePage() {
-  const supabase = createPagesBrowserClient()
+  const supabase = createPagesBrowserClient<Database>()
   const router = useRouter()
 
-  // Estados para cada campo del formulario:
-  const [nombreContacto, setNombreContacto] = useState('')
-  const [razonSocial, setRazonSocial] = useState('')
+  const [nombre, setNombre] = useState('')
+  const [razon_social, setRazonSocial] = useState('')
   const [nif, setNif] = useState('')
   const [email, setEmail] = useState('')
   const [domicilio, setDomicilio] = useState('')
-  const [cp, setCp] = useState('')
+  const [codigo_postal, setCodigoPostal] = useState('')
   const [localidad, setLocalidad] = useState('')
   const [provincia, setProvincia] = useState('')
-  const [pais, setPais] = useState('España')
+  const [pais, setPais] = useState('')
   const [telefono, setTelefono] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-
     try {
-      // 1) Comprueba usuario logueado
       const {
-        data: { user },
-        error: userErr,
-      } = await supabase.auth.getUser()
-      if (userErr || !user) throw new Error(userErr?.message || 'Usuario no encontrado')
+        data: { session },
+      } = await supabase.auth.getSession()
 
-      // 2) Inserta nuevo cliente
-      const { error: insertErr } = await supabase
-        .from('clientes')
-        .insert({
-          user_id: user.id,
-          nombre_contacto: nombreContacto,
-          razon_social: razonSocial,
-          nif,
-          email,
-          domicilio,
-          codigo_postal,
-          localidad,
-          provincia,
-          pais,
-          telefono,
-        })
+      if (!session) throw new Error('Tienes que iniciar sesión')
 
-      if (insertErr) throw insertErr
+      const upsertData: ClienteInsert = {
+        user_id: session.user.id,
+        nombre,
+        razon_social,
+        nif,
+        email,
+        domicilio,
+        codigo_postal,    // <-- cambiamos cp por codigo_postal
+        localidad,
+        provincia,
+        pais,
+        telefono,
+      }
 
-      // 3) Redirige al listado de clientes (cierra el “formulario”)
-      router.push('/clientes')
+      const { error } = await supabase.from('clientes').upsert(upsertData)
+      if (error) throw error
+
+      router.push('/clientes') // volvemos al listado
     } catch (err: any) {
-      alert(`Ha ocurrido un error inesperado:\n${err.message}`)
+      alert('Ha ocurrido un error inesperado: ' + err.message)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white rounded shadow">
-      <h1 className="text-2xl font-bold mb-6">Nuevo cliente</h1>
+    <div className="max-w-md mx-auto p-6 bg-white rounded shadow">
+      <h1 className="text-2xl mb-4">Nuevo cliente</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block font-medium">Nombre contacto</label>
-          <input
-            className="mt-1 w-full border rounded px-3 py-2"
-            value={nombreContacto}
-            onChange={e => setNombreContacto(e.target.value)}
-            required
-          />
+          <label>Nombre contacto</label>
+          <input value={nombre} onChange={e => setNombre(e.target.value)} required className="w-full border px-2 py-1 rounded" />
         </div>
-
         <div>
-          <label className="block font-medium">Razón social</label>
-          <input
-            className="mt-1 w-full border rounded px-3 py-2"
-            value={razonSocial}
-            onChange={e => setRazonSocial(e.target.value)}
-            required
-          />
+          <label>Razón social</label>
+          <input value={razon_social} onChange={e => setRazonSocial(e.target.value)} required className="w-full border px-2 py-1 rounded" />
         </div>
-
         <div>
-          <label className="block font-medium">NIF / CIF</label>
-          <input
-            className="mt-1 w-full border rounded px-3 py-2"
-            value={nif}
-            onChange={e => setNif(e.target.value.toUpperCase())}
-            required
-          />
+          <label>NIF / CIF</label>
+          <input value={nif} onChange={e => setNif(e.target.value)} required className="w-full border px-2 py-1 rounded" />
         </div>
-
         <div>
-          <label className="block font-medium">Email</label>
-          <input
-            type="email"
-            className="mt-1 w-full border rounded px-3 py-2"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            required
-          />
+          <label>Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full border px-2 py-1 rounded" />
         </div>
-
         <div>
-          <label className="block font-medium">Domicilio</label>
-          <input
-            className="mt-1 w-full border rounded px-3 py-2"
-            value={domicilio}
-            onChange={e => setDomicilio(e.target.value)}
-            required
-          />
+          <label>Domicilio</label>
+          <input value={domicilio} onChange={e => setDomicilio(e.target.value)} required className="w-full border px-2 py-1 rounded" />
         </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block font-medium">Código postal</label>
-            <input
-              className="mt-1 w-full border rounded px-3 py-2"
-              value={cp}
-              onChange={e => setCp(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className="block font-medium">Localidad</label>
-            <input
-              className="mt-1 w-full border rounded px-3 py-2"
-              value={localidad}
-              onChange={e => setLocalidad(e.target.value)}
-              required
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block font-medium">Provincia</label>
-            <input
-              className="mt-1 w-full border rounded px-3 py-2"
-              value={provincia}
-              onChange={e => setProvincia(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className="block font-medium">País</label>
-            <input
-              className="mt-1 w-full border rounded px-3 py-2"
-              value={pais}
-              onChange={e => setPais(e.target.value)}
-              required
-            />
-          </div>
-        </div>
-
         <div>
-          <label className="block font-medium">Teléfono</label>
+          <label>Código postal</label>
           <input
-            className="mt-1 w-full border rounded px-3 py-2"
-            value={telefono}
-            onChange={e => setTelefono(e.target.value)}
+            value={codigo_postal}
+            onChange={e => setCodigoPostal(e.target.value)}
             required
+            className="w-full border px-2 py-1 rounded"
           />
         </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className={`mt-4 w-full py-2 rounded text-white font-medium ${
-            loading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
-          }`}
-        >
-          {loading ? 'Creando...' : '+ Crear cliente'}
+        <div>
+          <label>Localidad</label>
+          <input value={localidad} onChange={e => setLocalidad(e.target.value)} required className="w-full border px-2 py-1 rounded" />
+        </div>
+        <div>
+          <label>Provincia</label>
+          <input value={provincia} onChange={e => setProvincia(e.target.value)} required className="w-full border px-2 py-1 rounded" />
+        </div>
+        <div>
+          <label>País</label>
+          <input value={pais} onChange={e => setPais(e.target.value)} required className="w-full border px-2 py-1 rounded" />
+        </div>
+        <div>
+          <label>Teléfono</label>
+          <input value={telefono} onChange={e => setTelefono(e.target.value)} required className="w-full border px-2 py-1 rounded" />
+        </div>
+        <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-2 rounded">
+          {loading ? 'Creando…' : '+ Crear cliente'}
         </button>
       </form>
     </div>
