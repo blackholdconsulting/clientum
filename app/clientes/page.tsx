@@ -1,59 +1,54 @@
-// app/clientes/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createPagesBrowserClient } from '@supabase/auth-helpers-react'
+import { useSupabaseClient } from '@supabase/auth-helpers-react'
 
 type Cliente = {
   id: string
   user_id: string
   nombre: string
-  razon_social: string
-  nif: string
-  email: string
-  telefono: string
+  razon_social: string | null
+  nif: string | null
+  email: string | null
+  telefono: string | null
   tipo: 'empresa' | 'persona'
   created_at: string
 }
 
 export default function ClientesPage() {
+  const supabase = useSupabaseClient()
   const router = useRouter()
-  const supabase = createPagesBrowserClient()
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'todos' | 'empresa' | 'persona'>('todos')
 
   useEffect(() => {
-    const fetchClientes = async () => {
+    const load = async () => {
       setLoading(true)
       try {
-        // Solo trae los clientes del usuario logueado
         const {
-          data: userSession,
-          error: sessionError,
+          data: { session },
         } = await supabase.auth.getSession()
-        if (sessionError || !userSession.session) {
-          router.push('/') // si no hay sesión, manda al login
+        if (!session) {
+          router.push('/auth/login')
           return
         }
-
         const { data, error } = await supabase
           .from('clientes')
           .select('*')
-          .eq('user_id', userSession.session.user.id)
+          .eq('user_id', session.user.id)
           .order('created_at', { ascending: false })
 
         if (error) throw error
         setClientes(data || [])
       } catch (err: any) {
-        alert(`Error cargando tus contactos: ${err.message}`)
+        alert('Error cargando contactos: ' + err.message)
       } finally {
         setLoading(false)
       }
     }
-
-    fetchClientes()
+    load()
   }, [supabase, router])
 
   const filtered = clientes.filter(c => {
@@ -64,24 +59,45 @@ export default function ClientesPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Contactos</h1>
+      <header className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">Contactos</h1>
+        <div className="space-x-2">
+          <button
+            onClick={() => router.push('/clientes/nuevo')}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            + Nuevo contacto
+          </button>
+          <button
+            onClick={() => router.push('/clientes/importar')}
+            className="border px-4 py-2 rounded hover:bg-gray-100"
+          >
+            Importar contactos
+          </button>
+        </div>
+      </header>
 
-      {/* Filtros */}
-      <div className="flex items-center space-x-2 mb-6">
+      <div className="flex items-center space-x-2 mb-4">
         <button
-          className={`px-3 py-1 rounded ${filter === 'todos' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+          className={`px-3 py-1 rounded ${
+            filter === 'todos' ? 'bg-blue-600 text-white' : 'bg-gray-200'
+          }`}
           onClick={() => setFilter('todos')}
         >
           Todos
         </button>
         <button
-          className={`px-3 py-1 rounded ${filter === 'empresa' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+          className={`px-3 py-1 rounded ${
+            filter === 'empresa' ? 'bg-blue-600 text-white' : 'bg-gray-200'
+          }`}
           onClick={() => setFilter('empresa')}
         >
           Empresas
         </button>
         <button
-          className={`px-3 py-1 rounded ${filter === 'persona' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+          className={`px-3 py-1 rounded ${
+            filter === 'persona' ? 'bg-blue-600 text-white' : 'bg-gray-200'
+          }`}
           onClick={() => setFilter('persona')}
         >
           Personas
@@ -93,25 +109,15 @@ export default function ClientesPage() {
         <button className="ml-2 text-blue-600">+ Filtro</button>
       </div>
 
-      {/* Acciones */}
-      <div className="flex justify-end mb-4 space-x-2">
-        <button
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-          onClick={() => router.push('/clientes/nuevo')}
-        >
-          + Nuevo contacto
-        </button>
-        <button className="border px-4 py-2 rounded">Importar contactos</button>
-      </div>
-
-      {/* Tabla de datos */}
       {loading ? (
-        <p>Cargando...</p>
+        <p>Cargando contactos…</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-center text-gray-500">No tienes contactos.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border">
-            <thead>
-              <tr className="bg-gray-100">
+        <div className="overflow-x-auto bg-white shadow rounded">
+          <table className="min-w-full">
+            <thead className="bg-gray-100">
+              <tr>
                 <th className="px-4 py-2 text-left">Nombre</th>
                 <th className="px-4 py-2 text-left">Razón social</th>
                 <th className="px-4 py-2 text-left">NIF</th>
@@ -120,22 +126,19 @@ export default function ClientesPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(cliente => (
-                <tr key={cliente.id} className="border-t hover:bg-gray-50">
-                  <td className="px-4 py-2">{cliente.nombre}</td>
-                  <td className="px-4 py-2">{cliente.razon_social}</td>
-                  <td className="px-4 py-2">{cliente.nif}</td>
-                  <td className="px-4 py-2">{cliente.email}</td>
-                  <td className="px-4 py-2">{cliente.telefono}</td>
+              {filtered.map(c => (
+                <tr
+                  key={c.id}
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => router.push(`/clientes/${c.id}`)}
+                >
+                  <td className="px-4 py-3">{c.nombre}</td>
+                  <td className="px-4 py-3">{c.razon_social || '—'}</td>
+                  <td className="px-4 py-3">{c.nif || '—'}</td>
+                  <td className="px-4 py-3">{c.email || '—'}</td>
+                  <td className="px-4 py-3">{c.telefono || '—'}</td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-2 text-center text-gray-500">
-                    No tienes contactos aún.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
