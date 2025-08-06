@@ -1,4 +1,3 @@
-// app/negocio/plan-futuro/page.tsx
 'use client'
 
 import React, { useState } from 'react'
@@ -7,16 +6,23 @@ import Image from 'next/image'
 
 export default function PlanFuturoPage() {
   const [objetivos, setObjetivos] = useState<string[]>([])
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [nuevoTexto, setNuevoTexto] = useState('')
 
-  const agregarObjetivo = () => {
-    const texto = prompt('Introduce el texto de tu nuevo objetivo:')
-    if (texto?.trim()) {
-      setObjetivos((prev) => [...prev, texto.trim()])
+  const abrirModal = () => {
+    setNuevoTexto('')
+    setIsModalOpen(true)
+  }
+  const cerrarModal = () => setIsModalOpen(false)
+  const guardarObjetivo = () => {
+    if (nuevoTexto.trim()) {
+      setObjetivos((prev) => [...prev, nuevoTexto.trim()])
+      cerrarModal()
     }
   }
 
   return (
-    <main className="p-6 bg-white rounded-md shadow-lg">
+    <main className="p-6 bg-white rounded-md shadow-lg relative">
       {/* Header */}
       <header className="flex items-center mb-6">
         <Link href="/negocio" className="text-gray-500 hover:text-gray-700 mr-4">
@@ -37,7 +43,7 @@ export default function PlanFuturoPage() {
           />
           <p className="text-gray-600 mb-4">Define tus objetivos a largo plazo.</p>
           <button
-            onClick={agregarObjetivo}
+            onClick={abrirModal}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
           >
             Añadir objetivo
@@ -53,7 +59,7 @@ export default function PlanFuturoPage() {
             ))}
           </ul>
           <button
-            onClick={agregarObjetivo}
+            onClick={abrirModal}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
           >
             Añadir otro objetivo
@@ -68,6 +74,35 @@ export default function PlanFuturoPage() {
           Leer artículo
         </Link>
       </div>
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-96 p-6">
+            <h2 className="text-lg font-semibold mb-4">Nuevo objetivo</h2>
+            <textarea
+              value={nuevoTexto}
+              onChange={(e) => setNuevoTexto(e.target.value)}
+              className="w-full h-24 border rounded px-3 py-2 mb-4 resize-none"
+              placeholder="Describe tu objetivo…"
+            />
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={cerrarModal}
+                className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={guardarObjetivo}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
