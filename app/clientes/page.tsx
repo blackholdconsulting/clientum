@@ -1,8 +1,9 @@
+// app/clientes/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
+import { createPagesBrowserClient } from '@supabase/auth-helpers-react'
 
 type Cliente = {
   id: string
@@ -27,25 +28,33 @@ export default function ClientesPage() {
     const fetchClientes = async () => {
       setLoading(true)
       try {
+        // Solo trae los clientes del usuario logueado
+        const {
+          data: userSession,
+          error: sessionError,
+        } = await supabase.auth.getSession()
+        if (sessionError || !userSession.session) {
+          router.push('/') // si no hay sesión, manda al login
+          return
+        }
+
         const { data, error } = await supabase
           .from('clientes')
           .select('*')
+          .eq('user_id', userSession.session.user.id)
           .order('created_at', { ascending: false })
 
-        if (error) {
-          alert(`Error cargando clientes: ${error.message}`)
-        } else {
-          setClientes(data || [])
-        }
+        if (error) throw error
+        setClientes(data || [])
       } catch (err: any) {
-        alert(`Error inesperado: ${err.message}`)
+        alert(`Error cargando tus contactos: ${err.message}`)
       } finally {
         setLoading(false)
       }
     }
 
     fetchClientes()
-  }, [supabase])
+  }, [supabase, router])
 
   const filtered = clientes.filter(c => {
     if (filter === 'empresa') return c.tipo === 'empresa'
@@ -123,7 +132,7 @@ export default function ClientesPage() {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-2 text-center text-gray-500">
-                    No hay contactos para mostrar.
+                    No tienes contactos aún.
                   </td>
                 </tr>
               )}
