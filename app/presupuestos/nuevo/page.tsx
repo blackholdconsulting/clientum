@@ -39,15 +39,15 @@ interface Cliente {
 
 export default function NuevoPresupuestoPage() {
   const router = useRouter()
-  const supabase = useSupabaseClient()
   const session = useSession()
+  const supabase = useSupabaseClient()
 
-  // Fechas y número
+  // Estado formulario
   const [fecha, setFecha] = useState('')
   const [numero, setNumero] = useState('')
   const [vencimiento, setVencimiento] = useState('')
+  const [comentarios, setComentarios] = useState('')
 
-  // Datos del remitente (perfil) + IBAN + Comentarios
   const [empresa, setEmpresa] = useState<Empresa>({
     nombre: '',
     apellidos: '',
@@ -64,9 +64,7 @@ export default function NuevoPresupuestoPage() {
     web: '',
     iban: '',
   })
-  const [comentarios, setComentarios] = useState('')
 
-  // Datos del cliente
   const [cliente, setCliente] = useState<Cliente>({
     nombre: '',
     direccion: '',
@@ -75,14 +73,13 @@ export default function NuevoPresupuestoPage() {
     email: '',
   })
 
-  // Líneas, IVA, IRPF
   const [lineas, setLineas] = useState<Linea[]>([
     { descripcion: '', unidades: 1, precioUnitario: 0 },
   ])
   const [iva, setIva] = useState(21)
   const [irpf, setIrpf] = useState(0)
 
-  // Carga inicial de perfil
+  // Carga datos perfil al montar
   useEffect(() => {
     if (!session) return
     ;(async () => {
@@ -95,7 +92,6 @@ export default function NuevoPresupuestoPage() {
         `)
         .eq('id', session.user.id)
         .single()
-
       if (perfil && !error) {
         setEmpresa(perfil as Empresa)
       }
@@ -112,11 +108,12 @@ export default function NuevoPresupuestoPage() {
       )
     )
   }
+
   const addLinea = () =>
     setLineas((ls) => [...ls, { descripcion: '', unidades: 1, precioUnitario: 0 }])
 
   const calcularTotales = () => {
-    const base = lineas.reduce((s, l) => s + l.unidades * l.precioUnitario, 0)
+    const base = lineas.reduce((sum, l) => sum + l.unidades * l.precioUnitario, 0)
     const ivaImp = (base * iva) / 100
     const irpfImp = (base * irpf) / 100
     return { base, ivaImp, irpfImp, total: base + ivaImp - irpfImp }
@@ -178,7 +175,7 @@ export default function NuevoPresupuestoPage() {
     doc.text('Presupuesto', 40, y)
     y += 30
 
-    // Fechas/número
+    // Fechas y número
     doc.setFont('helvetica', 'normal').setFontSize(12).setTextColor(0)
     doc.text(`Fecha: ${fecha}`, 40, y)
     doc.text(`Núm.: ${numero}`, 300, y)
@@ -186,14 +183,14 @@ export default function NuevoPresupuestoPage() {
     doc.text(`Vto.: ${vencimiento}`, 40, y)
     y += 30
 
-    // Nombre de la empresa y cliente
+    // Empresa y cliente
     doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(0, 102, 204)
-    const empresaTitulo = empresa.razonSocial || `${empresa.nombre} ${empresa.apellidos}`
-    doc.text(empresaTitulo, 40, y)
+    const tituloEmpresa = empresa.razonSocial || `${empresa.nombre} ${empresa.apellidos}`
+    doc.text(tituloEmpresa, 40, y)
     doc.text(cliente.nombre || 'Cliente', 300, y)
     y += 20
 
-    // Detalle empresa / cliente
+    // Detalle empresa
     doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(60)
     doc.text(`NIF: ${empresa.nif}`, 40, y)
     doc.text(`Email: ${empresa.email}`, 300, y)
@@ -209,10 +206,10 @@ export default function NuevoPresupuestoPage() {
     doc
       .setFont('helvetica', 'bold')
       .setFontSize(12)
-      .setTextColor(0, 102, 204);  // <-- punto y coma añadido aquí
+      .setTextColor(0, 102, 204); 
     ['Descripción', 'Unidades', 'P.Unit. (€)', 'Importe (€)'].forEach((h, i) =>
       doc.text(h, 40 + i * 130, y)
-    ); // <-- punto y coma al final de forEach
+    ); 
     y += 16
     doc.setLineWidth(0.5).line(40, y, 550, y)
     y += 10
@@ -266,7 +263,7 @@ export default function NuevoPresupuestoPage() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Crear Nuevo Presupuesto</h1>
+      <h1 className="text-2xl font-bold mb-6">Crear Nuevo Presupuesto</h1>
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow space-y-6">
         {/* Fechas y número */}
         <div className="grid grid-cols-3 gap-4">
@@ -298,7 +295,7 @@ export default function NuevoPresupuestoPage() {
           </div>
         </div>
 
-        {/* Tus datos */}
+        {/* Tus datos y comentarios */}
         <fieldset className="grid grid-cols-2 gap-4">
           <div>
             <h2 className="font-semibold mb-2">Tus datos</h2>
@@ -376,31 +373,31 @@ export default function NuevoPresupuestoPage() {
               placeholder="Email"
               value={empresa.email}
               onChange={(e) => setEmpresa({ ...empresa, email: e.target.value })}
-              className="block w-full border rounded px-2 py-1 mb-2"
+              className="block w/full border rounded px-2 py-1 mb-2"
             />
             <input
               placeholder="Web"
               value={empresa.web}
               onChange={(e) => setEmpresa({ ...empresa, web: e.target.value })}
-              className="block w-full border rounded px-2 py-1 mb-2"
+              className="block w/full border rounded px-2 py-1 mb-2"
             />
             <input
               placeholder="IBAN"
               value={empresa.iban}
               onChange={(e) => setEmpresa({ ...empresa, iban: e.target.value })}
-              className="block w/full border rounded px-2 py-1"
+              className="block w/full border rounded px-2 py-1 mb-2"
             />
             <textarea
               placeholder="Comentarios"
               value={comentarios}
               onChange={(e) => setComentarios(e.target.value)}
-              className="block w-full border rounded px-2 py-1 h-24 mt-2"
+              className="block w/full border rounded px-2 py-1 h-24"
             />
           </div>
 
-          {/* Datos del cliente y líneas */}
+          {/* Datos del cliente, líneas, IVA/IRPF */}
           <div className="space-y-4">
-            <h2 className="font-semibold">Datos del cliente</h2>
+            <h2 className="font-semibold mb-2">Datos del cliente</h2>
             <input
               placeholder="Nombre / Razón Social"
               value={cliente.nombre}
@@ -423,13 +420,13 @@ export default function NuevoPresupuestoPage() {
               placeholder="CP"
               value={cliente.cp}
               onChange={(e) => setCliente({ ...cliente, cp: e.target.value })}
-              className="block w-full border rounded px-2 py-1 mb-2"
+              className="block w/full border rounded px-2 py-1 mb-2"
             />
             <input
               placeholder="Email"
               value={cliente.email}
               onChange={(e) => setCliente({ ...cliente, email: e.target.value })}
-              className="block w-full border rounded px-2 py-1"
+              className="block w/full border rounded px-2 py-1 mb-2"
             />
 
             <fieldset className="space-y-2 mt-4">
@@ -485,7 +482,7 @@ export default function NuevoPresupuestoPage() {
                   type="number"
                   value={iva}
                   onChange={(e) => setIva(Number(e.target.value))}
-                  className="mt-1 block w-full border rounded px-2 py-1"
+                  className="mt-1 block w/full border rounded px-2 py-1"
                 />
               </div>
               <div>
@@ -494,14 +491,14 @@ export default function NuevoPresupuestoPage() {
                   type="number"
                   value={irpf}
                   onChange={(e) => setIrpf(Number(e.target.value))}
-                  className="mt-1 block w-full border rounded px-2 py-1"
+                  className="mt-1 block w/full border rounded px-2 py-1"
                 />
               </div>
             </div>
           </div>
         </fieldset>
 
-        {/* Botones Export */}
+        {/* Botones de exportación */}
         <div className="flex justify-end space-x-3 pt-4 border-t">
           <button
             type="button"
