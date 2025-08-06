@@ -43,7 +43,7 @@ export default function NuevoClientePage() {
           nif,
           email,
           domicilio,
-          cp,
+          codigo_postal,
           localidad,
           provincia,
           pais,
