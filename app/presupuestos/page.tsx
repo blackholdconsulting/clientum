@@ -1,12 +1,13 @@
-// app/presupuestos/page.tsx
+// app/presupuestos/page.tsx (continúa)
+
+// --- Client Component ---
 'use client'
 
-import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react'
-import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
+import React, { useState, ChangeEvent, FormEvent } from 'react'
 import { jsPDF } from 'jspdf'
 
-type Linea = { descripcion: string; unidades: number; precioUnitario: number }
-type Perfil = {
+export type Linea = { descripcion: string; unidades: number; precioUnitario: number }
+export type Perfil = {
   nombre: string
   apellidos: string
   telefono: string
@@ -22,7 +23,7 @@ type Perfil = {
   web: string
   iban: string
 }
-type ClienteRow = {
+export type ClienteRow = {
   id: string
   nombre: string
   direccion: string
@@ -31,15 +32,13 @@ type ClienteRow = {
   email: string
 }
 
-export default function PresupuestosPage() {
-  const supabase = createPagesBrowserClient()
+interface Props {
+  perfil: Perfil
+  clientes: ClienteRow[]
+}
 
-  // Datos
-  const [perfil, setPerfil] = useState<Perfil | null>(null)
-  const [clientes, setClientes] = useState<ClienteRow[]>([])
-  const [cliente, setCliente] = useState<ClienteRow | null>(null)
-
-  // Formulario
+export default function PresupuestoForm({ perfil, clientes }: Props) {
+  // --- Form state ---
   const [fecha, setFecha] = useState('')
   const [numero, setNumero] = useState('')
   const [vencimiento, setVencimiento] = useState('')
@@ -49,40 +48,15 @@ export default function PresupuestosPage() {
   ])
   const [iva, setIva] = useState(21)
   const [irpf, setIrpf] = useState(0)
+  const [cliente, setCliente] = useState<ClienteRow | null>(null)
 
-  useEffect(() => {
-    ;(async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: p, error: errP } = await supabase
-        .from('perfil')
-        .select('nombre,apellidos,telefono,idioma,nombre_empr,nif,direccion,ciudad,provincia,cp,pais,email,web,iban')
-        .eq('id', user.id)
-        .single()
-      if (p) setPerfil(p as Perfil)
-
-      const { data: cls } = await supabase
-        .from('clientes')
-        .select('id,nombre,direccion,cif,cp,email')
-        .order('nombre', { ascending: true })
-      if (cls) setClientes(cls as ClienteRow[])
-    })()
-  }, [supabase])
-
-  if (!perfil) {
-    return <div className="p-6">Cargando tus datos…</div>
-  }
-
-  const addLinea = () => {
-    setLineas(ls => [...ls, { descripcion: '', unidades: 1, precioUnitario: 0 }])
-  }
+  // --- Handlers ---
+  const addLinea = () =>
+    setLineas((ls) => [...ls, { descripcion: '', unidades: 1, precioUnitario: 0 }])
 
   const handleLineaChange = (i: number, e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setLineas(ls =>
+    setLineas((ls) =>
       ls.map((l, idx) =>
         idx === i
           ? { ...l, [name]: name === 'descripcion' ? value : Number(value) }
@@ -98,10 +72,22 @@ export default function PresupuestosPage() {
     return { base, ivaImp, irpfImp, total: base + ivaImp - irpfImp }
   }
 
+  // --- Export CSV ---
   const exportCSV = () => {
     const { base, ivaImp, irpfImp, total } = calcularTotales()
-    const header = ['Fecha','Número','Vto.','Empresa','Cliente','Desc.','Unid.','P.Unit','Importe','Comentarios']
-    const rows = lineas.map(l => [
+    const header = [
+      'Fecha',
+      'Número',
+      'Vencimiento',
+      'Empresa',
+      'Cliente',
+      'Descripción',
+      'Unidades',
+      'P.Unit',
+      'Importe',
+      'Comentarios',
+    ]
+    const rows = lineas.map((l) => [
       fecha,
       numero,
       vencimiento,
@@ -113,18 +99,18 @@ export default function PresupuestosPage() {
       (l.unidades * l.precioUnitario).toFixed(2),
       comentarios,
     ])
-    rows.push(['','','','','','BASE','','',base.toFixed(2),''])
-    rows.push(['','','','','',`IVA(${iva}%)`,'','',ivaImp.toFixed(2),''])
-    rows.push(['','','','','',`IRPF(${irpf}%)`,'','',(-irpfImp).toFixed(2),''])
-    rows.push(['','','','','','TOTAL','','',total.toFixed(2),''])
+    rows.push(['', '', '', '', '', 'BASE', '', '', base.toFixed(2), ''])
+    rows.push(['', '', '', '', '', `IVA(${iva}%)`, '', '', ivaImp.toFixed(2), ''])
+    rows.push(['', '', '', '', '', `IRPF(${irpf}%)`, '', '', (-irpfImp).toFixed(2), ''])
+    rows.push(['', '', '', '', '', 'TOTAL', '', '', total.toFixed(2), ''])
 
     const csv =
       [header, ...rows]
-        .map(r => r.map(c => `"${c.replace(/"/g,'""')}"`).join(','))
+        .map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(','))
         .join('\r\n') +
       `\r\n\r\nComentarios: ${comentarios}\r\nIBAN: ${perfil.iban}`
 
-    const blob = new Blob([csv], { type: 'text/csv' })
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -133,50 +119,85 @@ export default function PresupuestosPage() {
     URL.revokeObjectURL(url)
   }
 
+  // --- Export PDF ---
   const exportPDF = () => {
     const doc = new jsPDF({ unit: 'pt', format: 'a4' })
     let y = 40
-    doc.setFont('helvetica','bold').setFontSize(24).setTextColor(0,102,204)
-    doc.text('Presupuesto',40,y); y += 30
-    doc.setFont('helvetica','normal').setFontSize(12).setTextColor(0)
-    doc.text(`Fecha: ${fecha}`,40,y); doc.text(`Núm.: ${numero}`,300,y); y += 16
-    doc.text(`Vto.: ${vencimiento}`,40,y); y += 30
-    doc.setFont('helvetica','bold').setFontSize(14).setTextColor(0,102,204)
-    doc.text(perfil.nombre_empr,40,y); doc.text(cliente?.nombre||'Cliente',300,y); y += 20
-    doc.setFont('helvetica','normal').setFontSize(10).setTextColor(60)
-    doc.text(`Tel: ${perfil.telefono}`,40,y); doc.text(`Email: ${perfil.email}`,300,y); y += 14
-    doc.text(`Dirección: ${perfil.direccion}`,40,y); doc.text(`Ciudad/CP: ${perfil.ciudad}/${perfil.cp}`,300,y); y += 14
-    doc.text(`NIF: ${perfil.nif}`,40,y); doc.text(`IBAN: ${perfil.iban}`,300,y); y += 30
-    doc.setFont('helvetica','bold').setFontSize(12).setTextColor(0,102,204)
-    ;['Desc.','Unid.','P.Unit (€)','Importe (€)'].forEach((h,i) => doc.text(h,40+i*130,y))
-    y += 16; doc.setLineWidth(0.5).line(40,y,550,y); y += 10
-    doc.setFont('helvetica','normal').setTextColor(0)
-    lineas.forEach(l => {
-      doc.text(l.descripcion,40,y)
-      doc.text(String(l.unidades),170,y,{align:'right'})
-      doc.text(l.precioUnitario.toFixed(2),300,y,{align:'right'})
-      doc.text((l.unidades*l.precioUnitario).toFixed(2),430,y,{align:'right'})
+    doc.setFont('helvetica', 'bold').setFontSize(24).setTextColor(0, 102, 204)
+    doc.text('Presupuesto', 40, y)
+    y += 30
+    doc.setFont('helvetica', 'normal').setFontSize(12).setTextColor(0)
+    doc.text(`Fecha: ${fecha}`, 40, y)
+    doc.text(`Número: ${numero}`, 300, y)
+    y += 16
+    doc.text(`Vencimiento: ${vencimiento}`, 40, y)
+    y += 30
+
+    doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(0, 102, 204)
+    doc.text(perfil.nombre_empr, 40, y)
+    doc.text(cliente?.nombre || 'Cliente', 300, y)
+    y += 20
+
+    doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(60)
+    doc.text(`Teléfono: ${perfil.telefono}`, 40, y)
+    doc.text(`Email: ${perfil.email}`, 300, y)
+    y += 14
+    doc.text(`Dirección: ${perfil.direccion}`, 40, y)
+    doc.text(`Ciudad/CP: ${perfil.ciudad}/${perfil.cp}`, 300, y)
+    y += 14
+    doc.text(`NIF: ${perfil.nif}`, 40, y)
+    doc.text(`IBAN: ${perfil.iban}`, 300, y)
+    y += 30
+
+    doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0, 102, 204)
+    ;['Descripción', 'Unidades', 'P.Unit (€)', 'Importe (€)'].forEach((h, i) =>
+      doc.text(h, 40 + i * 130, y)
+    )
+    y += 16
+    doc.setLineWidth(0.5).line(40, y, 550, y)
+    y += 10
+
+    doc.setFont('helvetica', 'normal').setTextColor(0)
+    lineas.forEach((l) => {
+      doc.text(l.descripcion, 40, y)
+      doc.text(String(l.unidades), 170, y, { align: 'right' })
+      doc.text(l.precioUnitario.toFixed(2), 300, y, { align: 'right' })
+      doc.text((l.unidades * l.precioUnitario).toFixed(2), 430, y, { align: 'right' })
       y += 18
-      if (y>750) { doc.addPage(); y=40 }
+      if (y > 750) {
+        doc.addPage()
+        y = 40
+      }
     })
+
     const { base, ivaImp, irpfImp, total } = calcularTotales()
     y += 20
-    doc.setFont('helvetica','bold').setFontSize(12).setTextColor(0,102,204)
-    doc.text('BASE:',300,y); doc.text(`${base.toFixed(2)} €`,550,y,{align:'right'}); y += 16
-    doc.text(`IVA(${iva}%):`,300,y); doc.text(`${ivaImp.toFixed(2)} €`,550,y,{align:'right'}); y += 16
-    doc.text(`IRPF(${irpf}%):`,300,y); doc.text(`${(-irpfImp).toFixed(2)} €`,550,y,{align:'right'}); y += 16
+    doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0, 102, 204)
+    doc.text('BASE:', 300, y)
+    doc.text(`${base.toFixed(2)} €`, 550, y, { align: 'right' })
+    y += 16
+    doc.text(`IVA (${iva}%):`, 300, y)
+    doc.text(`${ivaImp.toFixed(2)} €`, 550, y, { align: 'right' })
+    y += 16
+    doc.text(`IRPF (${irpf}%):`, 300, y)
+    doc.text(`${(-irpfImp).toFixed(2)} €`, 550, y, { align: 'right' })
+    y += 16
     doc.setFontSize(16).setTextColor(0)
-    doc.text('TOTAL:',300,y); doc.text(`${total.toFixed(2)} €`,550,y,{align:'right'}); y += 30
-    doc.setFont('helvetica','normal').setFontSize(10).setTextColor(60)
-    doc.text(`Comentarios: ${comentarios}`,40,y); y += 14
-    doc.text(`IBAN: ${perfil.iban}`,40,y)
-    doc.save(`presupuesto-${numero||'sin-numero'}.pdf`)
+    doc.text('TOTAL:', 300, y)
+    doc.text(`${total.toFixed(2)} €`, 550, y, { align: 'right' })
+    y += 30
+
+    doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(60)
+    doc.text(`Comentarios: ${comentarios}`, 40, y)
+    y += 14
+    doc.text(`IBAN: ${perfil.iban}`, 40, y)
+
+    doc.save(`presupuesto-${numero || 'sin-numero'}.pdf`)
   }
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Crear Presupuesto</h1>
-
       <form onSubmit={(e: FormEvent) => e.preventDefault()} className="bg-white p-6 rounded shadow space-y-6">
         {/* Fecha / Número / Vencimiento */}
         <div className="grid grid-cols-3 gap-4">
@@ -215,27 +236,27 @@ export default function PresupuestosPage() {
             <textarea value={comentarios} onChange={e => setComentarios(e.target.value)} placeholder="Comentarios" className="block w-full h-24 border rounded px-2 py-1" />
           </div>
 
-        {/* Datos del cliente */}
-        <div>
-          <h2 className="font-semibold mb-2">Datos del cliente</h2>
-          <select value={cliente?.id || ''} onChange={e => setCliente(clientes.find(c => c.id === e.target.value) || null)} className="block w-full mb-4 border rounded px-2 py-1">
-            <option value="" disabled>Selecciona un cliente</option>
-            {clientes.map(c => (
-              <option key={c.id} value={c.id}>{c.nombre}</option>
-            ))}
-          </select>
-          {cliente && (
-            <>
-              <input readOnly value={cliente.direccion} placeholder="Dirección" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
-              <input readOnly value={cliente.cif} placeholder="CIF" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
-              <input readOnly value={cliente.cp} placeholder="CP" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
-              <input readOnly value={cliente.email} placeholder="Email" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
-            </>
-          )}
-        </div>
+          {/* Datos del cliente */}
+          <div>
+            <h2 className="font-semibold mb-2">Datos del cliente</h2>
+            <select value={cliente?.id || ''} onChange={e => setCliente(clientes.find(c => c.id === e.target.value) || null)} className="block w-full mb-4 border rounded px-2 py-1">
+              <option value="" disabled>Selecciona un cliente</option>
+              {clientes.map(c => (
+                <option key={c.id} value={c.id}>{c.nombre}</option>
+              ))}
+            </select>
+            {cliente && (
+              <>
+                <input readOnly value={cliente.direccion} placeholder="Dirección" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
+                <input readOnly value={cliente.cif} placeholder="CIF" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
+                <input readOnly value={cliente.cp} placeholder="CP" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
+                <input readOnly value={cliente.email} placeholder="Email" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
+              </>
+            )}
+          </div>
         </fieldset>
 
-        {/* Líneas */}
+        {/* Líneas del presupuesto */}
         <fieldset className="space-y-2">
           <legend className="font-semibold">Líneas del presupuesto</legend>
           {lineas.map((l, i) => (
@@ -249,8 +270,7 @@ export default function PresupuestosPage() {
                   <button type="button" onClick={addLinea} className="px-2 py-1 bg-blue-600 text-white rounded">+</button>
                 )}
               </div>
-            </div>
-          ))}
+            ))}
         </fieldset>
 
         {/* IVA / IRPF */}
