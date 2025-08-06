@@ -1,3 +1,4 @@
+// app/presupuestos/nuevo/page.tsx
 'use client'
 
 import { useState, useEffect, ChangeEvent } from 'react'
@@ -124,7 +125,7 @@ export default function NuevoPresupuestoPage() {
   }
 
   const exportCSV = () => {
-    const { base, ivaImp, irpfImp, total } = calcularTotales()
+    const { base, ivaImp, irpfImp } = calcularTotales()
     const header = [
       'Fecha',
       'Número',
@@ -150,13 +151,13 @@ export default function NuevoPresupuestoPage() {
     rows.push(['', '', '', '', '', 'BASE IMPONIBLE', '', '', base.toFixed(2)])
     rows.push(['', '', '', '', '', `IVA (${iva}%)`, '', '', ivaImp.toFixed(2)])
     rows.push(['', '', '', '', '', `IRPF (${irpf}%)`, '', '', (-irpfImp).toFixed(2)])
-    rows.push(['', '', '', '', '', 'TOTAL', '', '', total.toFixed(2)])
+    rows.push(['', '', '', '', '', 'TOTAL', '', '', (base + ivaImp - irpfImp).toFixed(2)])
 
     const csv =
       [header, ...rows]
         .map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(','))
         .join('\r\n') +
-      `\r\n\r\nCondiciones de pago: 30 días a partir de la fecha de entrega.\r\n` +
+      `\r\n\r\nCondiciones de pago: 30 días a partir de la entrega.\r\n` +
       `Pago por transferencia (IBAN): ${empresa.iban}`
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -202,10 +203,13 @@ export default function NuevoPresupuestoPage() {
     y += 30
 
     // Tabla de líneas
-    doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0, 102, 204)
+    doc
+      .setFont('helvetica', 'bold')
+      .setFontSize(12)
+      .setTextColor(0, 102, 204);  // <-- punto y coma añadido aquí
     ['Descripción', 'Unidades', 'P.Unit. (€)', 'Importe (€)'].forEach((h, i) =>
       doc.text(h, 40 + i * 130, y)
-    )
+    );  // <-- punto y coma al final de forEach
     y += 16
     doc.setLineWidth(0.5).line(40, y, 550, y)
     y += 10
@@ -450,7 +454,8 @@ export default function NuevoPresupuestoPage() {
               type="number"
               value={iva}
               onChange={(e) => setIva(Number(e.target.value))}
-              className="mt-1 block w-full border rounded px-2 py-1"
+              className="
+border rounded px-2 py-1 mt-1 block w-full"
             />
           </div>
           <div>
