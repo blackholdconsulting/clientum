@@ -62,7 +62,9 @@ export default function PresupuestosPage() {
   const [numero, setNumero] = useState('')
   const [vencimiento, setVencimiento] = useState('')
   const [comentarios, setComentarios] = useState('')
-  const [lineas, setLineas] = useState<Linea[]>([{ descripcion: '', unidades: 1, precioUnitario: 0 }])
+  const [lineas, setLineas] = useState<Linea[]>([
+    { descripcion: '', unidades: 1, precioUnitario: 0 },
+  ])
   const [iva, setIva] = useState(21)
   const [irpf, setIrpf] = useState(0)
 
@@ -70,21 +72,23 @@ export default function PresupuestosPage() {
   useEffect(() => {
     if (!session) return
     ;(async () => {
-      // Perfil (idéntico a app/profile/page.tsx)
+      // 1) Perfil (igual que en app/profile/page.tsx)
       const { data: p, error: errP } = await supabase
         .from('perfil')
-        .select(`nombre,apellidos,telefono,idioma,nombre_empr,nif,direccion,ciudad,provincia,cp,pais,email,web,iban`)
+        .select(
+          `nombre,apellidos,telefono,idioma,nombre_empr,nif,direccion,ciudad,provincia,cp,pais,email,web,iban`
+        )
         .eq('id', session.user.id)
         .single()
-      if (errP) console.error('Error cargando perfil:', errP)
+      if (errP) console.error('Error perfil:', errP)
       else if (p) setPerfil(p as Perfil)
 
-      // Clientes para desplegable
+      // 2) Lista de clientes
       const { data: cls, error: errC } = await supabase
         .from('clientes')
         .select('id,nombre,direccion,cif,cp,email')
         .order('nombre', { ascending: true })
-      if (errC) console.error('Error cargando clientes:', errC)
+      if (errC) console.error('Error clientes:', errC)
       else if (cls) setClientes(cls as ClienteRow[])
     })()
   }, [session, supabase])
@@ -108,7 +112,7 @@ export default function PresupuestosPage() {
     )
   }
 
-  // Calcular totales
+  // Cálculo de totales
   const calcularTotales = () => {
     const base = lineas.reduce((sum, l) => sum + l.unidades * l.precioUnitario, 0)
     const ivaImp = (base * iva) / 100
@@ -116,7 +120,7 @@ export default function PresupuestosPage() {
     return { base, ivaImp, irpfImp, total: base + ivaImp - irpfImp }
   }
 
-  // Exportar CSV
+  // Export CSV
   const exportCSV = () => {
     const { base, ivaImp, irpfImp, total } = calcularTotales()
     const header = [
@@ -163,7 +167,7 @@ export default function PresupuestosPage() {
     URL.revokeObjectURL(url)
   }
 
-  // Exportar PDF
+  // Export PDF
   const exportPDF = () => {
     const doc = new jsPDF({ unit: 'pt', format: 'a4' })
     let y = 40
@@ -266,81 +270,52 @@ export default function PresupuestosPage() {
           <div>
             <h2 className="font-semibold mb-2">Tus datos</h2>
             <input placeholder="Nombre" value={perfil.nombre} onChange={e => setPerfil({ ...perfil, nombre: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <input placeholder="Apellidos" value={perfil.apellidos} onChange={e => setPerfil({ ...perfil, apellidos: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <input placeholder="Teléfono" value={perfil.telefono} onChange={e => setPerfil({ ...perfil, telefono: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <select value={perfil.idioma} onChange={e => setPerfil({ ...perfil, idioma: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2">
-              <option>Español</option>
-              <option>Inglés</option>
+            <input placeholder="Apellidos" value={perfil.apellidos} onChange={e => setPerfil({ ...perfil, apellidos: e.target.value })} className="block w/full border rounded px-2 py-1 mb-2" />
+            <input placeholder="Teléfono" value={perfil.telefono} onChange={e => setPerfil({ ...perfil, telefono: e.target.value })} className="block w/full	border rounded px-2 py-1 mb-2" />
+            <select value={perfil.idioma} onChange={e => setPerfil({ ...perfil, idioma: e.target.value })} className="block w/full border rounded px-2 py-1 mb-2">
+              <option>Español</option><option>Inglés</option>
             </select>
-            <input placeholder="Razón Social" value={perfil.nombre_empr} onChange={e => setPerfil({ ...perfil, nombre_empr: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <input placeholder="NIF/CIF" value={perfil.nif} onChange={e => setPerfil({ ...perfil, nif: e.target.value })} className="block w/full border rounded px-2 py-1 mb-2" />
-            <input placeholder="Dirección" value={perfil.direccion} onChange={e => setPerfil({ ...perfil, direccion: e.target.value })} className="block w/full border rounded px-2 py-1 mb-2" />
-            <input placeholder="Ciudad" value={perfil.ciudad} onChange={e => setPerfil({ ...perfil, ciudad: e.target.value })} className="block w/full border rounded px-2 py-1 mb-2" />
-            <input placeholder="Provincia" value={perfil.provincia} onChange={e => setPerfil({ ...perfil, provincia: e.target.value })} className="block w/full border rounded px-2 py-1 mb-2" />
-            <input placeholder="CP" value={perfil.cp} onChange={e => setPerfil({ ...perfil, cp: e.target.value })} className="block w/full border rounded px-2 py-1 mb-2" />
-            <input placeholder="País" value={perfil.pais} onChange={e => setPerfil({ ...perfil, pais: e.target.value })} className="block w/full border rounded px-2 py-1 mb-2" />
-            <input placeholder="Email" value={perfil.email} onChange={e => setPerfil({ ...perfil, email: e.target.value })} className="block w/full border rounded px-2 py-1 mb-2" />
-            <input placeholder="Web" value={perfil.web} onChange={e => setPerfil({ ...perfil, web: e.target.value })} className="
-block w/full border rounded px-2 py-1 mb-2" />
-            <input placeholder="IBAN" value={perfil.iban} onChange={e => setPerfil({ ...perfil, iban: e.target.value })} className="block w/full border rounded px-2 py-1 mb-2" />
-            <textarea placeholder="Comentarios" value={comentarios} onChange={e => setComentarios(e.target.value)} className="block w/full border rounded px-2 py-1 h-24 mb-2" />
+            <input placeholder="Razón Social" value={perfil.nombre_empr} onChange={e => setPerfil({ ...perfil, nombre_empr: e.target.value })} className="block w/full	border rounded px-2 py-1 mb-2" />
+            <input placeholder="NIF/CIF" value={perfil.nif} onChange={e => setPerfil({ ...perfil, nif: e.target.value })} className="block w/full	border rounded px-2 py-1 mb-2" />            <input placeholder="Dirección" value={perfil.direccion} onChange={e => setPerfil({ ...perfil, direccion: e.target.value })} className="block w/full	border rounded px-2 py-1 mb-2" />            <input placeholder="Ciudad" value={perfil.ciudad} onChange={e => setPerfil({ ...perfil, ciudad: e.target.value })} className="block w/full	border rounded px-2 py-1 mb-2" />            <input placeholder="Provincia" value={perfil.provincia} onChange={e => setPerfil({ ...perfil, provincia: e.target.value })} className="block w/full	border rounded px-2 py-1 mb-2" />            <input placeholder="CP" value={perfil.cp} onChange={e => setPerfil({ ...perfil, cp: e.target.value })} className="block w/full	border rounded px-2 py-1 mb-2" />            <input placeholder="País" value={perfil.pais} onChange={e => setPerfil({ ...perfil, pais: e.target.value })} className="block w/full	border rounded px-2 py-1 mb-2" />            <input placeholder="Email" value={perfil.email} onChange={e => setPerfil({ ...perfil, email: e.target.value })} className="block w/full	border rounded px-2 py-1 mb-2" />            <input placeholder="Web" value={perfil.web} onChange={e => setPerfil({ ...perfil, web: e.target.value })} className="block w/full;border rounded px-2 py-1 mb-2" />            <input placeholder="IBAN" value={perfil.iban} onChange={e => setPerfil({ ...perfil, iban: e.target.value })} className="block w/full;border rounded px-2 py-1 mb-2" />            <textarea placeholder="Comentarios" value={comentarios} onChange={e => setComentarios(e.target.value)} className="block w/full;border rounded px-2 py-1 h-24 mb-2" />
           </div>
-
-          {/* Datos del cliente */}
+          {/* Datos cliente */}
           <div>
             <h2 className="font-semibold mb-2">Datos del cliente</h2>
-            <select
-              className="block w/full border rounded px-2 py-1 mb-4"
-              value={cliente?.id || ''}
-              onChange={e => setCliente(clientes.find(c => c.id === e.target.value) || null)}
-            >
+            <select className="block w/full;border rounded px-2 py-1 mb-4" value={cliente?.id||''} onChange={e=>setCliente(clientes.find(c=>c.id===e.target.value)||null)}>
               <option value="" disabled>Selecciona un cliente</option>
-              {clientes.map(c => (
+              {clientes.map(c=>(
                 <option key={c.id} value={c.id}>{c.nombre}</option>
               ))}
             </select>
-            {cliente && (
-              <>
-                <input readOnly placeholder="Dirección" value={cliente.direccion} className="block w/full bg-gray-100 border rounded px-2 py-1 mb-2" />
-                <input readOnly placeholder="CIF" value={cliente.cif} className="block w/full bg-gray-100 border rounded px-2 py-1 mb-2" />
-                <input readOnly placeholder="CP" value={cliente.cp} className="block w/full bg-gray-100 border rounded px-2 py-1 mb-2" />
-                <input readOnly placeholder="Email" value={cliente.email} className="block w/full bg-gray-100 border rounded px-2 py-1 mb-2" />
-              </>
-            )}
+            {cliente && <>
+              <input readOnly placeholder="Dirección" value={cliente.direccion} className="block w/full bg-gray-100;border rounded px-2 py-1 mb-2"/>
+              <input readOnly placeholder="CIF" value={cliente.cif} className="block w/full bg-gray-100;border rounded px-2 py-1 mb-2"/>
+              <input readOnly placeholder="CP" value={cliente.cp} className="block w/full bg-gray-100;border rounded px-2 py-1 mb-2"/>
+              <input readOnly placeholder="Email" value={cliente.email} className="block w/full bg-gray-100;border rounded px-2 py-1 mb-2"/>
+            </>}
           </div>
         </fieldset>
-
-        {/* Líneas del presupuesto */}
+        {/* Líneas */}
         <fieldset className="space-y-2">
           <legend className="font-semibold">Líneas del presupuesto</legend>
-          {lineas.map((l, i) => (
+          {lineas.map((l,i)=>(
             <div key={i} className="grid grid-cols-4 gap-4 items-center">
-              <input name="descripcion" placeholder="Descripción" value={l.descripcion} onChange={e => handleLineaChange(i, e)} className="border rounded px-2 py-1" />
-              <input name="unidades" type="number" placeholder="Unidades" value={l.unidades} onChange={e => handleLineaChange(i, e)} className="border rounded px-2 py-1" />
-              <input name="precioUnitario" type="number" step="0.01" placeholder="Precio unitario" value={l.precioUnitario} onChange={e => handleLineaChange(i, e)} className="border rounded px-2 py-1" />
+              <input name="descripcion" placeholder="Descripción" value={l.descripcion} onChange={e=>handleLineaChange(i,e)} className="border rounded px-2 py-1"/>
+              <input name="unidades" type="number" placeholder="Unidades" value={l.unidades} onChange={e=>handleLineaChange(i,e)} className="border rounded px-2 py-1"/>
+              <input name="precioUnitario" type="number" step="0.01" placeholder="Precio unitario" value={l.precioUnitario} onChange={e=>handleLineaChange(i,e)} className="border rounded px-2 py-1"/>
               <div className="flex items-center">
-                <span className="mr-2">{(l.unidades * l.precioUnitario).toFixed(2)} €</span>
-                {i === lineas.length - 1 && (
-                  <button type="button" onClick={addLinea} className="px-2 py-1 bg-blue-600 text-white rounded">+</button>
-                )}
+                <span className="mr-2">{(l.unidades*l.precioUnitario).toFixed(2)} €</span>
+                {i===lineas.length-1&&<button type="button" onClick={addLinea} className="px-2 py-1 bg-blue-600 text-white rounded">+</button>}
               </div>
             </div>
           ))}
         </fieldset>
-
-        {/* IVA / IRPF */}
+        {/* IVA/IRPF */}
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm">IVA (%)</label>
-            <input type="number" value={iva} onChange={e => setIva(Number(e.target.value))} className="mt-1 block w-full border rounded px-2 py-1" />
-          </div>
-          <div>
-            <label className="block text-sm">IRPF (%)</label>
-            <input type="number" value={irpf} onChange={e => setIrpf(Number(e.target.value))} className="mt-1 block w-full	border rounded px-2 py-1" />
-          </div>
+          <div><label className="block text-sm">IVA (%)</label><input type="number" value={iva} onChange={e=>setIva(Number(e.target.value))} className="mt-1 block w-full;border rounded px-2 py-1"/></div>
+          <div><label className="block text-sm">IRPF (%)</label><input type="number" value={irpf} onChange={e=>setIrpf(Number(e.target.value))} className="mt-1 block w-full;border rounded px-2 py-1"/></div>
         </div>
-
-        {/* Botones de exportación */}
+        {/* Botones export */}
         <div className="flex justify-end space-x-3 pt-4 border-t">
           <button type="button" onClick={exportCSV} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Exportar CSV</button>
           <button type="button" onClick={exportPDF} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Descargar PDF</button>
