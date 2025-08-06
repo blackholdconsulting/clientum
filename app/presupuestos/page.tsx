@@ -1,13 +1,12 @@
-// app/presupuestos/page.tsx (continúa)
-
-// --- Client Component ---
+// app/presupuestos/page.tsx
 'use client'
 
-import React, { useState, ChangeEvent, FormEvent } from 'react'
+import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react'
+import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
 import { jsPDF } from 'jspdf'
 
-export type Linea = { descripcion: string; unidades: number; precioUnitario: number }
-export type Perfil = {
+type Linea = { descripcion: string; unidades: number; precioUnitario: number }
+type Perfil = {
   nombre: string
   apellidos: string
   telefono: string
@@ -23,7 +22,7 @@ export type Perfil = {
   web: string
   iban: string
 }
-export type ClienteRow = {
+type ClienteRow = {
   id: string
   nombre: string
   direccion: string
@@ -32,13 +31,15 @@ export type ClienteRow = {
   email: string
 }
 
-interface Props {
-  perfil: Perfil
-  clientes: ClienteRow[]
-}
+export default function PresupuestosPage() {
+  const supabase = createPagesBrowserClient()
 
-export default function PresupuestoForm({ perfil, clientes }: Props) {
-  // --- Form state ---
+  // estados de datos
+  const [perfil, setPerfil] = useState<Perfil | null>(null)
+  const [clientes, setClientes] = useState<ClienteRow[]>([])
+  const [cliente, setCliente] = useState<ClienteRow | null>(null)
+
+  // estados del formulario
   const [fecha, setFecha] = useState('')
   const [numero, setNumero] = useState('')
   const [vencimiento, setVencimiento] = useState('')
@@ -48,12 +49,43 @@ export default function PresupuestoForm({ perfil, clientes }: Props) {
   ])
   const [iva, setIva] = useState(21)
   const [irpf, setIrpf] = useState(0)
-  const [cliente, setCliente] = useState<ClienteRow | null>(null)
 
-  // --- Handlers ---
+  // carga perfil y clientes al montar
+  useEffect(() => {
+    ;(async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: p, error: errP } = await supabase
+        .from('perfil')
+        .select(
+          `nombre,apellidos,telefono,idioma,
+           nombre_empr,nif,direccion,ciudad,provincia,cp,pais,
+           email,web,iban`
+        )
+        .eq('id', user.id)
+        .single()
+      if (p) setPerfil(p as Perfil)
+
+      const { data: cls, error: errC } = await supabase
+        .from('clientes')
+        .select('id,nombre,direccion,cif,cp,email')
+        .order('nombre', { ascending: true })
+      if (cls) setClientes(cls as ClienteRow[])
+    })()
+  }, [supabase])
+
+  if (!perfil) {
+    return <div className="p-6">Cargando tus datos…</div>
+  }
+
+  // añadir nueva línea
   const addLinea = () =>
     setLineas((ls) => [...ls, { descripcion: '', unidades: 1, precioUnitario: 0 }])
 
+  // manejar cambios en las líneas
   const handleLineaChange = (i: number, e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setLineas((ls) =>
@@ -65,6 +97,7 @@ export default function PresupuestoForm({ perfil, clientes }: Props) {
     )
   }
 
+  // calcular totales
   const calcularTotales = () => {
     const base = lineas.reduce((sum, l) => sum + l.unidades * l.precioUnitario, 0)
     const ivaImp = (base * iva) / 100
@@ -72,7 +105,7 @@ export default function PresupuestoForm({ perfil, clientes }: Props) {
     return { base, ivaImp, irpfImp, total: base + ivaImp - irpfImp }
   }
 
-  // --- Export CSV ---
+  // exportar CSV
   const exportCSV = () => {
     const { base, ivaImp, irpfImp, total } = calcularTotales()
     const header = [
@@ -119,18 +152,19 @@ export default function PresupuestoForm({ perfil, clientes }: Props) {
     URL.revokeObjectURL(url)
   }
 
-  // --- Export PDF ---
+  // exportar PDF
   const exportPDF = () => {
     const doc = new jsPDF({ unit: 'pt', format: 'a4' })
     let y = 40
     doc.setFont('helvetica', 'bold').setFontSize(24).setTextColor(0, 102, 204)
     doc.text('Presupuesto', 40, y)
     y += 30
+
     doc.setFont('helvetica', 'normal').setFontSize(12).setTextColor(0)
     doc.text(`Fecha: ${fecha}`, 40, y)
-    doc.text(`Número: ${numero}`, 300, y)
+    doc.text(`Núm.: ${numero}`, 300, y)
     y += 16
-    doc.text(`Vencimiento: ${vencimiento}`, 40, y)
+    doc.text(`Vto.: ${vencimiento}`, 40, y)
     y += 30
 
     doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(0, 102, 204)
@@ -203,15 +237,29 @@ export default function PresupuestoForm({ perfil, clientes }: Props) {
         <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="block text-sm">Fecha</label>
-            <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} className="mt-1 block w-full border rounded px-2 py-1" />
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className="mt-1 block w-full border rounded px-2 py-1"
+            />
           </div>
           <div>
             <label className="block text-sm">Número</label>
-            <input value={numero} onChange={e => setNumero(e.target.value)} className="mt-1 block w-full border rounded px-2 py-1" />
+            <input
+              value={numero}
+              onChange={(e) => setNumero(e.target.value)}
+              className="mt-1 block w-full border rounded px-2 py-1"
+            />
           </div>
           <div>
             <label className="block text-sm">Vencimiento</label>
-            <input type="date" value={vencimiento} onChange={e => setVencimiento(e.target.value)} className="mt-1 block w-full border rounded px-2 py-1" />
+            <input
+              type="date"
+              value={vencimiento}
+              onChange={(e) => setVencimiento(e.target.value)}
+              className="mt-1 block w-full border rounded px-2 py-1"
+            />
           </div>
         </div>
 
@@ -233,62 +281,82 @@ export default function PresupuestoForm({ perfil, clientes }: Props) {
             <input readOnly value={perfil.email} placeholder="Email" className="block w-full mb-2 border rounded px-2 py-1" />
             <input readOnly value={perfil.web} placeholder="Web" className="block w-full mb-2 border rounded px-2 py-1" />
             <input readOnly value={perfil.iban} placeholder="IBAN" className="block w-full mb-2 border rounded px-2 py-1" />
-            <textarea value={comentarios} onChange={e => setComentarios(e.target.value)} placeholder="Comentarios" className="block w-full h-24 border rounded px-2 py-1" />
+            <textarea
+              value={comentarios}
+              onChange={(e) => setComentarios(e.target.value)}
+              placeholder="Comentarios"
+              className="block w-full h-24 border rounded px-2 py-1"
+            />
           </div>
 
-          {/* Datos del cliente */}
-          <div>
-            <h2 className="font-semibold mb-2">Datos del cliente</h2>
-            <select value={cliente?.id || ''} onChange={e => setCliente(clientes.find(c => c.id === e.target.value) || null)} className="block w-full mb-4 border rounded px-2 py-1">
-              <option value="" disabled>Selecciona un cliente</option>
-              {clientes.map(c => (
-                <option key={c.id} value={c.id}>{c.nombre}</option>
-              ))}
-            </select>
-            {cliente && (
-              <>
-                <input readOnly value={cliente.direccion} placeholder="Dirección" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
-                <input readOnly value={cliente.cif} placeholder="CIF" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
-                <input readOnly value={cliente.cp} placeholder="CP" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
-                <input readOnly value={cliente.email} placeholder="Email" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
-              </>
-            )}
-          </div>
+        {/* Datos del cliente */}
+        <div>
+          <h2 className="font-semibold mb-2">Datos del cliente</h2>
+          <select
+            value={cliente?.id || ''}
+            onChange={(e) => setCliente(clientes.find((c) => c.id === e.target.value) || null)}
+            className="block w-full mb-4 border rounded px-2 py-1"
+          >
+            <option value="" disabled>
+              Selecciona un cliente
+            </option>
+            {clientes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
+              </option>
+            ))}
+          </select>
+          {cliente && (
+            <>
+              <input readOnly value={cliente.direccion} placeholder="Dirección" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
+              <input readOnly value={cliente.cif} placeholder="CIF" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
+              <input readOnly value={cliente.cp} placeholder="CP" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
+              <input readOnly value={cliente.email} placeholder="Email" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
+            </>
+          )}
+        </div>
         </fieldset>
 
-        {/* Líneas del presupuesto */}
+        {/* Líneas del presupuesto */}  
         <fieldset className="space-y-2">
           <legend className="font-semibold">Líneas del presupuesto</legend>
           {lineas.map((l, i) => (
             <div key={i} className="grid grid-cols-4 gap-4 items-center">
-              <input name="descripcion" placeholder="Descripción" value={l.descripcion} onChange={e => handleLineaChange(i, e)} className="border rounded px-2 py-1" />
-              <input name="unidades" type="number" placeholder="Unidades" value={l.unidades} onChange={e => handleLineaChange(i, e)} className="border rounded px-2 py-1" />
-              <input name="precioUnitario" type="number" step="0.01" placeholder="Precio unitario" value={l.precioUnitario} onChange={e => handleLineaChange(i, e)} className="border rounded px-2 py-1" />
+              <input name="descripcion" placeholder="Descripción" value={l.descripcion} onChange={(e) => handleLineaChange(i, e)} className="border rounded px-2 py-1" />
+              <input name="unidades" type="number" placeholder="Unidades" value={l.unidades} onChange={(e) => handleLineaChange(i, e)} className="border rounded px-2 py-1" />
+              <input name="precioUnitario" type="number" step="0.01" placeholder="Precio unitario" value={l.precioUnitario} onChange={(e) => handleLineaChange(i, e)} className="border rounded px-2 py-1" />
               <div className="flex items-center">
                 <span className="mr-2">{(l.unidades * l.precioUnitario).toFixed(2)} €</span>
                 {i === lineas.length - 1 && (
-                  <button type="button" onClick={addLinea} className="px-2 py-1 bg-blue-600 text-white rounded">+</button>
+                  <button type="button" onClick={addLinea} className="px-2 py-1 bg-blue-600 text-white rounded">
+                    +
+                  </button>
                 )}
               </div>
-            ))}
+            </div>
+          ))}
         </fieldset>
 
         {/* IVA / IRPF */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm">IVA (%)</label>
-            <input type="number" value={iva} onChange={e => setIva(Number(e.target.value))} className="mt-1 block w-full border rounded px-2 py-1" />
+            <input type="number" value={iva} onChange={(e) => setIva(Number(e.target.value))} className="mt-1 block w-full border rounded px-2 py-1" />
           </div>
           <div>
             <label className="block text-sm">IRPF (%)</label>
-            <input type="number" value={irpf} onChange={e => setIrpf(Number(e.target.value))} className="mt-1 block w-full border rounded px-2 py-1" />
+            <input type="number" value={irpf} onChange={(e) => setIrpf(Number(e.target.value))} className="mt-1 block w-full border rounded px-2 py-1" />
           </div>
         </div>
 
-        {/* Botones */}
+        {/* Botones de exportación */}
         <div className="flex justify-end space-x-3 pt-4 border-t">
-          <button type="button" onClick={exportCSV} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Exportar CSV</button>
-          <button type="button" onClick={exportPDF} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Descargar PDF</button>
+          <button type="button" onClick={exportCSV} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+            Exportar CSV
+          </button>
+          <button type="button" onClick={exportPDF} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+            Descargar PDF
+          </button>
         </div>
       </form>
     </div>
