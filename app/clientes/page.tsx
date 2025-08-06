@@ -39,7 +39,9 @@ export default function ClientesPage() {
           setClientes(data || [])
         }
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        setLoading(false)
+      })
   }, [])
 
   return (
@@ -86,4 +88,6 @@ export default function ClientesPage() {
         </table>
       )}
     </div>
+  )
 }
+
