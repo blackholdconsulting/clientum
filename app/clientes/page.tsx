@@ -28,6 +28,9 @@ export default function ClientesPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // pon loading antes de la llamada
+    setLoading(true)
+
     supabase
       .from('clientes')
       .select('*')
@@ -39,7 +42,8 @@ export default function ClientesPage() {
           setClientes(data || [])
         }
       })
-      .finally(() => {
+      .then(() => {
+        // Aquí quitamos el loading
         setLoading(false)
       })
   }, [])
@@ -75,7 +79,7 @@ export default function ClientesPage() {
             </tr>
           </thead>
           <tbody>
-            {clientes.map(c => (
+            {clientes.map((c) => (
               <tr key={c.id} className="border-t hover:bg-gray-50">
                 <td className="px-4 py-2">{c.nombre}</td>
                 <td className="px-4 py-2">{c.razon_social}</td>
@@ -90,4 +94,5 @@ export default function ClientesPage() {
     </div>
   )
 }
+
 
