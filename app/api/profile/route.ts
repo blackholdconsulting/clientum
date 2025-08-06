@@ -4,7 +4,7 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 
 export async function GET() {
-  // Inicializa Supabase en el server
+  // Inicializa Supabase en el servidor
   const supabase = createServerComponentClient({ cookies })
 
   // Obtén la sesión actual
@@ -13,13 +13,10 @@ export async function GET() {
   } = await supabase.auth.getSession()
 
   if (!session) {
-    return NextResponse.json(
-      { error: 'No session found' },
-      { status: 401 }
-    )
+    return NextResponse.json({ error: 'No session found' }, { status: 401 })
   }
 
-  // Consulta la tabla "perfil" para el usuario logueado
+  // Recupera el perfil del usuario logueado
   const { data: profile, error } = await supabase
     .from('perfil')
     .select(`
@@ -42,12 +39,9 @@ export async function GET() {
     .single()
 
   if (error) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // Devuelve el perfil en JSON
+  // Devuelve el perfil como JSON
   return NextResponse.json(profile)
 }
