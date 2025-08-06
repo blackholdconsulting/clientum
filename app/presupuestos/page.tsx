@@ -32,7 +32,8 @@ type ClienteRow = {
 }
 
 export default function PresupuestosPage() {
-  const { data: session } = useSession()
+  // <-- CORRECCIÓN AQUÍ: useSession devuelve directamente la sesión
+  const session = useSession()
   const supabase = useSupabaseClient()
 
   // Perfil
@@ -52,6 +53,7 @@ export default function PresupuestosPage() {
     web: '',
     iban: '',
   })
+
   // Clientes
   const [clientes, setClientes] = useState<ClienteRow[]>([])
   const [cliente, setCliente] = useState<ClienteRow | null>(null)
@@ -61,7 +63,9 @@ export default function PresupuestosPage() {
   const [numero, setNumero] = useState('')
   const [vencimiento, setVencimiento] = useState('')
   const [comentarios, setComentarios] = useState('')
-  const [lineas, setLineas] = useState<Linea[]>([{ descripcion: '', unidades: 1, precioUnitario: 0 }])
+  const [lineas, setLineas] = useState<Linea[]>([
+    { descripcion: '', unidades: 1, precioUnitario: 0 },
+  ])
   const [iva, setIva] = useState(21)
   const [irpf, setIrpf] = useState(0)
 
@@ -70,27 +74,27 @@ export default function PresupuestosPage() {
     if (!session) return
     ;(async () => {
       const userId = session.user.id
+
       // 1) Perfil
       const { data: p, error: errP } = await supabase
         .from('perfil')
-        .select('nombre,apellidos,telefono,idioma,nombre_empr,nif,direccion,ciudad,provincia,cp,pais,email,web,iban')
+        .select(
+          'nombre,apellidos,telefono,idioma,nombre_empr,nif,direccion,ciudad,provincia,cp,pais,email,web,iban'
+        )
         .eq('user_id', userId)
         .single()
-      if (errP) {
-        console.error('Error cargando perfil:', errP)
-      } else if (p) {
-        setPerfil(p as Perfil)
-      }
+
+      if (errP) console.error('Error cargando perfil:', errP)
+      else if (p) setPerfil(p as Perfil)
+
       // 2) Clientes
       const { data: cls, error: errC } = await supabase
         .from('clientes')
         .select('id,nombre,direccion,cif,cp,email')
         .order('nombre', { ascending: true })
-      if (errC) {
-        console.error('Error cargando clientes:', errC)
-      } else if (cls) {
-        setClientes(cls as ClienteRow[])
-      }
+
+      if (errC) console.error('Error cargando clientes:', errC)
+      else if (cls) setClientes(cls as ClienteRow[])
     })()
   }, [session, supabase])
 
@@ -110,7 +114,7 @@ export default function PresupuestosPage() {
 
   // Cálculo de totales
   const calcularTotales = () => {
-    const base = lineas.reduce((s, l) => s + l.unidades * l.precioUnitario, 0)
+    const base = lineas.reduce((sum, l) => sum + l.unidades * l.precioUnitario, 0)
     const ivaImp = (base * iva) / 100
     const irpfImp = (base * irpf) / 100
     return { base, ivaImp, irpfImp, total: base + ivaImp - irpfImp }
@@ -144,8 +148,30 @@ export default function PresupuestosPage() {
       comentarios,
     ])
     rows.push(['', '', '', '', '', 'BASE', '', '', base.toFixed(2), ''])
-    rows.push(['', '', '', '', '', `IVA(${iva}%)`, '', '', ivaImp.toFixed(2), ''])
-    rows.push(['', '', '', '', '', `IRPF(${irpf}%)`, '', '', (-irpfImp).toFixed(2), ''])
+    rows.push([
+      '',
+      '',
+      '',
+      '',
+      '',
+      `IVA(${iva}%)`,
+      '',
+      '',
+      ivaImp.toFixed(2),
+      '',
+    ])
+    rows.push([
+      '',
+      '',
+      '',
+      '',
+      '',
+      `IRPF(${irpf}%)`,
+      '',
+      '',
+      (-irpfImp).toFixed(2),
+      '',
+    ])
     rows.push(['', '', '', '', '', 'TOTAL', '', '', total.toFixed(2), ''])
 
     const csv =
@@ -179,13 +205,18 @@ export default function PresupuestosPage() {
     doc.text(`Vto.: ${vencimiento}`, 40, y)
     y += 30
 
-    // Empresa / Cliente
-    doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(0, 102, 204)
+    doc
+      .setFont('helvetica', 'bold')
+      .setFontSize(14)
+      .setTextColor(0, 102, 204)
     doc.text(perfil.nombre_empr, 40, y)
     doc.text(cliente?.nombre || 'Cliente', 300, y)
     y += 20
 
-    doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(60)
+    doc
+      .setFont('helvetica', 'normal')
+      .setFontSize(10)
+      .setTextColor(60)
     doc.text(`Tel: ${perfil.telefono}`, 40, y)
     doc.text(`Email: ${perfil.email}`, 300, y)
     y += 14
@@ -196,7 +227,6 @@ export default function PresupuestosPage() {
     doc.text(`IBAN: ${perfil.iban}`, 300, y)
     y += 30
 
-    // Tabla de líneas
     doc
       .setFont('helvetica', 'bold')
       .setFontSize(12)
@@ -213,7 +243,9 @@ export default function PresupuestosPage() {
       doc.text(l.descripcion, 40, y)
       doc.text(String(l.unidades), 170, y, { align: 'right' })
       doc.text(l.precioUnitario.toFixed(2), 300, y, { align: 'right' })
-      doc.text((l.unidades * l.precioUnitario).toFixed(2), 430, y, { align: 'right' })
+      doc.text((l.unidades * l.precioUnitario).toFixed(2), 430, y, {
+        align: 'right',
+      })
       y += 18
       if (y > 750) {
         doc.addPage()
@@ -223,7 +255,10 @@ export default function PresupuestosPage() {
 
     const { base, ivaImp, irpfImp, total } = calcularTotales()
     y += 20
-    doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0, 102, 204)
+    doc
+      .setFont('helvetica', 'bold')
+      .setFontSize(12)
+      .setTextColor(0, 102, 204)
     doc.text('BASE:', 300, y)
     doc.text(`${base.toFixed(2)} €`, 550, y, { align: 'right' })
     y += 16
@@ -238,7 +273,10 @@ export default function PresupuestosPage() {
     doc.text(`${total.toFixed(2)} €`, 550, y, { align: 'right' })
     y += 30
 
-    doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(60)
+    doc
+      .setFont('helvetica', 'normal')
+      .setFontSize(10)
+      .setTextColor(60)
     doc.text(`Comentarios: ${comentarios}`, 40, y)
     y += 14
     doc.text(`Transferencia (IBAN): ${perfil.iban}`, 40, y)
@@ -249,20 +287,37 @@ export default function PresupuestosPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Crear Presupuesto</h1>
-      <form onSubmit={(e: FormEvent) => e.preventDefault()} className="bg-white p-6 rounded shadow space-y-6">
+      <form
+        onSubmit={(e: FormEvent) => e.preventDefault()}
+        className="bg-white p-6 rounded shadow space-y-6"
+      >
         {/* Fechas / Número */}
         <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="block text-sm">Fecha</label>
-            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="mt-1 block w-full border rounded px-2 py-1" />
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className="mt-1 block w-full border rounded px-2 py-1"
+            />
           </div>
           <div>
             <label className="block text-sm">Número</label>
-            <input value={numero} onChange={(e) => setNumero(e.target.value)} className="mt-1 block w-full border rounded px-2 py-1" />
+            <input
+              value={numero}
+              onChange={(e) => setNumero(e.target.value)}
+              className="mt-1 block w-full border rounded px-2 py-1"
+            />
           </div>
           <div>
             <label className="block text-sm">Vencimiento</label>
-            <input type="date" value={vencimiento} onChange={(e) => setVencimiento(e.target.value)} className="mt-1 block w-full border rounded px-2 py-1" />
+            <input
+              type="date"
+              value={vencimiento}
+              onChange={(e) => setVencimiento(e.target.value)}
+              className="mt-1 block w-full border rounded px-2 py-1"
+            />
           </div>
         </div>
 
@@ -270,24 +325,104 @@ export default function PresupuestosPage() {
         <fieldset className="grid grid-cols-2 gap-4">
           <div>
             <h2 className="font-semibold mb-2">Tus datos</h2>
-            <input placeholder="Nombre" value={perfil.nombre} onChange={(e) => setPerfil({ ...perfil, nombre: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <input placeholder="Apellidos" value={perfil.apellidos} onChange={(e) => setPerfil({ ...perfil, apellidos: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <input placeholder="Teléfono" value={perfil.telefono} onChange={(e) => setPerfil({ ...perfil, telefono: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <select value={perfil.idioma} onChange={(e) => setPerfil({ ...perfil, idioma: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2">
+            <input
+              placeholder="Nombre"
+              value={perfil.nombre}
+              onChange={(e) => setPerfil({ ...perfil, nombre: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="Apellidos"
+              value={perfil.apellidos}
+              onChange={(e) => setPerfil({ ...perfil, apellidos: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="Teléfono"
+              value={perfil.telefono}
+              onChange={(e) => setPerfil({ ...perfil, telefono: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <select
+              value={perfil.idioma}
+              onChange={(e) => setPerfil({ ...perfil, idioma: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            >
               <option>Español</option>
               <option>Inglés</option>
             </select>
-            <input placeholder="Razón Social" value={perfil.nombre_empr} onChange={(e) => setPerfil({ ...perfil, nombre_empr: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <input placeholder="NIF/CIF" value={perfil.nif} onChange={(e) => setPerfil({ ...perfil, nif: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <input placeholder="Dirección" value={perfil.direccion} onChange={(e) => setPerfil({ ...perfil, direccion: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <input placeholder="Ciudad" value={perfil.ciudad} onChange={(e) => setPerfil({ ...perfil, ciudad: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <input placeholder="Provincia" value={perfil.provincia} onChange={(e) => setPerfil({ ...perfil, provincia: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <input placeholder="CP" value={perfil.cp} onChange={(e) => setPerfil({ ...perfil, cp: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <input placeholder="País" value={perfil.pais} onChange={(e) => setPerfil({ ...perfil, pais: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <input placeholder="Email" value={perfil.email} onChange={(e) => setPerfil({ ...perfil, email: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <input placeholder="Web" value={perfil.web} onChange={(e) => setPerfil({ ...perfil, web: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <input placeholder="IBAN" value={perfil.iban} onChange={(e) => setPerfil({ ...perfil, iban: e.target.value })} className="block w-full border rounded px-2 py-1 mb-2" />
-            <textarea placeholder="Comentarios" value={comentarios} onChange={(e) => setComentarios(e.target.value)} className="block w-full border rounded px-2 py-1 h-24" />
+            <input
+              placeholder="Razón Social"
+              value={perfil.nombre_empr}
+              onChange={(e) =>
+                setPerfil({ ...perfil, nombre_empr: e.target.value })
+              }
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="NIF/CIF"
+              value={perfil.nif}
+              onChange={(e) => setPerfil({ ...perfil, nif: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="Dirección"
+              value={perfil.direccion}
+              onChange={(e) =>
+                setPerfil({ ...perfil, direccion: e.target.value })
+              }
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="Ciudad"
+              value={perfil.ciudad}
+              onChange={(e) => setPerfil({ ...perfil, ciudad: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="Provincia"
+              value={perfil.provincia}
+              onChange={(e) =>
+                setPerfil({ ...perfil, provincia: e.target.value })
+              }
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="CP"
+              value={perfil.cp}
+              onChange={(e) => setPerfil({ ...perfil, cp: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="País"
+              value={perfil.pais}
+              onChange={(e) => setPerfil({ ...perfil, pais: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="Email"
+              value={perfil.email}
+              onChange={(e) => setPerfil({ ...perfil, email: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="Web"
+              value={perfil.web}
+              onChange={(e) => setPerfil({ ...perfil, web: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="IBAN"
+              value={perfil.iban}
+              onChange={(e) => setPerfil({ ...perfil, iban: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <textarea
+              placeholder="Comentarios"
+              value={comentarios}
+              onChange={(e) => setComentarios(e.target.value)}
+              className="block w-full border rounded px-2 py-1 h-24"
+            />
           </div>
 
           {/* Cliente desplegable */}
@@ -297,7 +432,8 @@ export default function PresupuestosPage() {
               className="block w-full border rounded px-2 py-1 mb-4"
               value={cliente?.id || ''}
               onChange={(e) => {
-                const sel = clientes.find((c) => c.id === e.target.value) || null
+                const sel =
+                  clientes.find((c) => c.id === e.target.value) || null
                 setCliente(sel)
               }}
             >
@@ -312,10 +448,30 @@ export default function PresupuestosPage() {
             </select>
             {cliente && (
               <>
-                <input readOnly placeholder="Dirección" value={cliente.direccion} className="block w-full bg-gray-100 border rounded px-2 py-1 mb-2" />
-                <input readOnly placeholder="CIF" value={cliente.cif} className="block w-full bg-gray-100 border rounded px-2 py-1 mb-2" />
-                <input readOnly placeholder="CP" value={cliente.cp} className="block w-full bg-gray-100 border rounded px-2 py-1 mb-2" />
-                <input readOnly placeholder="Email" value={cliente.email} className="block w-full bg-gray-100 border rounded px-2 py-1 mb-2" />
+                <input
+                  readOnly
+                  placeholder="Dirección"
+                  value={cliente.direccion}
+                  className="block w-full bg-gray-100 border rounded px-2 py-1 mb-2"
+                />
+                <input
+                  readOnly
+                  placeholder="CIF"
+                  value={cliente.cif}
+                  className="block w-full bg-gray-100 border rounded px-2 py-1 mb-2"
+                />
+                <input
+                  readOnly
+                  placeholder="CP"
+                  value={cliente.cp}
+                  className="block w-full bg-gray-100 border rounded px-2 py-1 mb-2"
+                />
+                <input
+                  readOnly
+                  placeholder="Email"
+                  value={cliente.email}
+                  className="block w-full bg-gray-100 border rounded px-2 py-1 mb-2"
+                />
               </>
             )}
           </div>
@@ -326,13 +482,40 @@ export default function PresupuestosPage() {
           <legend className="font-semibold">Líneas del presupuesto</legend>
           {lineas.map((l, i) => (
             <div key={i} className="grid grid-cols-4 gap-4 items-center">
-              <input name="descripcion" placeholder="Descripción" value={l.descripcion} onChange={(e) => handleLineaChange(i, e)} className="border rounded px-2 py-1" />
-              <input name="unidades" type="number" placeholder="Unidades" value={l.unidades} onChange={(e) => handleLineaChange(i, e)} className="border rounded px-2 py-1" />
-              <input name="precioUnitario" type="number" placeholder="Precio unitario" step="0.01" value={l.precioUnitario} onChange={(e) => handleLineaChange(i, e)} className="border rounded px-2 py-1" />
+              <input
+                name="descripcion"
+                placeholder="Descripción"
+                value={l.descripcion}
+                onChange={(e) => handleLineaChange(i, e)}
+                className="border rounded px-2 py-1"
+              />
+              <input
+                name="unidades"
+                type="number"
+                placeholder="Unidades"
+                value={l.unidades}
+                onChange={(e) => handleLineaChange(i, e)}
+                className="border rounded px-2 py-1"
+              />
+              <input
+                name="precioUnitario"
+                type="number"
+                placeholder="Precio unitario"
+                step="0.01"
+                value={l.precioUnitario}
+                onChange={(e) => handleLineaChange(i, e)}
+                className="border rounded px-2 py-1"
+              />
               <div className="flex items-center">
-                <span className="mr-2">{(l.unidades * l.precioUnitario).toFixed(2)} €</span>
+                <span className="mr-2">
+                  {(l.unidades * l.precioUnitario).toFixed(2)} €
+                </span>
                 {i === lineas.length - 1 && (
-                  <button type="button" onClick={addLinea} className="px-2 py-1 bg-blue-600 text-white rounded">
+                  <button
+                    type="button"
+                    onClick={addLinea}
+                    className="px-2 py-1 bg-blue-600 text-white rounded"
+                  >
                     +
                   </button>
                 )}
@@ -345,20 +528,38 @@ export default function PresupuestosPage() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm">IVA (%)</label>
-            <input type="number" value={iva} onChange={(e) => setIva(Number(e.target.value))} className="mt-1 block w-full border rounded px-2 py-1" />
+            <input
+              type="number"
+              value={iva}
+              onChange={(e) => setIva(Number(e.target.value))}
+              className="mt-1 block w-full border rounded px-2 py-1"
+            />
           </div>
           <div>
             <label className="block text-sm">IRPF (%)</label>
-            <input type="number" value={irpf} onChange={(e) => setIrpf(Number(e.target.value))} className="mt-1 block w-full border rounded px-2 py-1" />
+            <input
+              type="number"
+              value={irpf}
+              onChange={(e) => setIrpf(Number(e.target.value))}
+              className="mt-1 block w-full border rounded px-2 py-1"
+            />
           </div>
         </div>
 
         {/* Botones de exportación */}
         <div className="flex justify-end space-x-3 pt-4 border-t">
-          <button type="button" onClick={exportCSV} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+          <button
+            type="button"
+            onClick={exportCSV}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          >
             Exportar CSV
           </button>
-          <button type="button" onClick={exportPDF} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+          <button
+            type="button"
+            onClick={exportPDF}
+            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+          >
             Descargar PDF
           </button>
         </div>
