@@ -2,7 +2,7 @@
 'use client'
 
 import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react'
-import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
+import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react'
 import { jsPDF } from 'jspdf'
 
 type Linea = { descripcion: string; unidades: number; precioUnitario: number }
@@ -32,7 +32,8 @@ type ClienteRow = {
 }
 
 export default function PresupuestosPage() {
-  const supabase = createPagesBrowserClient()
+  const session = useSession()
+  const supabase = useSupabaseClient()
 
   // estados de datos
   const [perfil, setPerfil] = useState<Perfil | null>(null)
@@ -50,42 +51,40 @@ export default function PresupuestosPage() {
   const [iva, setIva] = useState(21)
   const [irpf, setIrpf] = useState(0)
 
-  // carga perfil y clientes al montar
+  // cargar perfil y clientes cuando session esté lista
   useEffect(() => {
+    if (!session) return
     ;(async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
-
       const { data: p, error: errP } = await supabase
         .from('perfil')
-        .select(
-          `nombre,apellidos,telefono,idioma,
-           nombre_empr,nif,direccion,ciudad,provincia,cp,pais,
-           email,web,iban`
-        )
-        .eq('id', user.id)
+        .select(`
+          nombre,apellidos,telefono,idioma,
+          nombre_empr,nif,direccion,ciudad,provincia,cp,pais,
+          email,web,iban
+        `)
+        .eq('id', session.user.id)
         .single()
-      if (p) setPerfil(p as Perfil)
+      if (errP) console.error(errP)
+      else if (p) setPerfil(p as Perfil)
 
       const { data: cls, error: errC } = await supabase
         .from('clientes')
         .select('id,nombre,direccion,cif,cp,email')
         .order('nombre', { ascending: true })
-      if (cls) setClientes(cls as ClienteRow[])
+      if (errC) console.error(errC)
+      else if (cls) setClientes(cls as ClienteRow[])
     })()
-  }, [supabase])
+  }, [session, supabase])
 
   if (!perfil) {
     return <div className="p-6">Cargando tus datos…</div>
   }
 
-  // añadir nueva línea
+  // añadir línea
   const addLinea = () =>
     setLineas((ls) => [...ls, { descripcion: '', unidades: 1, precioUnitario: 0 }])
 
-  // manejar cambios en las líneas
+  // manejar cambios de línea
   const handleLineaChange = (i: number, e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setLineas((ls) =>
@@ -159,7 +158,6 @@ export default function PresupuestosPage() {
     doc.setFont('helvetica', 'bold').setFontSize(24).setTextColor(0, 102, 204)
     doc.text('Presupuesto', 40, y)
     y += 30
-
     doc.setFont('helvetica', 'normal').setFontSize(12).setTextColor(0)
     doc.text(`Fecha: ${fecha}`, 40, y)
     doc.text(`Núm.: ${numero}`, 300, y)
@@ -257,7 +255,7 @@ export default function PresupuestosPage() {
             <input
               type="date"
               value={vencimiento}
-              onChange={(e) => setVencimiento(e.target.value)}
+              onChange={(e) => setVencimiento(e.target.value)}  
               className="mt-1 block w-full border rounded px-2 py-1"
             />
           </div>
@@ -289,35 +287,35 @@ export default function PresupuestosPage() {
             />
           </div>
 
-        {/* Datos del cliente */}
-        <div>
-          <h2 className="font-semibold mb-2">Datos del cliente</h2>
-          <select
-            value={cliente?.id || ''}
-            onChange={(e) => setCliente(clientes.find((c) => c.id === e.target.value) || null)}
-            className="block w-full mb-4 border rounded px-2 py-1"
-          >
-            <option value="" disabled>
-              Selecciona un cliente
-            </option>
-            {clientes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre}
+          {/* Datos del cliente */}
+          <div>
+            <h2 className="font-semibold mb-2">Datos del cliente</h2>
+            <select
+              value={cliente?.id || ''}
+              onChange={(e) => setCliente(clientes.find((c) => c.id === e.target.value) || null)}
+              className="block w-full mb-4 border rounded px-2 py-1"
+            >
+              <option value="" disabled>
+                Selecciona un cliente
               </option>
-            ))}
-          </select>
-          {cliente && (
-            <>
-              <input readOnly value={cliente.direccion} placeholder="Dirección" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
-              <input readOnly value={cliente.cif} placeholder="CIF" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
-              <input readOnly value={cliente.cp} placeholder="CP" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
-              <input readOnly value={cliente.email} placeholder="Email" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
-            </>
-          )}
-        </div>
+              {clientes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+            {cliente && (
+              <>
+                <input readOnly value={cliente.direccion} placeholder="Dirección" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
+                <input readOnly value={cliente.cif} placeholder="CIF" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
+                <input readOnly value={cliente.cp} placeholder="CP" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
+                <input readOnly value={cliente.email} placeholder="Email" className="block w-full mb-2 bg-gray-100 border rounded px-2 py-1" />
+              </>
+            )}
+          </div>
         </fieldset>
 
-        {/* Líneas del presupuesto */}  
+        {/* Líneas del presupuesto */}
         <fieldset className="space-y-2">
           <legend className="font-semibold">Líneas del presupuesto</legend>
           {lineas.map((l, i) => (
@@ -349,7 +347,7 @@ export default function PresupuestosPage() {
           </div>
         </div>
 
-        {/* Botones de exportación */}
+        {/* Botones */}
         <div className="flex justify-end space-x-3 pt-4 border-t">
           <button type="button" onClick={exportCSV} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
             Exportar CSV
