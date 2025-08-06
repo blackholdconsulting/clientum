@@ -1,8 +1,21 @@
-"use client";
+// app/negocio/plan-futuro/page.tsx
+'use client'
 
-import Link from "next/link";
+import React, { useState } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
+import roadmapEmpty from '/public/illustrations/roadmap-empty.svg'
 
 export default function PlanFuturoPage() {
+  const [objetivos, setObjetivos] = useState<string[]>([])
+
+  const agregarObjetivo = () => {
+    const texto = prompt('Introduce el texto de tu nuevo objetivo:')
+    if (texto?.trim()) {
+      setObjetivos((prev) => [...prev, texto.trim()])
+    }
+  }
+
   return (
     <main className="p-6 bg-white rounded-md shadow-lg">
       {/* Header con botón “volver” */}
@@ -16,20 +29,43 @@ export default function PlanFuturoPage() {
         <h1 className="text-2xl font-semibold">Plan futuro</h1>
       </header>
 
-      {/* Contenido principal */}
-      <div className="flex flex-col items-center justify-center py-16">
-        <img
-          src="/illustrations/roadmap-empty.svg"
-          alt="Sin plan futuro"
-          className="w-48 h-48 mb-6"
-        />
-        <p className="text-gray-600 mb-4">
-          Define tus objetivos a largo plazo.
-        </p>
-        <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
-          Añadir objetivo
-        </button>
-      </div>
+      {/* Si no hay objetivos, mostramos la ilustración */}
+      {objetivos.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16">
+          <Image
+            src={roadmapEmpty}
+            alt="Sin plan futuro"
+            width={192}
+            height={192}
+            className="mb-6"
+          />
+          <p className="text-gray-600 mb-4">
+            Define tus objetivos a largo plazo.
+          </p>
+          <button
+            onClick={agregarObjetivo}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+          >
+            Añadir objetivo
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <ul className="list-disc pl-5 space-y-2">
+            {objetivos.map((obj, idx) => (
+              <li key={idx} className="text-gray-800">
+                {obj}
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={agregarObjetivo}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+          >
+            Añadir otro objetivo
+          </button>
+        </div>
+      )}
 
       {/* Enlace a artículo */}
       <div className="mt-8 bg-white border rounded-md p-4 flex items-center justify-between">
@@ -44,5 +80,5 @@ export default function PlanFuturoPage() {
         </Link>
       </div>
     </main>
-  );
+  )
 }
