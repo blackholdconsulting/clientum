@@ -1,8 +1,9 @@
+// app/presupuestos/nuevo/page.tsx
 'use client'
 
 import React, { useState, useEffect, ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { useSession, useSupabaseClient } from '@supabase/auth-helpers-nextjs'
+import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react'
 import { jsPDF } from 'jspdf'
 
 interface Linea {
@@ -147,54 +148,10 @@ export default function NuevoPresupuestoPage() {
       (l.unidades * l.precioUnitario).toFixed(2),
       comentarios,
     ])
-    rows.push([
-      '',
-      '',
-      '',
-      '',
-      '',
-      'BASE IMPONIBLE',
-      '',
-      '',
-      base.toFixed(2),
-      '',
-    ])
-    rows.push([
-      '',
-      '',
-      '',
-      '',
-      '',
-      `IVA (${iva}%)`,
-      '',
-      '',
-      ivaImp.toFixed(2),
-      '',
-    ])
-    rows.push([
-      '',
-      '',
-      '',
-      '',
-      '',
-      `IRPF (${irpf}%)`,
-      '',
-      '',
-      (-irpfImp).toFixed(2),
-      '',
-    ])
-    rows.push([
-      '',
-      '',
-      '',
-      '',
-      '',
-      'TOTAL',
-      '',
-      '',
-      total.toFixed(2),
-      '',
-    ])
+    rows.push(['', '', '', '', '', 'BASE IMPONIBLE', '', '', base.toFixed(2), ''])
+    rows.push(['', '', '', '', '', `IVA (${iva}%)`, '', '', ivaImp.toFixed(2), ''])
+    rows.push(['', '', '', '', '', `IRPF (${irpf}%)`, '', '', (-irpfImp).toFixed(2), ''])
+    rows.push(['', '', '', '', '', 'TOTAL', '', '', total.toFixed(2), ''])
 
     const csv =
       [header, ...rows]
@@ -229,7 +186,7 @@ export default function NuevoPresupuestoPage() {
     doc.text(`Vto.: ${vencimiento}`, 40, y)
     y += 30
 
-    // Nombre de la empresa (sin "DECLARANDO:")
+    // Nombre de la empresa y cliente
     doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(0, 102, 204)
     const empresaTitulo = empresa.razonSocial || `${empresa.nombre} ${empresa.apellidos}`
     doc.text(empresaTitulo, 40, y)
@@ -248,14 +205,14 @@ export default function NuevoPresupuestoPage() {
     doc.text(`IBAN: ${empresa.iban}`, 300, y)
     y += 30
 
-    // Líneas
+    // Tabla de líneas
     doc
       .setFont('helvetica', 'bold')
       .setFontSize(12)
-      .setTextColor(0, 102, 204); 
+      .setTextColor(0, 102, 204);  // <-- punto y coma añadido aquí
     ['Descripción', 'Unidades', 'P.Unit. (€)', 'Importe (€)'].forEach((h, i) =>
       doc.text(h, 40 + i * 130, y)
-    ); 
+    ); // <-- punto y coma al final de forEach
     y += 16
     doc.setLineWidth(0.5).line(40, y, 550, y)
     y += 10
@@ -313,14 +270,38 @@ export default function NuevoPresupuestoPage() {
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow space-y-6">
         {/* Fechas y número */}
         <div className="grid grid-cols-3 gap-4">
-          {/* ... como antes ... */}
+          <div>
+            <label className="block text-sm">Fecha</label>
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className="mt-1 block w-full border rounded px-2 py-1"
+            />
+          </div>
+          <div>
+            <label className="block text-sm">Número</label>
+            <input
+              value={numero}
+              onChange={(e) => setNumero(e.target.value)}
+              className="mt-1 block w-full border rounded px-2 py-1"
+            />
+          </div>
+          <div>
+            <label className="block text-sm">Vencimiento</label>
+            <input
+              type="date"
+              value={vencimiento}
+              onChange={(e) => setVencimiento(e.target.value)}
+              className="mt-1 block w-full border rounded px-2 py-1"
+            />
+          </div>
         </div>
 
         {/* Tus datos */}
         <fieldset className="grid grid-cols-2 gap-4">
           <div>
             <h2 className="font-semibold mb-2">Tus datos</h2>
-            {/** Nombre y apellidos **/}
             <input
               placeholder="Nombre"
               value={empresa.nombre}
@@ -333,16 +314,191 @@ export default function NuevoPresupuestoPage() {
               onChange={(e) => setEmpresa({ ...empresa, apellidos: e.target.value })}
               className="block w-full border rounded px-2 py-1 mb-2"
             />
-            {/** Resto de campos idénticos **/}
-            {/* ... razonSocial, nif, direccion, ciudad, provincia, cp, pais, telefono, email, web, iban */}
+            <input
+              placeholder="Teléfono"
+              value={empresa.telefono}
+              onChange={(e) => setEmpresa({ ...empresa, telefono: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <select
+              value={empresa.idioma}
+              onChange={(e) => setEmpresa({ ...empresa, idioma: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            >
+              <option>Español</option>
+              <option>Inglés</option>
+            </select>
+            <input
+              placeholder="Razón Social"
+              value={empresa.razonSocial}
+              onChange={(e) => setEmpresa({ ...empresa, razonSocial: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="NIF"
+              value={empresa.nif}
+              onChange={(e) => setEmpresa({ ...empresa, nif: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="Dirección"
+              value={empresa.direccion}
+              onChange={(e) => setEmpresa({ ...empresa, direccion: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              <input
+                placeholder="Ciudad"
+                value={empresa.ciudad}
+                onChange={(e) => setEmpresa({ ...empresa, ciudad: e.target.value })}
+                className="block w-full border rounded px-2 py-1"
+              />
+              <input
+                placeholder="Provincia"
+                value={empresa.provincia}
+                onChange={(e) => setEmpresa({ ...empresa, provincia: e.target.value })}
+                className="block w-full border rounded px-2 py-1"
+              />
+              <input
+                placeholder="CP"
+                value={empresa.cp}
+                onChange={(e) => setEmpresa({ ...empresa, cp: e.target.value })}
+                className="block w-full border rounded px-2 py-1"
+              />
+            </div>
+            <input
+              placeholder="País"
+              value={empresa.pais}
+              onChange={(e) => setEmpresa({ ...empresa, pais: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="Email"
+              value={empresa.email}
+              onChange={(e) => setEmpresa({ ...empresa, email: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="Web"
+              value={empresa.web}
+              onChange={(e) => setEmpresa({ ...empresa, web: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="IBAN"
+              value={empresa.iban}
+              onChange={(e) => setEmpresa({ ...empresa, iban: e.target.value })}
+              className="block w/full border rounded px-2 py-1"
+            />
+            <textarea
+              placeholder="Comentarios"
+              value={comentarios}
+              onChange={(e) => setComentarios(e.target.value)}
+              className="block w-full border rounded px-2 py-1 h-24 mt-2"
+            />
           </div>
-          {/* Datos del cliente, líneas, IVA/IRPF, comentarios */}
-          <textarea
-            placeholder="Comentarios"
-            value={comentarios}
-            onChange={(e) => setComentarios(e.target.value)}
-            className="w-full border rounded px-2 py-1 h-24"
-          />
+
+          {/* Datos del cliente y líneas */}
+          <div className="space-y-4">
+            <h2 className="font-semibold">Datos del cliente</h2>
+            <input
+              placeholder="Nombre / Razón Social"
+              value={cliente.nombre}
+              onChange={(e) => setCliente({ ...cliente, nombre: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="Dirección"
+              value={cliente.direccion}
+              onChange={(e) => setCliente({ ...cliente, direccion: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="CIF"
+              value={cliente.cif}
+              onChange={(e) => setCliente({ ...cliente, cif: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="CP"
+              value={cliente.cp}
+              onChange={(e) => setCliente({ ...cliente, cp: e.target.value })}
+              className="block w-full border rounded px-2 py-1 mb-2"
+            />
+            <input
+              placeholder="Email"
+              value={cliente.email}
+              onChange={(e) => setCliente({ ...cliente, email: e.target.value })}
+              className="block w-full border rounded px-2 py-1"
+            />
+
+            <fieldset className="space-y-2 mt-4">
+              <legend className="font-semibold">Líneas del presupuesto</legend>
+              {lineas.map((l, i) => (
+                <div key={i} className="grid grid-cols-4 gap-4 items-center">
+                  <input
+                    name="descripcion"
+                    placeholder="Descripción"
+                    value={l.descripcion}
+                    onChange={(e) => handleLineaChange(i, e)}
+                    className="border rounded px-2 py-1"
+                  />
+                  <input
+                    type="number"
+                    name="unidades"
+                    placeholder="Unidades"
+                    value={l.unidades}
+                    onChange={(e) => handleLineaChange(i, e)}
+                    className="border rounded px-2 py-1"
+                  />
+                  <input
+                    type="number"
+                    name="precioUnitario"
+                    placeholder="Precio unitario"
+                    step="0.01"
+                    value={l.precioUnitario}
+                    onChange={(e) => handleLineaChange(i, e)}
+                    className="border rounded px-2 py-1"
+                  />
+                  <div className="flex items-center">
+                    <span className="mr-2">
+                      {(l.unidades * l.precioUnitario).toFixed(2)} €
+                    </span>
+                    {i === lineas.length - 1 && (
+                      <button
+                        type="button"
+                        onClick={addLinea}
+                        className="px-2 py-1 bg-blue-600 text-white rounded"
+                      >
+                        +
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </fieldset>
+
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className="block text-sm">IVA (%)</label>
+                <input
+                  type="number"
+                  value={iva}
+                  onChange={(e) => setIva(Number(e.target.value))}
+                  className="mt-1 block w-full border rounded px-2 py-1"
+                />
+              </div>
+              <div>
+                <label className="block text-sm">IRPF (%)</label>
+                <input
+                  type="number"
+                  value={irpf}
+                  onChange={(e) => setIrpf(Number(e.target.value))}
+                  className="mt-1 block w-full border rounded px-2 py-1"
+                />
+              </div>
+            </div>
+          </div>
         </fieldset>
 
         {/* Botones Export */}
@@ -350,14 +506,14 @@ export default function NuevoPresupuestoPage() {
           <button
             type="button"
             onClick={exportCSV}
-            className="px-4 py-2 bg-green-600 text-white rounded"
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
           >
             Exportar CSV
           </button>
           <button
             type="button"
             onClick={exportPDF}
-            className="px-4 py-2 bg-indigo-600 text-white rounded"
+            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
           >
             Descargar PDF
           </button>
