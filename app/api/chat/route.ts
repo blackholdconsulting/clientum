@@ -2,70 +2,75 @@
 import { NextResponse } from 'next/server'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
-import { OpenAI } from 'openai'
+import { Configuration, OpenAIApi } from 'openai'
 
 export const runtime = 'edge'
 
-const ai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! })
+// Configura OpenAI con tu API Key
+const configuration = new Configuration({
+  apiKey: process.env.OPENAI_API_KEY
+})
+const openai = new OpenAIApi(configuration)
+
+export async function GET() {
+  const supabase = createServerComponentClient({ cookies })
+  const {
+    data: { session }
+  } = await supabase.auth.getSession()
+
+  if (!session) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  }
+
+  // Recupera todo el historial de este usuario
+  const { data: history, error } = await supabase
+    .from('chat_messages')
+    .select('role, content')
+    .eq('user_id', session.user.id)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ history })
+}
 
 export async function POST(req: Request) {
   const supabase = createServerComponentClient({ cookies })
   const {
-    data: { session },
+    data: { session }
   } = await supabase.auth.getSession()
 
   if (!session) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
   }
 
   const { message } = await req.json()
-  if (!message || typeof message !== 'string') {
-    return NextResponse.json({ error: 'Mensaje inválido' }, { status: 400 })
-  }
 
-  // 1) Guarda tu mensaje
-  const { data: userMsg, error: err1 } = await supabase
+  // 1) Guarda el mensaje del usuario
+  await supabase
     .from('chat_messages')
     .insert({ user_id: session.user.id, role: 'user', content: message })
-    .select('*')
-    .single()
-  if (err1 || !userMsg) {
-    return NextResponse.json({ error: 'No se pudo guardar tu mensaje' }, { status: 500 })
-  }
 
-  // 2) Llama a OpenAI en modo streaming
-  const responseStream = await ai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      { role: 'system', content: 'Eres el asistente de Clientum, profesional y amable.' },
-      { role: 'user', content: message },
-    ],
-    stream: true,
-  })
+  // 2) Recupera el historial actualizado
+  const { data: history } = await supabase
+    .from('chat_messages')
+    .select('role, content')
+    .eq('user_id', session.user.id)
+    .order('created_at', { ascending: true })
 
-  // 3) Devuelve un ReadableStream al cliente y acumulamos la respuesta
-  let assistantContent = ''
-  const stream = new ReadableStream({
-    async start(controller) {
-      for await (const chunk of responseStream) {
-        const delta = chunk.choices?.[0]?.delta?.content
-        if (delta) {
-          assistantContent += delta
-          controller.enqueue(new TextEncoder().encode(delta))
-        }
-      }
-      // 4) Guarda la respuesta completa
-      await supabase.from('chat_messages').insert({
-        user_id: session.user.id,
-        role: 'assistant',
-        content: assistantContent,
-      })
-      controller.close()
-    },
+  // 3) Llama a OpenAI
+  const aiResponse = await openai.createChatCompletion({
+    model: 'gpt-3.5-turbo',
+    messages: history!.map((m) => ({ role: m.role, content: m.content }))
   })
+  const assistantContent = aiResponse.data.choices[0].message!.content!
 
-  return new Response(stream, {
-    status: 200,
-    headers: { 'Content-Type': 'text/event-stream' },
-  })
+  // 4) Guarda la respuesta del asistente
+  await supabase
+    .from('chat_messages')
+    .insert({ user_id: session.user.id, role: 'assistant', content: assistantContent })
+
+  return NextResponse.json({ message: assistantContent })
 }
