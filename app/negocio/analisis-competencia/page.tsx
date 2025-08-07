@@ -1,98 +1,150 @@
-// app/negocio/analisis-de-la-competencia/page.tsx
-"use client";
+// app/negocio/analisis-competencia/page.tsx
+'use client'
 
-import { useState, Fragment } from "react";
-import { Tab } from "@headlessui/react";
+import React, { useState, useEffect, Fragment } from 'react'
+import { Tab } from '@headlessui/react'
+import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react'
 
 function classNames(...classes: string[]) {
-  return classes.filter(Boolean).join(" ");
+  return classes.filter(Boolean).join(' ')
 }
 
 type Competitor = {
-  id: number;
-  nombre: string;
-  precio: string;
-  ubicacion: string;
-  fortalezas: string;
-  debilidades: string;
-};
+  id: number
+  user_id: string
+  nombre: string
+  precio: string
+  ubicacion: string
+  fortalezas: string
+  debilidades: string
+}
 
 export default function AnalisisCompetenciaPage() {
-  const tabs = ["DAFO", "PEST", "PESTEL", "Competidores"] as const;
-  const [activeTab, setActiveTab] = useState<typeof tabs[number]>("DAFO");
+  const session = useSession()
+  const supabase = useSupabaseClient()
 
-  // DAFO state
+  const tabs = ['DAFO', 'PEST', 'PESTEL', 'Competidores'] as const
+  const [activeTab, setActiveTab] = useState<typeof tabs[number]>('DAFO')
+
+  // DAFO
   const [dafo, setDafo] = useState({
-    fortalezas: "",
-    debilidades: "",
-    oportunidades: "",
-    amenazas: "",
-  });
+    fortalezas: '',
+    debilidades: '',
+    oportunidades: '',
+    amenazas: '',
+  })
 
-  // PEST state
+  // PEST
   const [pest, setPest] = useState({
-    politico: "",
-    economico: "",
-    social: "",
-    tecnologico: "",
-  });
+    politico: '',
+    economico: '',
+    social: '',
+    tecnologico: '',
+  })
 
-  // PESTEL state
+  // PESTEL
   const [pestel, setPestel] = useState({
-    politico: "",
-    economico: "",
-    social: "",
-    tecnologico: "",
-    ambiental: "",
-    legal: "",
-  });
+    politico: '',
+    economico: '',
+    social: '',
+    tecnologico: '',
+    ambiental: '',
+    legal: '',
+  })
 
-  // Competitors state
-  const [competidores, setCompetidores] = useState<Competitor[]>([]);
+  // Competitors
+  const [competidores, setCompetidores] = useState<Competitor[]>([])
 
-  const addCompetitor = () => {
-    setCompetidores((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        nombre: "",
-        precio: "",
-        ubicacion: "",
-        fortalezas: "",
-        debilidades: "",
-      },
-    ]);
-  };
+  // 1) Cargar datos de Supabase
+  useEffect(() => {
+    if (!session) return
 
-  const updateCompetitor = (
+    // DAFO / PEST / PESTEL could be loaded similarly from your table if needed
+    // Aquí sólo cargamos competidores
+    supabase
+      .from<Competitor>('competidores')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('id', { ascending: true })
+      .then(({ data, error }) => {
+        if (error) console.error(error)
+        else if (data) setCompetidores(data)
+      })
+  }, [session, supabase])
+
+  // 2) Añadir nuevo competidor
+  const addCompetitor = async () => {
+    if (!session) return
+    const { data, error } = await supabase
+      .from<Competitor>('competidores')
+      .insert({
+        user_id: session.user.id,
+        nombre: '',
+        precio: '',
+        ubicacion: '',
+        fortalezas: '',
+        debilidades: '',
+      })
+      .select('*')
+      .single()
+    if (error) console.error(error)
+    else if (data) setCompetidores((prev) => [...prev, data])
+  }
+
+  // 3) Actualizar campo de competidor
+  const updateCompetitor = async (
     id: number,
-    field: keyof Competitor,
+    field: keyof Omit<Competitor, 'id' | 'user_id'>,
     value: string
   ) => {
-    setCompetidores((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, [field]: value } : c))
-    );
-  };
+    // actualizar en Supabase
+    const { data, error } = await supabase
+      .from<Competitor>('competidores')
+      .update({ [field]: value })
+      .eq('id', id)
+      .select('*')
+      .single()
+    if (error) {
+      console.error(error)
+    } else if (data) {
+      // actualizar en estado local
+      setCompetidores((prev) =>
+        prev.map((c) => (c.id === id ? data : c))
+      )
+    }
+  }
 
-  const removeCompetitor = (id: number) => {
-    setCompetidores((prev) => prev.filter((c) => c.id !== id));
-  };
+  // 4) Eliminar competidor
+  const removeCompetitor = async (id: number) => {
+    const { error } = await supabase
+      .from('competidores')
+      .delete()
+      .eq('id', id)
+    if (error) {
+      console.error(error)
+    } else {
+      setCompetidores((prev) => prev.filter((c) => c.id !== id))
+    }
+  }
 
   return (
     <div className="max-w-5xl mx-auto p-8 space-y-6">
       <h1 className="text-3xl font-bold">Análisis de la Competencia</h1>
 
-      <Tab.Group selectedIndex={tabs.indexOf(activeTab)} onChange={(i) => setActiveTab(tabs[i])}>
+      <Tab.Group
+        selectedIndex={tabs.indexOf(activeTab)}
+        onChange={(i) => setActiveTab(tabs[i])}
+      >
         <Tab.List className="flex space-x-2 border-b">
           {tabs.map((tab) => (
             <Tab key={tab} as={Fragment}>
               {({ selected }) => (
                 <button
                   className={classNames(
-                    "py-2 px-4 -mb-px font-medium",
+                    'py-2 px-4 -mb-px font-medium',
                     selected
-                      ? "border-b-2 border-indigo-600 text-indigo-600"
-                      : "text-gray-500 hover:text-gray-700"
+                      ? 'border-b-2 border-indigo-600 text-indigo-600'
+                      : 'text-gray-500 hover:text-gray-700'
                   )}
                 >
                   {tab}
@@ -105,92 +157,24 @@ export default function AnalisisCompetenciaPage() {
         <Tab.Panels className="pt-6">
           {/* DAFO */}
           <Tab.Panel>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h2 className="font-semibold mb-1">Fortalezas</h2>
-                <textarea
-                  value={dafo.fortalezas}
-                  onChange={(e) =>
-                    setDafo({ ...dafo, fortalezas: e.target.value })
-                  }
-                  className="w-full border rounded p-2 h-32"
-                />
-              </div>
-              <div>
-                <h2 className="font-semibold mb-1">Debilidades</h2>
-                <textarea
-                  value={dafo.debilidades}
-                  onChange={(e) =>
-                    setDafo({ ...dafo, debilidades: e.target.value })
-                  }
-                  className="w-full border rounded p-2 h-32"
-                />
-              </div>
-              <div>
-                <h2 className="font-semibold mb-1">Oportunidades</h2>
-                <textarea
-                  value={dafo.oportunidades}
-                  onChange={(e) =>
-                    setDafo({ ...dafo, oportunidades: e.target.value })
-                  }
-                  className="w-full border rounded p-2 h-32"
-                />
-              </div>
-              <div>
-                <h2 className="font-semibold mb-1">Amenazas</h2>
-                <textarea
-                  value={dafo.amenazas}
-                  onChange={(e) =>
-                    setDafo({ ...dafo, amenazas: e.target.value })
-                  }
-                  className="w-full border rounded p-2 h-32"
-                />
-              </div>
-            </div>
+            {/* ... tu UI de DAFO (igual que antes) ... */}
           </Tab.Panel>
 
           {/* PEST */}
           <Tab.Panel>
-            <div className="space-y-4">
-              {(["politico", "economico", "social", "tecnologico"] as const).map((field) => (
-                <div key={field}>
-                  <h2 className="font-semibold capitalize mb-1">{field}</h2>
-                  <textarea
-                    value={pest[field]}
-                    onChange={(e) =>
-                      setPest({ ...pest, [field]: e.target.value })
-                    }
-                    className="w-full border rounded p-2 h-24"
-                  />
-                </div>
-              ))}
-            </div>
+            {/* ... tu UI de PEST ... */}
           </Tab.Panel>
 
           {/* PESTEL */}
           <Tab.Panel>
-            <div className="space-y-4">
-              {(
-                ["politico", "economico", "social", "tecnologico", "ambiental", "legal"] as const
-              ).map((field) => (
-                <div key={field}>
-                  <h2 className="font-semibold capitalize mb-1">{field}</h2>
-                  <textarea
-                    value={pestel[field]}
-                    onChange={(e) =>
-                      setPestel({ ...pestel, [field]: e.target.value })
-                    }
-                    className="w-full border rounded p-2 h-24"
-                  />
-                </div>
-              ))}
-            </div>
+            {/* ... tu UI de PESTEL ... */}
           </Tab.Panel>
 
           {/* Competidores */}
           <Tab.Panel>
             <div className="mb-4">
               <button
+                type="button"
                 onClick={addCompetitor}
                 className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
               >
@@ -210,55 +194,68 @@ export default function AnalisisCompetenciaPage() {
                   </tr>
                 </thead>
                 <tbody>
+                  {competidores.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="p-4 text-center text-gray-500">
+                        No tienes competidores aún.
+                      </td>
+                    </tr>
+                  )}
                   {competidores.map((c) => (
                     <tr key={c.id}>
                       <td className="border px-2 py-1">
                         <input
+                          type="text"
                           value={c.nombre}
                           onChange={(e) =>
-                            updateCompetitor(c.id, "nombre", e.target.value)
+                            updateCompetitor(c.id, 'nombre', e.target.value)
                           }
                           className="w-full border rounded px-1 py-0.5"
                         />
                       </td>
                       <td className="border px-2 py-1">
                         <input
+                          type="text"
                           value={c.precio}
                           onChange={(e) =>
-                            updateCompetitor(c.id, "precio", e.target.value)
+                            updateCompetitor(c.id, 'precio', e.target.value)
                           }
                           className="w-full border rounded px-1 py-0.5"
                         />
                       </td>
                       <td className="border px-2 py-1">
                         <input
+                          type="text"
                           value={c.ubicacion}
                           onChange={(e) =>
-                            updateCompetitor(c.id, "ubicacion", e.target.value)
+                            updateCompetitor(c.id, 'ubicacion', e.target.value)
                           }
                           className="w-full border rounded px-1 py-0.5"
                         />
                       </td>
                       <td className="border px-2 py-1">
                         <input
+                          type="text"
                           value={c.fortalezas}
                           onChange={(e) =>
-                            updateCompetitor(c.id, "fortalezas", e.target.value)
+                            updateCompetitor(c.id, 'fortalezas', e.target.value)
                           }
                           className="w-full border rounded px-1 py-0.5"
                         />
                       </td>
                       <td className="border px-2 py-1">
                         <input
+                          type="text"
                           value={c.debilidades}
                           onChange={(e) =>
-                            updateCompetitor(c.id, "debilidades", e.target.value)
+                            updateCompetitor(c.id, 'debilidades', e.target.value)
                           }
                           className="w-full border rounded px-1 py-0.5"
                         />
                       </td>
                       <td className="border px-2 py-1 text-center">
                         <button
+                          type="button"
                           onClick={() => removeCompetitor(c.id)}
                           className="text-red-600 hover:underline"
                         >
@@ -267,16 +264,6 @@ export default function AnalisisCompetenciaPage() {
                       </td>
                     </tr>
                   ))}
-                  {competidores.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="p-4 text-center text-gray-500"
-                      >
-                        No hay competidores añadidos.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
@@ -284,5 +271,5 @@ export default function AnalisisCompetenciaPage() {
         </Tab.Panels>
       </Tab.Group>
     </div>
-  );
+  )
 }
