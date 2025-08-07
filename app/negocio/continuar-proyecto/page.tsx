@@ -1,7 +1,7 @@
 // app/negocio/continuar-proyecto/page.tsx
 'use client'
 
-import React, { useState, useEffect, Fragment } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Dialog } from '@headlessui/react'
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react'
@@ -23,17 +23,24 @@ export default function ContinuarProyectoPage() {
   const [isOpen, setIsOpen] = useState(false)
   const [selectedProject, setSelectedProject] = useState<Proyecto | null>(null)
 
-  // 1) Al montar, carga los proyectos de este usuario
+  // 1) Carga inicial + debug
   useEffect(() => {
     if (!session) return
+
+    console.log('⏳ Cargando proyectos de Supabase para', session.user.id)
+
     supabase
       .from('proyectos')
       .select('id, user_id, nombre, estado')
       .eq('user_id', session.user.id)
       .order('created_at', { ascending: false })
       .then(({ data, error }) => {
-        if (error) console.error(error)
-        else setProyectos(data as Proyecto[] || [])
+        if (error) {
+          console.error('❌ Error al cargar proyectos:', error)
+        } else {
+          console.log('✅ Proyectos recibidos:', data)
+          setProyectos(data as Proyecto[] || [])
+        }
       })
   }, [session, supabase])
 
@@ -44,9 +51,7 @@ export default function ContinuarProyectoPage() {
 
   const handleConfirm = () => {
     if (!selectedProject) return
-    // Aquí podrías actualizar estado en Supabase, p.ej. marcar "en curso"
-    // supabase.from('proyectos').update({ estado: 'en curso' }).eq('id', selectedProject.id)
-    // luego rediriges al detalle
+    // redirigimos al detalle de ese proyecto
     router.push(`/negocio/proyectos/${selectedProject.id}`)
     setIsOpen(false)
     setSelectedProject(null)
@@ -76,28 +81,29 @@ export default function ContinuarProyectoPage() {
             </tr>
           </thead>
           <tbody>
-            {proyectos.length === 0 && (
+            {proyectos.length === 0 ? (
               <tr>
                 <td colSpan={4} className="p-4 text-center text-gray-500">
                   No tienes proyectos pendientes.
                 </td>
               </tr>
+            ) : (
+              proyectos.map((proyecto) => (
+                <tr key={proyecto.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-2 border-b">{proyecto.id}</td>
+                  <td className="px-4 py-2 border-b">{proyecto.nombre}</td>
+                  <td className="px-4 py-2 border-b capitalize">{proyecto.estado}</td>
+                  <td className="px-4 py-2 border-b text-center">
+                    <button
+                      onClick={() => handleOpenModal(proyecto)}
+                      className="px-3 py-1 text-sm text-white bg-green-600 hover:bg-green-700 rounded"
+                    >
+                      Continuar
+                    </button>
+                  </td>
+                </tr>
+              ))
             )}
-            {proyectos.map((proyecto) => (
-              <tr key={proyecto.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2 border-b">{proyecto.id}</td>
-                <td className="px-4 py-2 border-b">{proyecto.nombre}</td>
-                <td className="px-4 py-2 border-b capitalize">{proyecto.estado}</td>
-                <td className="px-4 py-2 border-b text-center">
-                  <button
-                    onClick={() => handleOpenModal(proyecto)}
-                    className="px-3 py-1 text-sm text-white bg-green-600 hover:bg-green-700 rounded"
-                  >
-                    Continuar
-                  </button>
-                </td>
-              </tr>
-            ))}
           </tbody>
         </table>
       </div>
@@ -139,3 +145,4 @@ export default function ContinuarProyectoPage() {
     </div>
   )
 }
+
