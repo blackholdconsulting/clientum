@@ -7,71 +7,65 @@ export default function ChatPage() {
   const supabase = createClientComponentClient<Database>()
   const [session, setSession] = useState<any>(null)
 
-  // 1) Carga la sesión y escucha cambios
+  // 1) Traer y escuchar sesión
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
+    const { data: sub } = supabase.auth.onAuthStateChange((_ev, sess) => {
+      setSession(sess)
     })
-    return () => {
-      listener.subscription.unsubscribe()
-    }
+    return () => sub.subscription.unsubscribe()
   }, [supabase])
 
-  // 2) Estado de mensajes e input
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
+  // 2) Mensajes e input
+  const [messages, setMessages] = useState<{ role: 'user'|'assistant'; content: string }[]>([])
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const endRef = useRef<null | HTMLDivElement>(null)
 
-  // 3) Scroll automático abajo
+  // 3) Scroll automático
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // 4) Función de envío
+  // 4) Enviar mensaje
   const handleSend = async () => {
-    if (!input.trim() || !session || isSending) return
-    const userText = input.trim()
-    setMessages((m) => [...m, { role: 'user', content: userText }])
+    if (!session || !input.trim() || isSending) return
+    const txt = input.trim()
+    setMessages((m) => [...m, { role: 'user', content: txt }])
     setInput('')
     setIsSending(true)
 
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userText }),
-      })
-      if (!res.ok) throw new Error(await res.text())
-
-      const reader = res.body?.getReader()
-      const decoder = new TextDecoder()
-      let assistantText = ''
-
-      // Lee el stream chunk a chunk
-      while (reader) {
-        const { value, done } = await reader.read()
-        if (done) break
-        const chunk = decoder.decode(value)
-        assistantText += chunk
-
-        // Actualiza último mensaje assistant en pantalla
-        setMessages((m) => {
-          const last = m[m.length - 1]
-          if (last?.role === 'assistant') {
-            return [...m.slice(0, -1), { role: 'assistant', content: assistantText }]
-          } else {
-            return [...m, { role: 'assistant', content: assistantText }]
-          }
-        })
-      }
-    } catch (error) {
-      console.error(error)
-      setMessages((m) => [...m, { role: 'assistant', content: '⚠️ Error al chatear.' }])
-    } finally {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: txt }),
+    })
+    if (!res.ok) {
+      setMessages((m) => [...m, { role: 'assistant', content: '❌ Error al chatear.' }])
       setIsSending(false)
+      return
     }
+
+    const reader = res.body!.getReader()
+    const decoder = new TextDecoder()
+    let assistantTxt = ''
+
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      const chunk = decoder.decode(value)
+      assistantTxt += chunk
+      setMessages((m) => {
+        const last = m[m.length - 1]
+        if (last.role === 'assistant') {
+          return [...m.slice(0, -1), { role: 'assistant', content: assistantTxt }]
+        } else {
+          return [...m, { role: 'assistant', content: assistantTxt }]
+        }
+      })
+    }
+
+    setIsSending(false)
   }
 
   return (
@@ -82,16 +76,14 @@ export default function ChatPage() {
           <div key={i} className={m.role === 'user' ? 'text-right mb-2' : 'text-left mb-2'}>
             <span
               className={`inline-block px-3 py-2 rounded ${
-                m.role === 'user'
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-gray-100 text-gray-800'
+                m.role === 'user' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
               }`}
             >
               {m.content}
             </span>
           </div>
         ))}
-        <div ref={messagesEndRef} />
+        <div ref={endRef} />
         {!session && (
           <div className="text-center text-gray-500 mt-4">Inicia sesión para chatear</div>
         )}
@@ -103,8 +95,8 @@ export default function ChatPage() {
           placeholder={session ? 'Escribe tu mensaje...' : 'Inicia sesión para chatear'}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          disabled={!session || isSending}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          disabled={!session || isSending}
         />
         <button
           onClick={handleSend}
