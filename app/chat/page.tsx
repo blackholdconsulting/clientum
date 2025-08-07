@@ -14,16 +14,17 @@ export default function ChatPage() {
     e.preventDefault()
     if (!input.trim()) return
 
--   const userMsg = { role: 'user', content: input }
-+   const userMsg: Msg = { role: 'user', content: input }   // <- ahora cumple Msg
+    // 1) Añade el mensaje del usuario al estado
+    const userMsg: Msg = { role: 'user', content: input }
     setMsgs((all) => [...all, userMsg])
     setInput('')
     setLoading(true)
 
+    // 2) Llama a tu API interna
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: userMsg.content })
+      body: JSON.stringify({ message: userMsg.content }),
     })
 
     if (!res.ok) {
@@ -32,14 +33,15 @@ export default function ChatPage() {
       return
     }
 
+    // 3) Recibe la respuesta del asistente
     const { content } = await res.json()
--   setMsgs((all) => [...all, { role: 'assistant', content }])
-+   const assistantMsg: Msg = { role: 'assistant', content } // <- idem aquí
-+   setMsgs((all) => [...all, assistantMsg])
+    const assistantMsg: Msg = { role: 'assistant', content }
+    setMsgs((all) => [...all, assistantMsg])
 
     setLoading(false)
   }
 
+  // Cada vez que cambian `msgs`, hacemos scroll al final
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [msgs])
@@ -47,6 +49,7 @@ export default function ChatPage() {
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-4">
       <h1 className="text-2xl font-bold">Chat IA de Clientum</h1>
+
       <div className="h-96 overflow-y-auto border rounded p-4 space-y-2 bg-white">
         {msgs.map((m, i) => (
           <div
@@ -62,6 +65,7 @@ export default function ChatPage() {
         ))}
         <div ref={endRef} />
       </div>
+
       <form onSubmit={send} className="flex space-x-2">
         <input
           className="flex-1 border rounded px-3 py-2"
