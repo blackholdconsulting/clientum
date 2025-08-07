@@ -13,7 +13,9 @@ export default function ChatPage() {
   const send = async (e: FormEvent) => {
     e.preventDefault()
     if (!input.trim()) return
-    const userMsg = { role: 'user', content: input }
+
+-   const userMsg = { role: 'user', content: input }
++   const userMsg: Msg = { role: 'user', content: input }   // <- ahora cumple Msg
     setMsgs((all) => [...all, userMsg])
     setInput('')
     setLoading(true)
@@ -31,7 +33,10 @@ export default function ChatPage() {
     }
 
     const { content } = await res.json()
-    setMsgs((all) => [...all, { role: 'assistant', content }])
+-   setMsgs((all) => [...all, { role: 'assistant', content }])
++   const assistantMsg: Msg = { role: 'assistant', content } // <- idem aquí
++   setMsgs((all) => [...all, assistantMsg])
+
     setLoading(false)
   }
 
