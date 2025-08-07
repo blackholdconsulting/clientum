@@ -1,43 +1,45 @@
 // app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import OpenAI from 'openai'
 
 export const runtime = 'edge'
 
-const ai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
-
 export async function POST(req: NextRequest) {
-  // 1) Autenticación
-  const supabase = createServerComponentClient({ cookies })
-  const {
-    data: { session }
-  } = await supabase.auth.getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  try {
+    const { message } = await req.json()
+    if (!message) {
+      return NextResponse.json({ error: 'No message provided' }, { status: 400 })
+    }
 
-  // 2) Mensaje del usuario
-  const { message } = await req.json()
-
-  // 3) Llamada sin streaming
-  const completion = await ai.chat.completions.create({
-    model: 'gpt-3.5-turbo',
-    temperature: 0.7,
-    messages: [
-      {
-        role: 'system',
-        content:
-          'Eres un asesor legal y financiero experto en autónomos y PYMEs en España. Responde siempre con rigor, cita normas cuando proceda y habla con lenguaje claro y profesional.'
+    // 1) Llamada directa REST a OpenAI
+    const apiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
       },
-      { role: 'user', content: message }
-    ]
-  })
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        temperature: 0.7,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Eres un asesor legal y financiero experto en autónomos y PYMEs en España. Responde con rigor, cita normas cuando proceda y usa un tono profesional claro.'
+          },
+          { role: 'user', content: message }
+        ]
+      })
+    })
 
-  const assistantText = completion.choices?.[0]?.message?.content || ''
+    if (!apiRes.ok) {
+      const errTxt = await apiRes.text()
+      return NextResponse.json({ error: errTxt }, { status: apiRes.status })
+    }
 
-  return NextResponse.json({ content: assistantText })
+    const { choices } = await apiRes.json()
+    const content = choices?.[0]?.message?.content || ''
+    return NextResponse.json({ content })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 }
