@@ -1,116 +1,106 @@
 'use client'
-
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useEffect, useRef, FormEvent } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { Database } from '../types/supabase' // ajusta la ruta si tu tipado está en otro sitio
 
-type Msg = { role: 'user' | 'assistant'; content: string }
+interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
 
 export default function ChatPage() {
-  const supabase = createClientComponentClient()
-  const [session, setSession] = useState<any>(null)
-  const [msgs, setMsgs] = useState<Msg[]>([])
+  const supabase = createClientComponentClient<Database>()
+  const [session, setSession] = useState<boolean|null>(null)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
-  const areaRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  // 1) Carga sesión al montar
+  // 1) Comprobar sesión
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
+      setSession(!!data.session)
     })
-  }, [supabase])
+  }, [])
 
-  // 2) Recupera historial al iniciar sesión
+  // 2) Auto-scroll al final
   useEffect(() => {
-    if (!session) return
-    supabase
-      .from('chat_messages')
-      .select('role,content')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: true })
-      .then(({ data }) => {
-        if (data) setMsgs(data as Msg[])
-      })
-  }, [session, supabase])
+    containerRef.current?.scrollTo({ top: containerRef.current.scrollHeight, behavior: 'smooth' })
+  }, [messages])
 
-  // 3) Enviar mensaje
-  const send = async () => {
+  // 3) Enviar mensaje y recibir stream
+  async function handleSend(e: FormEvent) {
+    e.preventDefault()
     if (!input.trim()) return
-    const userMsg: Msg = { role: 'user', content: input }
-    setMsgs((m) => [...m, userMsg])
+
+    // Añadir mensaje de usuario
+    const usrMsg: ChatMessage = { role: 'user', content: input.trim() }
+    setMessages(msgs => [...msgs, usrMsg])
     setInput('')
 
+    // Llamada al API (stream)
     const res = await fetch('/api/chat', {
       method: 'POST',
-      body: JSON.stringify({ message: userMsg.content }),
+      body: JSON.stringify({ message: usrMsg.content })
     })
     if (!res.ok) return
 
-    // 4) Leer SSE stream
     const reader = res.body!.getReader()
     const decoder = new TextDecoder()
-    let assistantText = ''
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) break
-      assistantText += decoder.decode(value)
-      // Actualiza mensaje parcial
-      setMsgs((m) => {
-        const last = m[m.length - 1]
-        if (last?.role === 'assistant') {
-          return [...m.slice(0, -1), { ...last, content: assistantText }]
-        }
-        return [...m, { role: 'assistant', content: assistantText }]
-      })
-      // Scroll
-      areaRef.current?.scrollTo({ top: 99999, behavior: 'smooth' })
-    }
+    let acc = ''
+    const assistant: ChatMessage = { role: 'assistant', content: '' }
+    setMessages(msgs => [...msgs, assistant])
 
-    // 5) Guardar respuesta final
-    await supabase.from('chat_messages').insert({
-      user_id: session.user.id,
-      role: 'assistant',
-      content: assistantText
-    })
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      acc += decoder.decode(value)
+      // Actualiza chunk a chunk
+      setMessages(msgs => {
+        const last = msgs[msgs.length - 1]
+        return [...msgs.slice(0, -1), { ...last, content: acc }]
+      })
+    }
   }
 
+  // 4) Render
+  if (session === null) {
+    return <div className="p-6 text-center">Cargando sesión…</div>
+  }
   if (!session) {
-    return <p className="text-red-600 text-center mt-8">Inicia sesión para chatear.</p>
+    return <div className="p-6 text-red-600 text-center font-semibold">Inicia sesión para chatear.</div>
   }
 
   return (
-    <div className="h-full flex flex-col p-6">
-      <h1 className="text-2xl font-bold mb-4">Chat IA de Clientum</h1>
-      <div ref={areaRef} className="flex-1 overflow-y-auto bg-white p-4 rounded shadow space-y-3">
-        {msgs.map((m, i) => (
-          <div key={i} className={m.role === 'user' ? 'text-right' : ''}>
-            <span
-              className={
-                (m.role === 'user'
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-gray-100 text-gray-800') +
-                ' inline-block p-2 rounded'
-              }
-            >
-              {m.content}
-            </span>
+    <div className="flex-1 flex flex-col h-full bg-white">
+      <h1 className="text-2xl font-bold p-6">Chat IA de Clientum</h1>
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-y-auto px-6 space-y-4"
+        style={{ minHeight: 0 }}
+      >
+        {messages.map((m, i) => (
+          <div key={i} className={`p-4 rounded-lg ${m.role==='user'?'bg-green-50 self-end':'bg-indigo-50 self-start'} max-w-xl`}>
+            <p className="whitespace-pre-wrap text-gray-800">{m.content}</p>
           </div>
         ))}
       </div>
-      <div className="mt-4 flex">
+      <form onSubmit={handleSend} className="flex items-center p-6 bg-gray-100">
         <input
+          type="text"
+          disabled={!session}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          className="flex-1 border rounded px-3 py-2"
-          placeholder="Escribe tu pregunta..."
-          onKeyDown={(e) => e.key === 'Enter' && send()}
+          onChange={e => setInput(e.target.value)}
+          placeholder={session ? 'Escribe tu pregunta…' : 'Inicia sesión para chatear'}
+          className="flex-1 px-4 py-2 rounded border border-gray-300 focus:outline-none focus:ring"
         />
         <button
-          onClick={send}
-          className="ml-2 bg-green-600 text-white px-4 py-2 rounded"
+          type="submit"
+          disabled={!input.trim()}
+          className="ml-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
         >
           Enviar
         </button>
-      </div>
+      </form>
     </div>
   )
 }
