@@ -1,144 +1,82 @@
 'use client'
 
-import React, { useState, useEffect, useRef, FormEvent } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { useSession } from '@supabase/auth-helpers-react'
+import { useState, useEffect, useRef } from 'react'
+import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
+import { Session } from '@supabase/supabase-js'
+import { useRouter } from 'next/navigation'
 
-type Message = {
-  id: string
-  role: 'user' | 'assistant'
+interface Msg {
+  role: string
   content: string
 }
 
 export default function ChatPage() {
-  const supabase = createClientComponentClient()
-  const session = useSession()
+  const supabase = createPagesBrowserClient()
+  const router = useRouter()
+  const [session, setSession] = useState<Session | null>(null)
+  const [history, setHistory] = useState<Msg[]>([])
+  const [input, setInput] = useState('')
+  const endRef = useRef<HTMLDivElement>(null)
 
-  const [messages, setMessages] = useState<Message[]>([])
-  const [inputValue, setInputValue] = useState('')
-  const scrollRef = useRef<HTMLDivElement>(null)
-
-  // Carga inicial de mensajes del usuario
+  // Carga sesión + histórico al montar
   useEffect(() => {
-    if (!session) return
-
-    ;(async () => {
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: true })
-
-      if (error) {
-        console.error('Error al cargar mensajes:', error)
-      } else if (data) {
-        setMessages(
-          data.map((row) => ({
-            id: row.id,
-            role: row.role as 'user' | 'assistant',
-            content: row.content,
-          }))
-        )
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        setSession(null)
+      } else {
+        setSession(session)
+        fetch('/api/chat')
+          .then((res) => res.json())
+          .then((d) => setHistory(d.history || []))
       }
-    })()
-  }, [session])
-
-  // Scroll automático al final
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior: 'smooth',
-      })
-    }
-  }, [messages])
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!session || !inputValue.trim()) return
-
-    // 1) Añade el mensaje del usuario en local
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: inputValue.trim(),
-    }
-    setMessages((prev) => [...prev, userMsg])
-    setInputValue('')
-
-    // 2) Guarda el mensaje del usuario en Supabase
-    await supabase.from('chat_messages').insert({
-      user_id: session.user.id,
-      role: 'user',
-      content: userMsg.content,
     })
+  }, [supabase])
 
-    // 3) Llama a tu API interna para obtener la respuesta IA
+  // Scroll al final cuando hay nuevo mensaje
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [history])
+
+  const send = async () => {
+    if (!input.trim()) return
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: userMsg.content }),
+      body: JSON.stringify({ message: input })
     })
-    const { reply } = await res.json()
-
-    // 4) Añade la respuesta del asistente en local y la guarda
-    const assistantMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content: reply,
+    if (res.ok) {
+      const { message } = await res.json()
+      setHistory((h) => [...h, { role: 'user', content: input }, { role: 'assistant', content: message }])
+      setInput('')
     }
-    setMessages((prev) => [...prev, assistantMsg])
-    await supabase.from('chat_messages').insert({
-      user_id: session.user.id,
-      role: 'assistant',
-      content: assistantMsg.content,
-    })
   }
 
-  if (!session) {
-    return (
-      <div className="p-6 max-w-4xl mx-auto">
-        <p className="text-red-600">Inicia sesión para chatear.</p>
-      </div>
-    )
+  if (session === null) {
+    return <div className="p-6 text-red-600">Inicia sesión para chatear.</div>
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Chat IA de Clientum</h1>
-      <div
-        ref={scrollRef}
-        className="h-[60vh] overflow-y-auto border bg-white rounded p-4 mb-4"
-      >
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={`mb-2 ${
-              m.role === 'assistant' ? 'text-gray-700' : 'text-blue-600'
-            }`}
-          >
-            <strong>
-              {m.role === 'assistant' ? 'Asistente:' : 'Tú:'}
-            </strong>{' '}
+    <div className="flex flex-col h-full p-6">
+      <div className="flex-1 overflow-y-auto bg-gray-100 p-4 rounded-lg space-y-2">
+        {history.map((m, i) => (
+          <div key={i} className={m.role === 'user' ? 'text-right text-blue-600' : 'text-left text-gray-800'}>
             {m.content}
           </div>
         ))}
+        <div ref={endRef} />
       </div>
-      <form onSubmit={handleSubmit} className="flex space-x-2">
+      <div className="mt-4 flex gap-2">
         <input
-          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && send()}
           className="flex-1 border rounded px-3 py-2"
           placeholder="Escribe tu mensaje..."
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
         />
-        <button
-          type="submit"
-          className="px-4 py-2 bg-green-600 text-white rounded"
-        >
+        <button onClick={send} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
           Enviar
         </button>
-      </form>
+      </div>
     </div>
   )
 }
