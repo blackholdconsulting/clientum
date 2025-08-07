@@ -26,43 +26,16 @@ export default function AnalisisCompetenciaPage() {
   const tabs = ['DAFO', 'PEST', 'PESTEL', 'Competidores'] as const
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>('DAFO')
 
-  // DAFO
-  const [dafo, setDafo] = useState({
-    fortalezas: '',
-    debilidades: '',
-    oportunidades: '',
-    amenazas: '',
-  })
-
-  // PEST
-  const [pest, setPest] = useState({
-    politico: '',
-    economico: '',
-    social: '',
-    tecnologico: '',
-  })
-
-  // PESTEL
-  const [pestel, setPestel] = useState({
-    politico: '',
-    economico: '',
-    social: '',
-    tecnologico: '',
-    ambiental: '',
-    legal: '',
-  })
+  // DAFO / PEST / PESTEL state omitted for brevity…
 
   // Competitors
   const [competidores, setCompetidores] = useState<Competitor[]>([])
 
-  // 1) Cargar datos de Supabase
+  // 1) Cargar competidores del usuario
   useEffect(() => {
     if (!session) return
-
-    // DAFO / PEST / PESTEL could be loaded similarly from your table if needed
-    // Aquí sólo cargamos competidores
     supabase
-      .from<Competitor>('competidores')
+      .from<'competidores', Competitor>('competidores')
       .select('*')
       .eq('user_id', session.user.id)
       .order('id', { ascending: true })
@@ -76,7 +49,7 @@ export default function AnalisisCompetenciaPage() {
   const addCompetitor = async () => {
     if (!session) return
     const { data, error } = await supabase
-      .from<Competitor>('competidores')
+      .from<'competidores', Competitor>('competidores')
       .insert({
         user_id: session.user.id,
         nombre: '',
@@ -97,17 +70,14 @@ export default function AnalisisCompetenciaPage() {
     field: keyof Omit<Competitor, 'id' | 'user_id'>,
     value: string
   ) => {
-    // actualizar en Supabase
     const { data, error } = await supabase
-      .from<Competitor>('competidores')
+      .from<'competidores', Competitor>('competidores')
       .update({ [field]: value })
       .eq('id', id)
       .select('*')
       .single()
-    if (error) {
-      console.error(error)
-    } else if (data) {
-      // actualizar en estado local
+    if (error) console.error(error)
+    else if (data) {
       setCompetidores((prev) =>
         prev.map((c) => (c.id === id ? data : c))
       )
@@ -117,14 +87,11 @@ export default function AnalisisCompetenciaPage() {
   // 4) Eliminar competidor
   const removeCompetitor = async (id: number) => {
     const { error } = await supabase
-      .from('competidores')
+      .from<'competidores', Competitor>('competidores')
       .delete()
       .eq('id', id)
-    if (error) {
-      console.error(error)
-    } else {
-      setCompetidores((prev) => prev.filter((c) => c.id !== id))
-    }
+    if (error) console.error(error)
+    else setCompetidores((prev) => prev.filter((c) => c.id !== id))
   }
 
   return (
@@ -157,17 +124,17 @@ export default function AnalisisCompetenciaPage() {
         <Tab.Panels className="pt-6">
           {/* DAFO */}
           <Tab.Panel>
-            {/* ... tu UI de DAFO (igual que antes) ... */}
+            {/* … tu UI de DAFO … */}
           </Tab.Panel>
 
           {/* PEST */}
           <Tab.Panel>
-            {/* ... tu UI de PEST ... */}
+            {/* … tu UI de PEST … */}
           </Tab.Panel>
 
           {/* PESTEL */}
           <Tab.Panel>
-            {/* ... tu UI de PESTEL ... */}
+            {/* … tu UI de PESTEL … */}
           </Tab.Panel>
 
           {/* Competidores */}
