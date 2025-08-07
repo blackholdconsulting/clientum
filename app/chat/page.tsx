@@ -1,111 +1,144 @@
 'use client'
-import React, { useState, useEffect, useRef } from 'react'
+
+import React, { useState, useEffect, useRef, FormEvent } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { Database } from '../types/supabase'
+import { useSession } from '@supabase/auth-helpers-react'
+
+type Message = {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+}
 
 export default function ChatPage() {
-  const supabase = createClientComponentClient<Database>()
-  const [session, setSession] = useState<any>(null)
+  const supabase = createClientComponentClient()
+  const session = useSession()
 
-  // 1) Traer y escuchar sesión
+  const [messages, setMessages] = useState<Message[]>([])
+  const [inputValue, setInputValue] = useState('')
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Carga inicial de mensajes del usuario
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data: sub } = supabase.auth.onAuthStateChange((_ev, sess) => {
-      setSession(sess)
-    })
-    return () => sub.subscription.unsubscribe()
-  }, [supabase])
+    if (!session) return
 
-  // 2) Mensajes e input
-  const [messages, setMessages] = useState<{ role: 'user'|'assistant'; content: string }[]>([])
-  const [input, setInput] = useState('')
-  const [isSending, setIsSending] = useState(false)
-  const endRef = useRef<null | HTMLDivElement>(null)
+    ;(async () => {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: true })
 
-  // 3) Scroll automático
+      if (error) {
+        console.error('Error al cargar mensajes:', error)
+      } else if (data) {
+        setMessages(
+          data.map((row) => ({
+            id: row.id,
+            role: row.role as 'user' | 'assistant',
+            content: row.content,
+          }))
+        )
+      }
+    })()
+  }, [session])
+
+  // Scroll automático al final
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: 'smooth',
+      })
+    }
   }, [messages])
 
-  // 4) Enviar mensaje
-  const handleSend = async () => {
-    if (!session || !input.trim() || isSending) return
-    const txt = input.trim()
-    setMessages((m) => [...m, { role: 'user', content: txt }])
-    setInput('')
-    setIsSending(true)
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!session || !inputValue.trim()) return
 
+    // 1) Añade el mensaje del usuario en local
+    const userMsg: Message = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: inputValue.trim(),
+    }
+    setMessages((prev) => [...prev, userMsg])
+    setInputValue('')
+
+    // 2) Guarda el mensaje del usuario en Supabase
+    await supabase.from('chat_messages').insert({
+      user_id: session.user.id,
+      role: 'user',
+      content: userMsg.content,
+    })
+
+    // 3) Llama a tu API interna para obtener la respuesta IA
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: txt }),
+      body: JSON.stringify({ message: userMsg.content }),
     })
-    if (!res.ok) {
-      setMessages((m) => [...m, { role: 'assistant', content: '❌ Error al chatear.' }])
-      setIsSending(false)
-      return
+    const { reply } = await res.json()
+
+    // 4) Añade la respuesta del asistente en local y la guarda
+    const assistantMsg: Message = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: reply,
     }
+    setMessages((prev) => [...prev, assistantMsg])
+    await supabase.from('chat_messages').insert({
+      user_id: session.user.id,
+      role: 'assistant',
+      content: assistantMsg.content,
+    })
+  }
 
-    const reader = res.body!.getReader()
-    const decoder = new TextDecoder()
-    let assistantTxt = ''
-
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) break
-      const chunk = decoder.decode(value)
-      assistantTxt += chunk
-      setMessages((m) => {
-        const last = m[m.length - 1]
-        if (last.role === 'assistant') {
-          return [...m.slice(0, -1), { role: 'assistant', content: assistantTxt }]
-        } else {
-          return [...m, { role: 'assistant', content: assistantTxt }]
-        }
-      })
-    }
-
-    setIsSending(false)
+  if (!session) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto">
+        <p className="text-red-600">Inicia sesión para chatear.</p>
+      </div>
+    )
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto flex flex-col h-screen">
+    <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Chat IA de Clientum</h1>
-      <div className="flex-1 overflow-auto mb-4 bg-white p-4 rounded shadow">
-        {messages.map((m, i) => (
-          <div key={i} className={m.role === 'user' ? 'text-right mb-2' : 'text-left mb-2'}>
-            <span
-              className={`inline-block px-3 py-2 rounded ${
-                m.role === 'user' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-              }`}
-            >
-              {m.content}
-            </span>
+      <div
+        ref={scrollRef}
+        className="h-[60vh] overflow-y-auto border bg-white rounded p-4 mb-4"
+      >
+        {messages.map((m) => (
+          <div
+            key={m.id}
+            className={`mb-2 ${
+              m.role === 'assistant' ? 'text-gray-700' : 'text-blue-600'
+            }`}
+          >
+            <strong>
+              {m.role === 'assistant' ? 'Asistente:' : 'Tú:'}
+            </strong>{' '}
+            {m.content}
           </div>
         ))}
-        <div ref={endRef} />
-        {!session && (
-          <div className="text-center text-gray-500 mt-4">Inicia sesión para chatear</div>
-        )}
       </div>
-      <div className="flex">
+      <form onSubmit={handleSubmit} className="flex space-x-2">
         <input
           type="text"
-          className="flex-1 px-4 py-2 border rounded-l"
-          placeholder={session ? 'Escribe tu mensaje...' : 'Inicia sesión para chatear'}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          disabled={!session || isSending}
+          className="flex-1 border rounded px-3 py-2"
+          placeholder="Escribe tu mensaje..."
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
         />
         <button
-          onClick={handleSend}
-          disabled={!session || isSending}
-          className="px-4 py-2 bg-green-600 text-white rounded-r disabled:opacity-50"
+          type="submit"
+          className="px-4 py-2 bg-green-600 text-white rounded"
         >
-          {isSending ? 'Enviando...' : 'Enviar'}
+          Enviar
         </button>
-      </div>
+      </form>
     </div>
   )
 }
