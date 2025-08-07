@@ -1,76 +1,60 @@
 // app/api/chat/route.ts
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { Configuration, OpenAIApi } from 'openai'
+import OpenAI from 'openai'
 
 export const runtime = 'edge'
 
-// Configura OpenAI con tu API Key
-const configuration = new Configuration({
+const ai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 })
-const openai = new OpenAIApi(configuration)
 
-export async function GET() {
-  const supabase = createServerComponentClient({ cookies })
-  const {
-    data: { session }
-  } = await supabase.auth.getSession()
-
-  if (!session) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
-
-  // Recupera todo el historial de este usuario
-  const { data: history, error } = await supabase
-    .from('chat_messages')
-    .select('role, content')
-    .eq('user_id', session.user.id)
-    .order('created_at', { ascending: true })
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ history })
-}
-
-export async function POST(req: Request) {
-  const supabase = createServerComponentClient({ cookies })
-  const {
-    data: { session }
-  } = await supabase.auth.getSession()
-
-  if (!session) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  }
+export async function POST(req: NextRequest) {
+  const supabase = createServerComponentClient({ cookies: req.cookies })
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return new Response('Unauthorized', { status: 401 })
 
   const { message } = await req.json()
+  if (typeof message !== 'string') {
+    return new Response('Bad Request', { status: 400 })
+  }
 
-  // 1) Guarda el mensaje del usuario
-  await supabase
+  // 1) Guarda el mensaje usuario
+  const { data: inserted, error: err1 } = await supabase
     .from('chat_messages')
     .insert({ user_id: session.user.id, role: 'user', content: message })
+    .select()
+    .limit(1)
+    .single()
+  if (err1 || !inserted) {
+    console.error(err1)
+    return new Response('DB Error', { status: 500 })
+  }
 
-  // 2) Recupera el historial actualizado
-  const { data: history } = await supabase
+  // 2) Recupera todo el historial reciente
+  const { data: history, error: err2 } = await supabase
     .from('chat_messages')
     .select('role, content')
     .eq('user_id', session.user.id)
     .order('created_at', { ascending: true })
+    .limit(50)
+  if (err2 || !history) {
+    console.error(err2)
+    return new Response('DB Error', { status: 500 })
+  }
 
   // 3) Llama a OpenAI
-  const aiResponse = await openai.createChatCompletion({
-    model: 'gpt-3.5-turbo',
-    messages: history!.map((m) => ({ role: m.role, content: m.content }))
+  const chat = await ai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: history.map((m) => ({
+      role: m.role as 'user' | 'assistant' | 'system',
+      content: m.content,
+    })),
+    stream: true
   })
-  const assistantContent = aiResponse.data.choices[0].message!.content!
 
-  // 4) Guarda la respuesta del asistente
-  await supabase
-    .from('chat_messages')
-    .insert({ user_id: session.user.id, role: 'assistant', content: assistantContent })
-
-  return NextResponse.json({ message: assistantContent })
+  // 4) Retorna el stream al cliente y guarda la respuesta a posteriori
+  return new Response(chat.body, {
+    headers: { 'Content-Type': 'text/event-stream' }
+  })
 }
