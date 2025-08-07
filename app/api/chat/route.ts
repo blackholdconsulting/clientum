@@ -20,13 +20,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // 2) Leemos el mensaje
+  // 2) Mensaje del usuario
   const { message } = await req.json()
 
-  // 3) Llamada streaming a OpenAI
-  const response = await ai.chat.completions.create({
+  // 3) Llamada sin streaming
+  const completion = await ai.chat.completions.create({
     model: 'gpt-3.5-turbo',
-    stream: true,
+    temperature: 0.7,
     messages: [
       {
         role: 'system',
@@ -37,11 +37,7 @@ export async function POST(req: NextRequest) {
     ]
   })
 
-  // 4) Forzamos el cast para pasar el body al Response
-  // @ts-ignore
-  const stream = response.body as ReadableStream<Uint8Array>
+  const assistantText = completion.choices?.[0]?.message?.content || ''
 
-  return new Response(stream, {
-    headers: { 'Content-Type': 'text/event-stream' }
-  })
+  return NextResponse.json({ content: assistantText })
 }
