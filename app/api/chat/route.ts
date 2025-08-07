@@ -6,13 +6,11 @@ import { OpenAI } from 'openai'
 
 export const runtime = 'edge'
 
-// Inicializa el cliente con tu API Key
 const ai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!
 })
 
 export async function POST(req: Request) {
-  // 1) Inicializa Supabase en server
   const supabase = createServerComponentClient({ cookies })
   const {
     data: { session },
@@ -27,8 +25,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Mensaje inválido' }, { status: 400 })
   }
 
-  // 2) Guarda el mensaje del usuario
-  const { data: [userMsg], error: err1 } = await supabase
+  // 1) Guarda el mensaje del usuario y obténlo con .single()
+  const { data: userMsg, error: err1 } = await supabase
     .from('chat_messages')
     .insert({
       user_id: session.user.id,
@@ -36,12 +34,13 @@ export async function POST(req: Request) {
       content: message,
     })
     .select('*')
+    .single()
 
   if (err1 || !userMsg) {
     return NextResponse.json({ error: 'Error guardando tu mensaje.' }, { status: 500 })
   }
 
-  // 3) Llamada streaming a OpenAI
+  // 2) Llamada streaming a OpenAI
   const response = await ai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
@@ -51,7 +50,7 @@ export async function POST(req: Request) {
     stream: true,
   })
 
-  // 4) Transmite al cliente y, al cerrar, almacena la respuesta
+  // 3) Stream al cliente y al finalizar guardamos la respuesta
   const stream = new ReadableStream({
     async start(controller) {
       const reader = response.body!.getReader()
@@ -64,7 +63,7 @@ export async function POST(req: Request) {
         assistantContent += new TextDecoder().decode(value)
       }
 
-      // Guarda la respuesta del asistente
+      // 4) Guarda la respuesta del asistente
       await supabase
         .from('chat_messages')
         .insert({
