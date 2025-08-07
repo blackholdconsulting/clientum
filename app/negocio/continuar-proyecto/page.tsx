@@ -23,12 +23,14 @@ export default function ContinuarProyectoPage() {
   const [isOpen, setIsOpen] = useState(false)
   const [selectedProject, setSelectedProject] = useState<Proyecto | null>(null)
 
-  // 1) Carga inicial + debug
+  // Carga de proyectos, con debug
   useEffect(() => {
-    if (!session) return
-
-    console.log('⏳ Cargando proyectos de Supabase para', session.user.id)
-
+    if (!session) {
+      console.log('🔒 Sin sesión, no cargo proyectos')
+      setProyectos([])
+      return
+    }
+    console.log('⏳ Cargando proyectos para user_id=', session.user.id)
     supabase
       .from('proyectos')
       .select('id, user_id, nombre, estado')
@@ -36,22 +38,20 @@ export default function ContinuarProyectoPage() {
       .order('created_at', { ascending: false })
       .then(({ data, error }) => {
         if (error) {
-          console.error('❌ Error al cargar proyectos:', error)
+          console.error('❌ Error fetching proyectos:', error)
         } else {
-          console.log('✅ Proyectos recibidos:', data)
+          console.log('✅ Datos recibidos:', data)
           setProyectos(data as Proyecto[] || [])
         }
       })
-  }, [session, supabase])
+  }, [session?.user?.id, supabase])
 
-  const handleOpenModal = (proyecto: Proyecto) => {
-    setSelectedProject(proyecto)
+  const openModal = (p: Proyecto) => {
+    setSelectedProject(p)
     setIsOpen(true)
   }
-
-  const handleConfirm = () => {
+  const confirm = () => {
     if (!selectedProject) return
-    // redirigimos al detalle de ese proyecto
     router.push(`/negocio/proyectos/${selectedProject.id}`)
     setIsOpen(false)
     setSelectedProject(null)
@@ -62,10 +62,11 @@ export default function ContinuarProyectoPage() {
       <h1 className="text-2xl font-bold mb-4">Continuar Proyecto</h1>
       <Link
         href="/negocio/proyectos"
-        className="inline-block px-4 py-2 mb-6 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded"
+        className="inline-block px-4 py-2 mb-6 text-white bg-blue-600 hover:bg-blue-700 rounded"
       >
         ← Volver a Proyectos
       </Link>
+
       <p className="mb-4 text-gray-700">
         Selecciona uno de tus proyectos y retómalo donde lo dejaste.
       </p>
@@ -88,14 +89,14 @@ export default function ContinuarProyectoPage() {
                 </td>
               </tr>
             ) : (
-              proyectos.map((proyecto) => (
-                <tr key={proyecto.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2 border-b">{proyecto.id}</td>
-                  <td className="px-4 py-2 border-b">{proyecto.nombre}</td>
-                  <td className="px-4 py-2 border-b capitalize">{proyecto.estado}</td>
+              proyectos.map((p) => (
+                <tr key={p.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-2 border-b">{p.id}</td>
+                  <td className="px-4 py-2 border-b">{p.nombre}</td>
+                  <td className="px-4 py-2 border-b capitalize">{p.estado}</td>
                   <td className="px-4 py-2 border-b text-center">
                     <button
-                      onClick={() => handleOpenModal(proyecto)}
+                      onClick={() => openModal(p)}
                       className="px-3 py-1 text-sm text-white bg-green-600 hover:bg-green-700 rounded"
                     >
                       Continuar
@@ -108,17 +109,13 @@ export default function ContinuarProyectoPage() {
         </table>
       </div>
 
-      {/* Modal Confirmación */}
-      <Dialog
-        open={isOpen}
-        onClose={() => setIsOpen(false)}
-        className="relative z-50"
-      >
+      {/* Modal */}
+      <Dialog open={isOpen} onClose={() => setIsOpen(false)} className="relative z-50">
         <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
-          <Dialog.Panel className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full">
+          <Dialog.Panel className="bg-white rounded shadow-lg p-6 w-full max-w-md">
             <Dialog.Title className="text-lg font-semibold mb-4">
-              Confirmar acción
+              Confirmar Continuación
             </Dialog.Title>
             <Dialog.Description className="mb-6 text-gray-600">
               ¿Deseas continuar con el proyecto “
@@ -128,13 +125,13 @@ export default function ContinuarProyectoPage() {
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setIsOpen(false)}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded"
+                className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
               >
                 Cancelar
               </button>
               <button
-                onClick={handleConfirm}
-                className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded"
+                onClick={confirm}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
               >
                 Confirmar
               </button>
@@ -143,6 +140,5 @@ export default function ContinuarProyectoPage() {
         </div>
       </Dialog>
     </div>
-  )
+)
 }
-
