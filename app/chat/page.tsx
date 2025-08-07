@@ -13,8 +13,8 @@ export default function ChatPage() {
   const send = async (e: FormEvent) => {
     e.preventDefault()
     if (!input.trim()) return
-    const userMsg: Msg = { role: 'user', content: input }
-    setMsgs((m) => [...m, userMsg])
+    const userMsg = { role: 'user', content: input }
+    setMsgs((all) => [...all, userMsg])
     setInput('')
     setLoading(true)
 
@@ -23,13 +23,15 @@ export default function ChatPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: userMsg.content })
     })
+
     if (!res.ok) {
       console.error(await res.text())
       setLoading(false)
       return
     }
+
     const { content } = await res.json()
-    setMsgs((m) => [...m, { role: 'assistant', content }])
+    setMsgs((all) => [...all, { role: 'assistant', content }])
     setLoading(false)
   }
 
@@ -40,7 +42,7 @@ export default function ChatPage() {
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-4">
       <h1 className="text-2xl font-bold">Chat IA de Clientum</h1>
-      <div className="h-96 overflow-y-auto border rounded p-4 space-y-2">
+      <div className="h-96 overflow-y-auto border rounded p-4 space-y-2 bg-white">
         {msgs.map((m, i) => (
           <div
             key={i}
@@ -57,7 +59,7 @@ export default function ChatPage() {
       </div>
       <form onSubmit={send} className="flex space-x-2">
         <input
-          className="flex-1 border rounded px-3"
+          className="flex-1 border rounded px-3 py-2"
           placeholder="Escribe tu pregunta..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -65,7 +67,7 @@ export default function ChatPage() {
         />
         <button
           type="submit"
-          className="bg-green-600 text-white px-4 rounded"
+          className="bg-green-600 text-white px-4 rounded disabled:opacity-50"
           disabled={loading}
         >
           {loading ? '…' : 'Enviar'}
