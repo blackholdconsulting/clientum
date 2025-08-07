@@ -28,20 +28,17 @@ export default function PlanFuturoPage() {
   const [modalAbierto, setModalAbierto] = useState(false)
   const [campo, setCampo] = useState<Partial<ObjetivoSMART>>({})
 
-  // 1) Carga inicial de objetivos desde Supabase
+  // 1) Carga inicial desde Supabase
   useEffect(() => {
     if (!session) return
     supabase
-      .from<'objetivos_smart', ObjetivoSMART>('objetivos_smart')
+      .from('objetivos_smart')
       .select('*')
       .eq('user_id', session.user.id)
       .order('created_at', { ascending: false })
       .then(({ data, error }) => {
-        if (error) {
-          console.error(error)
-        } else if (data) {
-          setObjetivos(data)
-        }
+        if (error) console.error(error)
+        else setObjetivos(data as ObjetivoSMART[])
       })
   }, [session, supabase])
 
@@ -51,22 +48,15 @@ export default function PlanFuturoPage() {
   }
   const cerrarModal = () => setModalAbierto(false)
 
-  // 2) Guarda en Supabase y en estado local
+  // 2) Inserta nuevo objetivo
   const guardarObjetivo = async () => {
     const { nombre, especifico, medible, alcanzable, relevante, temporal } = campo
-    if (
-      !nombre ||
-      !especifico ||
-      !medible ||
-      !alcanzable ||
-      !relevante ||
-      !temporal
-    ) {
+    if (!nombre || !especifico || !medible || !alcanzable || !relevante || !temporal) {
       alert('Completa todos los campos SMART.')
       return
     }
     const { data, error } = await supabase
-      .from<'objetivos_smart', ObjetivoSMART>('objetivos_smart')
+      .from('objetivos_smart')
       .insert({
         user_id: session!.user.id,
         nombre,
@@ -74,56 +64,41 @@ export default function PlanFuturoPage() {
         medible,
         alcanzable,
         relevante,
-        temporal
+        temporal,
       })
       .select('*')
       .single()
-
-    if (error) {
-      console.error(error)
-    } else if (data) {
-      setObjetivos((prev) => [data, ...prev])
-      cerrarModal()
-    }
+    if (error) console.error(error)
+    else setObjetivos((prev) => [data as ObjetivoSMART, ...prev])
+    cerrarModal()
   }
 
-  // 3) Actualiza “conseguido” en Supabase
+  // 3) Actualiza conseguido
   const toggleConseguido = async (id: number, actual: boolean) => {
     const { data, error } = await supabase
-      .from<'objetivos_smart', ObjetivoSMART>('objetivos_smart')
+      .from('objetivos_smart')
       .update({ conseguido: !actual })
       .eq('id', id)
       .select('*')
       .single()
-
-    if (error) {
-      console.error(error)
-    } else if (data) {
-      setObjetivos((prev) => prev.map((o) => (o.id === id ? data : o)))
-    }
+    if (error) console.error(error)
+    else setObjetivos((prev) =>
+      prev.map((o) => (o.id === id ? (data as ObjetivoSMART) : o))
+    )
   }
 
-  // 4) Elimina objetivo en Supabase
+  // 4) Elimina objetivo
   const eliminarObjetivo = async (id: number) => {
-    const { error } = await supabase
-      .from<'objetivos_smart', ObjetivoSMART>('objetivos_smart')
-      .delete()
-      .eq('id', id)
-
-    if (!error) {
-      setObjetivos((prev) => prev.filter((o) => o.id !== id))
-    } else {
-      console.error(error)
-    }
+    const { error } = await supabase.from('objetivos_smart').delete().eq('id', id)
+    if (error) console.error(error)
+    else setObjetivos((prev) => prev.filter((o) => o.id !== id))
   }
 
   return (
     <main className="p-6 bg-white rounded-lg shadow-lg relative">
       {/* Header */}
       <header className="flex items-center mb-6">
-        <Link href="/negocio" className="text-gray-500 hover:text-gray-700 mr-4">
-          ←
-        </Link>
+        <Link href="/negocio" className="text-gray-500 hover:text-gray-700 mr-4">←</Link>
         <h1 className="text-3xl font-bold">Plan Futuro SMART</h1>
       </header>
 
@@ -187,26 +162,11 @@ export default function PlanFuturoPage() {
                 </div>
               </div>
               <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 mt-4 text-sm">
-                <div>
-                  <dt className="font-medium">Específico</dt>
-                  <dd>{o.especifico}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium">Medible</dt>
-                  <dd>{o.medible}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium">Alcanzable</dt>
-                  <dd>{o.alcanzable}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium">Relevante</dt>
-                  <dd>{o.relevante}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium">Plazo</dt>
-                  <dd>{o.temporal}</dd>
-                </div>
+                <div><dt className="font-medium">Específico</dt><dd>{o.especifico}</dd></div>
+                <div><dt className="font-medium">Medible</dt><dd>{o.medible}</dd></div>
+                <div><dt className="font-medium">Alcanzable</dt><dd>{o.alcanzable}</dd></div>
+                <div><dt className="font-medium">Relevante</dt><dd>{o.relevante}</dd></div>
+                <div><dt className="font-medium">Plazo</dt><dd>{o.temporal}</dd></div>
               </dl>
             </div>
           ))}
@@ -229,7 +189,7 @@ export default function PlanFuturoPage() {
             <h3 className="text-lg font-bold mb-4">Nuevo Objetivo SMART</h3>
             <div className="space-y-4">
               {[
-                { label: 'Nombre resumido', key: 'nombre', type: 'text' },
+                { label: 'Nombre', key: 'nombre', type: 'text' },
                 { label: 'Específico', key: 'especifico', type: 'textarea' },
                 { label: 'Medible', key: 'medible', type: 'textarea' },
                 { label: 'Alcanzable', key: 'alcanzable', type: 'textarea' },
@@ -241,9 +201,7 @@ export default function PlanFuturoPage() {
                   {type === 'textarea' ? (
                     <textarea
                       value={(campo as any)[key] || ''}
-                      onChange={(e) =>
-                        setCampo({ ...campo, [key]: e.target.value })
-                      }
+                      onChange={(e) => setCampo({ ...campo, [key]: e.target.value })}
                       className="w-full border rounded px-3 py-2 resize-none"
                       rows={2}
                     />
@@ -251,9 +209,7 @@ export default function PlanFuturoPage() {
                     <input
                       type={type}
                       value={(campo as any)[key] || ''}
-                      onChange={(e) =>
-                        setCampo({ ...campo, [key]: e.target.value })
-                      }
+                      onChange={(e) => setCampo({ ...campo, [key]: e.target.value })}
                       className="w-full border rounded px-3 py-2"
                     />
                   )}
@@ -261,18 +217,10 @@ export default function PlanFuturoPage() {
               ))}
             </div>
             <div className="flex justify-end space-x-3 mt-6">
-              <button
-                type="button"
-                onClick={cerrarModal}
-                className="px-4 py-2 bg-gray-200 rounded"
-              >
+              <button type="button" onClick={cerrarModal} className="px-4 py-2 bg-gray-200 rounded">
                 Cancelar
               </button>
-              <button
-                type="button"
-                onClick={guardarObjetivo}
-                className="px-4 py-2 bg-green-600 text-white rounded"
-              >
+              <button type="button" onClick={guardarObjetivo} className="px-4 py-2 bg-green-600 text-white rounded">
                 Guardar SMART
               </button>
             </div>
