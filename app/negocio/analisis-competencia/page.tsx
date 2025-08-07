@@ -1,4 +1,4 @@
-// app/negocio/analisis-de-competencia/page.tsx
+// app/negocio/analisis-competencia/page.tsx
 'use client'
 
 import React, { useState, useEffect, Fragment } from 'react'
@@ -9,7 +9,6 @@ function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
 }
 
-// Tipos para persistencia
 type Analisis = {
   user_id: string
   fortalezas: string
@@ -41,21 +40,21 @@ export default function AnalisisCompetenciaPage() {
   const tabs = ['DAFO', 'PEST', 'PESTEL', 'Competidores'] as const
   const [activeTab, setActiveTab] = useState<typeof tabs[number]>('DAFO')
 
-  // Estado DAFO
+  // DAFO
   const [dafo, setDafo] = useState({
     fortalezas: '',
     debilidades: '',
     oportunidades: '',
     amenazas: '',
   })
-  // Estado PEST
+  // PEST
   const [pest, setPest] = useState({
     politico: '',
     economico: '',
     social: '',
     tecnologico: '',
   })
-  // Estado PESTEL
+  // PESTEL
   const [pestel, setPestel] = useState({
     politico: '',
     economico: '',
@@ -67,13 +66,13 @@ export default function AnalisisCompetenciaPage() {
   // Competidores
   const [competidores, setCompetidores] = useState<Competitor[]>([])
 
-  // 1) Carga inicial de DAFO/PEST/PESTEL y Competidores
+  // 1) Carga inicial
   useEffect(() => {
     if (!session) return
 
-    // DAFO/PEST/PESTEL
+    // Cargar DAFO/PEST/PESTEL
     supabase
-      .from<Analisis>('analisis_competencia')
+      .from('analisis_competencia')
       .select('*')
       .eq('user_id', session.user.id)
       .single()
@@ -81,48 +80,49 @@ export default function AnalisisCompetenciaPage() {
         if (error && error.code !== 'PGRST116') {
           console.error(error)
         } else if (data) {
+          const registro = data as Analisis
           setDafo({
-            fortalezas: data.fortalezas,
-            debilidades: data.debilidades,
-            oportunidades: data.oportunidades,
-            amenazas: data.amenazas,
+            fortalezas: registro.fortalezas,
+            debilidades: registro.debilidades,
+            oportunidades: registro.oportunidades,
+            amenazas: registro.amenazas,
           })
           setPest({
-            politico: data.politico,
-            economico: data.economico,
-            social: data.social,
-            tecnologico: data.tecnologico,
+            politico: registro.politico,
+            economico: registro.economico,
+            social: registro.social,
+            tecnologico: registro.tecnologico,
           })
           setPestel({
-            politico: data.politico,
-            economico: data.economico,
-            social: data.social,
-            tecnologico: data.tecnologico,
-            ambiental: data.ambiental,
-            legal: data.legal,
+            politico: registro.politico,
+            economico: registro.economico,
+            social: registro.social,
+            tecnologico: registro.tecnologico,
+            ambiental: registro.ambiental,
+            legal: registro.legal,
           })
         }
       })
 
-    // Competidores
+    // Cargar Competidores
     supabase
-      .from<Competitor>('competidores')
+      .from('competidores')
       .select('*')
       .eq('user_id', session.user.id)
       .order('id', { ascending: true })
       .then(({ data, error }) => {
         if (error) console.error(error)
-        else setCompetidores(data || [])
+        else setCompetidores(data as Competitor[] || [])
       })
   }, [session, supabase])
 
-  // 2) Upsert DAFO/PEST/PESTEL en un único payload
+  // 2) Guardar DAFO/PEST/PESTEL
   const guardarAnalisis = async () => {
     if (!session) return
     const payload = {
       user_id: session.user.id,
       ...dafo,
-      ...pestel, // PESTEL repite campos politico/economico/social/tecnologico
+      ...pestel, // PESTEL incluye también PEST campos
     }
     const { error } = await supabase
       .from('analisis_competencia')
@@ -144,7 +144,7 @@ export default function AnalisisCompetenciaPage() {
       .select('*')
       .single()
     if (error) console.error(error)
-    else setCompetidores((prev) => [...prev, data])
+    else setCompetidores((prev) => [...prev, data as Competitor])
   }
 
   const updateCompetitor = async (
@@ -161,7 +161,7 @@ export default function AnalisisCompetenciaPage() {
     if (error) console.error(error)
     else
       setCompetidores((prev) =>
-        prev.map((c) => (c.id === id ? data : c))
+        prev.map((c) => (c.id === id ? (data as Competitor) : c))
       )
   }
 
@@ -201,7 +201,7 @@ export default function AnalisisCompetenciaPage() {
           ))}
         </Tab.List>
 
-        <Tab.Panels className="pt-6">
+        <Tab.Panels className="pt-6 space-y-6">
           {/* DAFO */}
           <Tab.Panel>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
