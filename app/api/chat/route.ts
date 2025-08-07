@@ -1,60 +1,35 @@
 // app/api/chat/route.ts
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import OpenAI from 'openai'
+import OpenAI from 'openai-edge'
 
+// Esto fuerza que la función corra en el Edge Runtime
 export const runtime = 'edge'
 
-const ai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+// inicializa el cliente de OpenAI (usa tu OPENAI_API_KEY en .env)
+const ai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! })
 
 export async function POST(req: NextRequest) {
-  const supabase = createServerComponentClient({ cookies: req.cookies })
+  // 1) Autenticación
+  const supabase = createServerComponentClient({ cookies: () => req.cookies })
   const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return new Response('Unauthorized', { status: 401 })
+  if (!session) return new NextResponse('Unauthorized', { status: 401 })
 
+  // 2) Leer el mensaje enviado por el cliente
   const { message } = await req.json()
-  if (typeof message !== 'string') {
-    return new Response('Bad Request', { status: 400 })
-  }
 
-  // 1) Guarda el mensaje usuario
-  const { data: inserted, error: err1 } = await supabase
-    .from('chat_messages')
-    .insert({ user_id: session.user.id, role: 'user', content: message })
-    .select()
-    .limit(1)
-    .single()
-  if (err1 || !inserted) {
-    console.error(err1)
-    return new Response('DB Error', { status: 500 })
-  }
-
-  // 2) Recupera todo el historial reciente
-  const { data: history, error: err2 } = await supabase
-    .from('chat_messages')
-    .select('role, content')
-    .eq('user_id', session.user.id)
-    .order('created_at', { ascending: true })
-    .limit(50)
-  if (err2 || !history) {
-    console.error(err2)
-    return new Response('DB Error', { status: 500 })
-  }
-
-  // 3) Llama a OpenAI
-  const chat = await ai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: history.map((m) => ({
-      role: m.role as 'user' | 'assistant' | 'system',
-      content: m.content,
-    })),
-    stream: true
+  // 3) Llamada a OpenAI (chat.completions)
+  const response = await ai.chat.completions.create({
+    model: 'gpt-3.5-turbo',
+    stream: true,
+    messages: [
+      { role: 'system', content: 'Eres Clientum AI, un asistente experto en normativa fiscal y legal para autónomos y PYMEs.' },
+      { role: 'user',   content: message }
+    ]
   })
 
-  // 4) Retorna el stream al cliente y guarda la respuesta a posteriori
-  return new Response(chat.body, {
+  // 4) Devolver el stream directo a la página
+  return new NextResponse(response.body, {
     headers: { 'Content-Type': 'text/event-stream' }
   })
 }
