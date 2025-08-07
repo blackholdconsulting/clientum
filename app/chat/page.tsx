@@ -1,4 +1,3 @@
-// app/chat/page.tsx
 'use client'
 
 import React, { useState, useRef, useEffect, FormEvent } from 'react'
@@ -29,26 +28,8 @@ export default function ChatPage() {
       setLoading(false)
       return
     }
-
-    const reader = res.body!.getReader()
-    const decoder = new TextDecoder()
-    let assistantContent = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      assistantContent += decoder.decode(value)
-      // opcional: podrías actualizar en tiempo real
-      // setMsgs(m => {
-      //   const last = m[m.length-1]
-      //   if (last.role==='assistant') {
-      //     last.content = assistantContent
-      //     return [...m.slice(0,-1), last]
-      //   }
-      //   return [...m, { role:'assistant', content:assistantContent }]
-      // })
-    }
-
-    setMsgs((m) => [...m, { role: 'assistant', content: assistantContent }])
+    const { content } = await res.json()
+    setMsgs((m) => [...m, { role: 'assistant', content }])
     setLoading(false)
   }
 
