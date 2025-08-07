@@ -6,9 +6,7 @@ import { OpenAI } from 'openai'
 
 export const runtime = 'edge'
 
-const ai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!
-})
+const ai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! })
 
 export async function POST(req: Request) {
   const supabase = createServerComponentClient({ cookies })
@@ -25,22 +23,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Mensaje inválido' }, { status: 400 })
   }
 
-  // 1) Guarda el mensaje del usuario
+  // 1) Guarda tu mensaje
   const { data: userMsg, error: err1 } = await supabase
     .from('chat_messages')
-    .insert({
-      user_id: session.user.id,
-      role: 'user',
-      content: message,
-    })
+    .insert({ user_id: session.user.id, role: 'user', content: message })
     .select('*')
     .single()
-
   if (err1 || !userMsg) {
-    return NextResponse.json({ error: 'Error guardando tu mensaje.' }, { status: 500 })
+    return NextResponse.json({ error: 'No se pudo guardar tu mensaje' }, { status: 500 })
   }
 
-  // 2) Llamada streaming a OpenAI
+  // 2) Llama a OpenAI en modo streaming
   const responseStream = await ai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
@@ -50,36 +43,29 @@ export async function POST(req: Request) {
     stream: true,
   })
 
-  // 3) Transmite el contenido en streaming al cliente y guarda la respuesta al final
+  // 3) Devuelve un ReadableStream al cliente y acumulamos la respuesta
+  let assistantContent = ''
   const stream = new ReadableStream({
     async start(controller) {
-      const encoder = new TextEncoder()
-      let assistantContent = ''
-
-      // responseStream is an async iterable of ChatCompletionChunk
       for await (const chunk of responseStream) {
-        const content = chunk.choices?.[0]?.delta?.content
-        if (content) {
-          assistantContent += content
-          controller.enqueue(encoder.encode(content))
+        const delta = chunk.choices?.[0]?.delta?.content
+        if (delta) {
+          assistantContent += delta
+          controller.enqueue(new TextEncoder().encode(delta))
         }
       }
-
       // 4) Guarda la respuesta completa
-      await supabase
-        .from('chat_messages')
-        .insert({
-          user_id: session.user.id,
-          role: 'assistant',
-          content: assistantContent,
-        })
-
+      await supabase.from('chat_messages').insert({
+        user_id: session.user.id,
+        role: 'assistant',
+        content: assistantContent,
+      })
       controller.close()
     },
   })
 
   return new Response(stream, {
+    status: 200,
     headers: { 'Content-Type': 'text/event-stream' },
   })
 }
-
