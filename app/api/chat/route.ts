@@ -1,33 +1,56 @@
 // app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createRouteHandlerSupabaseClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 
-export const runtime = 'edge'   // o coméntalo si quieres Node.js
-
-// --- OPCIÓN A: con fetch puro ---
-const HF_ENDPOINT = 'https://api-inference.huggingface.co/models/facebook/blenderbot_small'
-const HF_TOKEN    = process.env.HUGGINGFACE_API_TOKEN!
+// Fuerza que la función corra en el Edge Runtime
+export const runtime = 'edge'
 
 export async function POST(req: NextRequest) {
-  const supabase = createServerComponentClient({ cookies: () => req.cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return new Response('Unauthorized', { status: 401 })
+  // 1) Crea un cliente supabase para rutas (route handler)
+  const supabase = createRouteHandlerSupabaseClient({ cookies })
 
-  const { question } = await req.json()
+  // 2) Comprueba sesión
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession()
 
-  // Llamada a HF
-  const r = await fetch(HF_ENDPOINT, {
+  if (sessionError || !session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // 3) Lee el body
+  const { message }: { message: string } = await req.json()
+  if (!message) {
+    return NextResponse.json({ error: 'No message provided' }, { status: 400 })
+  }
+
+  // 4) Aquí llamas a TogetherAI / HuggingFace / lo que uses
+  //    Ejemplo ficticio de petición a TogetherAI
+  const togetherRes = await fetch('https://api.together.ai/chat', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${HF_TOKEN}`,
-      'Content-Type':  'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.TOGETHER_API_KEY}`,
     },
-    body: JSON.stringify({ inputs: question, options: { wait_for_model: true } })
+    body: JSON.stringify({
+      model: 'gptj3',
+      prompt: message,
+      stream: true,
+    }),
   })
-  if (!r.ok) {
-    console.error(await r.text())
-    return new Response('Error en Hugging Face', { status: r.status })
+
+  if (!togetherRes.ok || !togetherRes.body) {
+    return NextResponse.json({ error: 'AI service error' }, { status: 502 })
   }
-  const [ out ] = await r.json() as Array<{ generated_text: string }>
-  return NextResponse.json({ answer: out.generated_text })
+
+  // 5) Reenvía el stream al cliente
+  return new NextResponse(togetherRes.body, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      // si lo necesitas:
+      // 'Cache-Control': 'no-cache, no-transform',
+    },
+  })
 }
