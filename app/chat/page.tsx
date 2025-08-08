@@ -1,17 +1,34 @@
 'use client'
 
-import { useState, useRef, FormEvent } from 'react'
+import { useEffect, useRef, useState, FormEvent } from 'react'
 
-type Msg = { role: 'user' | 'ai', text: string }
+type Msg = { role: 'user' | 'ai'; text: string }
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Msg[]>([])
+  const [messages, setMessages] = useState<Msg[]>([
+    { role: 'ai', text: '¡Hola! Soy Clientum AI. ¿En qué te ayudo hoy?' }
+  ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const bottomRef = useRef<HTMLDivElement | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
-  const send = async (e: FormEvent) => {
-    e.preventDefault()
+  // Auto-scroll al final
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
+
+  // Auto-resize del textarea
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = '0px'
+    el.style.height = Math.min(160, el.scrollHeight) + 'px'
+  }, [input])
+
+  const send = async (e?: FormEvent) => {
+    e?.preventDefault()
     const prompt = input.trim()
     if (!prompt || loading) return
 
@@ -19,6 +36,7 @@ export default function ChatPage() {
     setInput('')
     setLoading(true)
 
+    // Cancela stream previo si lo hubiera
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
@@ -39,8 +57,8 @@ export default function ChatPage() {
 
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
-
       let aiText = ''
+
       while (true) {
         const { value, done } = await reader.read()
         if (done) break
@@ -61,33 +79,112 @@ export default function ChatPage() {
     }
   }
 
-  return (
-    <div className="max-w-xl mx-auto p-4">
-      <div className="space-y-2 mb-4">
-        {messages.map((m, i) => (
-          <div key={i} className={m.role === 'user' ? 'text-right' : 'text-left'}>
-            <span className={`inline-block px-3 py-1 rounded-lg ${m.role === 'user' ? 'bg-blue-200' : 'bg-gray-200'}`}>
-              {m.text}
-            </span>
-          </div>
-        ))}
-      </div>
+  const stop = () => {
+    abortRef.current?.abort()
+    setLoading(false)
+  }
 
-      <form onSubmit={send} className="flex gap-2">
-        <input
-          className="flex-grow border rounded px-3 py-2"
-          placeholder="Escribe tu mensaje…"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          disabled={loading}
-        />
-        <button
-          className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-          disabled={loading}
-        >
-          {loading ? 'Enviando…' : 'Enviar'}
-        </button>
-      </form>
+  return (
+    <div className="min-h-[100dvh] bg-[#F5F7FA] text-slate-900 flex flex-col">
+      {/* Topbar estilo Holded */}
+      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur">
+        <div className="mx-auto w-full max-w-4xl px-4 py-3 flex items-center gap-3">
+          <div className="h-8 w-8 rounded-2xl bg-indigo-600 text-white grid place-items-center font-bold">AI</div>
+          <div className="flex-1">
+            <div className="font-semibold">Clientum AI</div>
+            <div className="text-xs text-slate-500">Asistente de BlackHold • estilo Holded</div>
+          </div>
+          {loading ? (
+            <span className="text-xs text-indigo-600 animate-pulse">generando…</span>
+          ) : (
+            <span className="text-xs text-slate-400">listo</span>
+          )}
+        </div>
+      </header>
+
+      {/* Chat container */}
+      <main className="flex-1">
+        <div className="mx-auto w-full max-w-3xl px-3 sm:px-4 py-4">
+          <div className="rounded-2xl bg-white shadow-sm border border-slate-200 p-2 sm:p-4">
+            <ul className="space-y-4">
+              {messages.map((m, i) => (
+                <li key={i} className={`flex gap-3 ${m.role === 'user' ? 'justify-end' : ''}`}>
+                  {/* Avatar */}
+                  {m.role === 'ai' && (
+                    <div className="shrink-0 h-8 w-8 rounded-full bg-slate-100 border border-slate-200 grid place-items-center text-[11px] font-semibold text-slate-600">
+                      AI
+                    </div>
+                  )}
+                  {/* Bubble */}
+                  <div
+                    className={
+                      m.role === 'user'
+                        ? 'max-w-[85%] rounded-2xl px-4 py-2 bg-indigo-600 text-white shadow-sm'
+                        : 'max-w-[85%] rounded-2xl px-4 py-3 bg-slate-50 text-slate-800 border border-slate-200'
+                    }
+                  >
+                    <pre className={`whitespace-pre-wrap leading-6 ${m.role === 'user' ? '' : 'prose-sm'}`}>
+                      {m.text || (loading && i === messages.length - 1 ? '…' : '')}
+                    </pre>
+                  </div>
+                  {/* Avatar user */}
+                  {m.role === 'user' && (
+                    <div className="shrink-0 h-8 w-8 rounded-full bg-indigo-100 border border-indigo-200 grid place-items-center text-[11px] font-semibold text-indigo-700">
+                      Tú
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <div ref={bottomRef} />
+          </div>
+        </div>
+      </main>
+
+      {/* Composer pegado abajo */}
+      <footer className="sticky bottom-0 z-10 border-t border-slate-200 bg-white/90 backdrop-blur">
+        <form onSubmit={send} className="mx-auto w-full max-w-3xl px-3 sm:px-4 py-3">
+          <div className="rounded-full border border-slate-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-200 px-3 py-2 flex items-end gap-2">
+            <textarea
+              ref={textareaRef}
+              className="min-h-[40px] max-h-40 flex-1 resize-none outline-none placeholder:text-slate-400 py-1"
+              placeholder="Escribe tu mensaje…  (Shift+Enter para salto de línea)"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  send()
+                }
+              }}
+              disabled={loading && !input}
+            />
+            {loading ? (
+              <button
+                type="button"
+                onClick={stop}
+                className="shrink-0 rounded-full px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200"
+                title="Detener generación"
+              >
+                Stop
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50"
+                disabled={!input.trim()}
+                title="Enviar"
+              >
+                Enviar
+              </button>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-slate-400">
+            Consejito: pulsa <span className="font-semibold text-slate-500">Enter</span> para enviar y{' '}
+            <span className="font-semibold text-slate-500">Shift+Enter</span> para nueva línea.
+          </p>
+        </form>
+      </footer>
     </div>
   )
 }
