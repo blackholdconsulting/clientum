@@ -1,53 +1,47 @@
-import { NextRequest, NextResponse } from 'next/server'
+// app/api/chat/route.ts
+import { NextRequest } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 
-export const runtime = 'edge'
-
 export async function POST(req: NextRequest) {
-  // 1) Sesión Supabase
+  // Inicializa Supabase (para auth si lo necesitas más adelante)
   const supabase = createRouteHandlerClient({ cookies })
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession()
-  if (sessionError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
 
-  // 2) Parsear JSON
-  let payload: { message?: string }
+  let json: { prompt?: string }
   try {
-    payload = await req.json()
+    json = await req.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-  }
-  const { message } = payload
-  if (!message) {
-    return NextResponse.json({ error: 'Missing "message"' }, { status: 400 })
+    return new Response('JSON inválido', { status: 400 })
   }
 
-  // 3) Llamada a Together AI (con tu clave en env)
-  const together = await fetch('https://api.together.ai/chat', {
+  const { prompt } = json
+  if (!prompt) return new Response('Falta “prompt” en el body', { status: 400 })
+
+  const apiKey = process.env.TOGETHER_API_KEY!
+  const apiUrl = process.env.NEXT_PUBLIC_INFERENCE_API_URL!
+
+  // Llamada al SSE de TogetherAI
+  const togetherRes = await fetch(`${apiUrl}/v1/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.TOGETHER_API_KEY}`,
+      'Authorization': `Bearer ${apiKey}`,
+      'Accept': 'text/event-stream',
     },
     body: JSON.stringify({
-      model: 'gptj3',
-      prompt: message,
-      stream: true,
+      inputs: prompt,
+      parameters: { max_new_tokens: 256, temperature: 0.7 }
     }),
   })
-  if (!together.ok || !together.body) {
-    const txt = await together.text().catch(() => '')
-    console.error('Together error:', together.status, txt)
-    return NextResponse.json({ error: 'AI service error' }, { status: 502 })
+
+  if (!togetherRes.ok || !togetherRes.body) {
+    const errText = await togetherRes.text()
+    return new Response(`Error TogetherAI: ${errText}`, { status: togetherRes.status })
   }
 
-  // 4) Reenvía el stream SSE al cliente
-  return new NextResponse(together.body, {
+  // Reenvía el stream directamente al cliente
+  return new Response(togetherRes.body, {
+    status: 200,
     headers: { 'Content-Type': 'text/event-stream' },
   })
 }
