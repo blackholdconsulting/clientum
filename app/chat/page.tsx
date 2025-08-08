@@ -1,72 +1,45 @@
 'use client'
-import React, { useState, useRef, useEffect } from 'react'
-
-type Msg = { role: 'user' | 'assistant'; content: string }
+import { useState } from 'react'
 
 export default function ChatPage() {
-  const [ msgs, setMsgs ]     = useState<Msg[]>([])
-  const [ input, setInput ]   = useState('')
-  const [ loading, setLoading ] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const [input, setInput] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  // aquí iría tu lógica de streaming, estados de mensajes, etc.
 
-  // Auto-scroll al final
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [msgs])
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const sendMessage = async () => {
     if (!input.trim()) return
+    setError(null)
 
-    // 1) apilar mensaje usuario
-    setMsgs(all => [...all, { role: 'user', content: input }])
-    setInput('')
-    setLoading(true)
-
-    // 2) llamar a nuestro endpoint
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ question: input })
-    })
-    if (!res.ok) {
-      setMsgs(all => [...all, { role:'assistant', content: '❌ Error de red' }])
-      setLoading(false)
-      return
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: input }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setError(err.error || `Server returned ${res.status}`)
+        return
+      }
+      // Aquí va tu lógica de lectura del stream:
+      // const reader = res.body!.getReader()…
+    } catch (e: any) {
+      console.error(e)
+      setError('Error de red')
     }
-    const { answer } = await res.json()
-
-    // 3) apilar respuesta AI
-    setMsgs(all => [...all, { role:'assistant', content: answer }])
-    setLoading(false)
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Chat IA de Clientum</h1>
-      <div className="border rounded-lg h-96 overflow-y-auto p-4 bg-white">
-        {msgs.map((m,i) => (
-          <div key={i} className={m.role==='user'? 'text-right text-green-700':'text-left'}>
-            <p>{m.content}</p>
-          </div>
-        ))}
-        <div ref={scrollRef} />
-        {loading && <p className="italic text-gray-500">Clientum IA está escribiendo…</p>}
-      </div>
-      <form onSubmit={handleSubmit} className="mt-3 flex gap-2">
-        <input
-          className="flex-1 border rounded px-3 py-2"
-          placeholder="Escribe tu pregunta…"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          disabled={loading}
-        />
-        <button
-          type="submit"
-          className="bg-green-600 text-white px-4 rounded"
-          disabled={loading}
-        >Enviar</button>
-      </form>
+    <div>
+      {/* tu UI de mensajes */}
+      {error && <div style={{ color: 'red' }}>❌ {error}</div>}
+
+      <input
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        placeholder="Escribe tu pregunta…"
+      />
+      <button onClick={sendMessage}>Enviar</button>
     </div>
   )
 }
