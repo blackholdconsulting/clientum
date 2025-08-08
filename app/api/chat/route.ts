@@ -1,33 +1,34 @@
-// app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 
-// Ejecutar en Edge
 export const runtime = 'edge'
 
 export async function POST(req: NextRequest) {
-  // 1) Cliente Supabase para route handlers
+  // 1) Sesión Supabase
   const supabase = createRouteHandlerClient({ cookies })
-
-  // 2) Comprueba sesión
   const {
     data: { session },
     error: sessionError,
   } = await supabase.auth.getSession()
-
   if (sessionError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // 3) Parsear body
-  const { message }: { message: string } = await req.json()
+  // 2) Parsear JSON
+  let payload: { message?: string }
+  try {
+    payload = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+  const { message } = payload
   if (!message) {
-    return NextResponse.json({ error: 'No message provided' }, { status: 400 })
+    return NextResponse.json({ error: 'Missing "message"' }, { status: 400 })
   }
 
-  // 4) Llamada a Together AI (ejemplo)
-  const togetherRes = await fetch('https://api.together.ai/chat', {
+  // 3) Llamada a Together AI (con tu clave en env)
+  const together = await fetch('https://api.together.ai/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -39,13 +40,14 @@ export async function POST(req: NextRequest) {
       stream: true,
     }),
   })
-
-  if (!togetherRes.ok || !togetherRes.body) {
+  if (!together.ok || !together.body) {
+    const txt = await together.text().catch(() => '')
+    console.error('Together error:', together.status, txt)
     return NextResponse.json({ error: 'AI service error' }, { status: 502 })
   }
 
-  // 5) Reenvía el stream al cliente
-  return new NextResponse(togetherRes.body, {
+  // 4) Reenvía el stream SSE al cliente
+  return new NextResponse(together.body, {
     headers: { 'Content-Type': 'text/event-stream' },
   })
 }
