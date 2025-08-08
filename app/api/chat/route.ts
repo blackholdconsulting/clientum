@@ -1,14 +1,14 @@
 // app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerSupabaseClient } from '@supabase/auth-helpers-nextjs'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 
-// Fuerza que la función corra en el Edge Runtime
+// Ejecutar en Edge
 export const runtime = 'edge'
 
 export async function POST(req: NextRequest) {
-  // 1) Crea un cliente supabase para rutas (route handler)
-  const supabase = createRouteHandlerSupabaseClient({ cookies })
+  // 1) Cliente Supabase para route handlers
+  const supabase = createRouteHandlerClient({ cookies })
 
   // 2) Comprueba sesión
   const {
@@ -20,14 +20,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // 3) Lee el body
+  // 3) Parsear body
   const { message }: { message: string } = await req.json()
   if (!message) {
     return NextResponse.json({ error: 'No message provided' }, { status: 400 })
   }
 
-  // 4) Aquí llamas a TogetherAI / HuggingFace / lo que uses
-  //    Ejemplo ficticio de petición a TogetherAI
+  // 4) Llamada a Together AI (ejemplo)
   const togetherRes = await fetch('https://api.together.ai/chat', {
     method: 'POST',
     headers: {
@@ -47,10 +46,6 @@ export async function POST(req: NextRequest) {
 
   // 5) Reenvía el stream al cliente
   return new NextResponse(togetherRes.body, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      // si lo necesitas:
-      // 'Cache-Control': 'no-cache, no-transform',
-    },
+    headers: { 'Content-Type': 'text/event-stream' },
   })
 }
