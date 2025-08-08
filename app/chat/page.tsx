@@ -2,56 +2,62 @@
 
 import { useState, useRef, FormEvent } from 'react'
 
+type Msg = { role: 'user' | 'ai', text: string }
+
 export default function ChatPage() {
-  const [messages, setMessages] = useState<{ role: 'user'|'ai'; text: string }[]>([])
+  const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
-  const handleSubmit = async (e: FormEvent) => {
+  const send = async (e: FormEvent) => {
     e.preventDefault()
-    if (!input.trim()) return
+    const prompt = input.trim()
+    if (!prompt || loading) return
 
-    // Añadimos mensaje de usuario
-    setMessages(prev => [...prev, { role: 'user', text: input }])
+    setMessages(m => [...m, { role: 'user', text: prompt }, { role: 'ai', text: '' }])
     setInput('')
+    setLoading(true)
 
-    // Cancelamos cualquier stream anterior
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
 
-    // Llamada al API
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: input }),
-      signal: controller.signal,
-    })
-
-    if (!res.ok || !res.body) {
-      const err = await res.text()
-      setMessages(prev => [...prev, { role: 'ai', text: `Error: ${err}` }])
-      return
-    }
-
-    // Leemos el stream
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let aiText = ''
-
-    // Añadimos placeholder para IA
-    setMessages(prev => [...prev, { role: 'ai', text: '' }])
-
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) break
-      aiText += decoder.decode(value)
-      // Actualizamos el último mensaje AI
-      setMessages(prev => {
-        const msgs = [...prev]
-        msgs[msgs.length - 1].text = aiText
-        return msgs
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+        signal: controller.signal,
+        cache: 'no-store',
       })
+
+      if (!res.ok || !res.body) {
+        const err = await res.text().catch(() => `${res.status}`)
+        throw new Error(err)
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+
+      let aiText = ''
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        aiText += decoder.decode(value, { stream: true })
+        setMessages(prev => {
+          const copy = [...prev]
+          copy[copy.length - 1] = { role: 'ai', text: aiText }
+          return copy
+        })
+      }
+    } catch (err: any) {
+      setMessages(prev => [
+        ...prev,
+        { role: 'ai', text: `Error: ${String(err?.message || err)}` },
+      ])
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -60,27 +66,26 @@ export default function ChatPage() {
       <div className="space-y-2 mb-4">
         {messages.map((m, i) => (
           <div key={i} className={m.role === 'user' ? 'text-right' : 'text-left'}>
-            <span
-              className={`inline-block px-3 py-1 rounded-lg ${
-                m.role === 'user' ? 'bg-blue-200' : 'bg-gray-200'
-              }`}
-            >
+            <span className={`inline-block px-3 py-1 rounded-lg ${m.role === 'user' ? 'bg-blue-200' : 'bg-gray-200'}`}>
               {m.text}
             </span>
           </div>
         ))}
       </div>
 
-      <form onSubmit={handleSubmit} className="flex gap-2">
+      <form onSubmit={send} className="flex gap-2">
         <input
-          type="text"
-          className="flex-grow border rounded px-2"
-          value={input}
-          onChange={e => setInput(e.target.value)}
+          className="flex-grow border rounded px-3 py-2"
           placeholder="Escribe tu mensaje…"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          disabled={loading}
         />
-        <button type="submit" className="px-4 py-1 bg-blue-500 text-white rounded">
-          Enviar
+        <button
+          className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+          disabled={loading}
+        >
+          {loading ? 'Enviando…' : 'Enviar'}
         </button>
       </form>
     </div>
