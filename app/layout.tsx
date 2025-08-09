@@ -167,7 +167,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 </Link>
                 {/* NUEVO: IVA (Trimestral) como subíndice de Contabilidad */}
                 <Link
-                  href="/contabilidad/iva"
+                  href="/iva"
                   className={linkClass('/contabilidad/iva')}
                 >
                   📄 IVA (Trimestral)
@@ -178,7 +178,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <Link href="/chat" className={linkClass('/chat')}>
               💬 Chat IA
             </Link>
-            <Link href="/rrhh" className={linkClass('/rrhh')}>
+            <Link href="/rrhh" className={linkClass('/RRHH')}>
               👩‍💼 RRHH
             </Link>
 
