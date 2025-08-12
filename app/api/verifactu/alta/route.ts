@@ -1,4 +1,3 @@
-// app/api/verifactu/alta/route.ts
 import { NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
@@ -12,102 +11,70 @@ export async function POST(req: NextRequest) {
   const supabase = createRouteHandlerClient({ cookies })
   const { invoice } = (await req.json()) as { invoice: Invoice }
 
-  // 1) Emisor/ajustes por organización (fallback a env)
-  const { data: issuer } = await supabase
-    .from('org_issuer')
-    .select('*')
-    .eq('org_id', invoice.orgId)
-    .maybeSingle()
+  // Usuario actual
+  const { data: { session } } = await supabase.auth.getSession()
+  const userId = session?.user.id
 
-  const issuerNif = issuer?.issuer_nif ?? process.env.ISSUER_NIF!
-  const softwareId =
-    issuer?.verifactu_software_id ?? process.env.VERIFACTU_SOFTWARE_ID ?? 'CLIENTUM'
-  const mode = (issuer?.verifactu_mode ?? process.env.VERIFACTU_MODE ?? 'test') as
-    | 'test'
-    | 'prod'
-  const series =
-    invoice.series ?? issuer?.default_series ?? process.env.VERIFACTU_SERIES ?? 'GEN'
+  // 1) Preferimos org_issuer; si no existe, usamos perfil del usuario
+  let issuerNif = process.env.ISSUER_NIF || ''
+  let softwareId = process.env.VERIFACTU_SOFTWARE_ID || 'CLIENTUM'
+  let mode = (process.env.VERIFACTU_MODE ?? 'test') as 'test'|'prod'
+  let defaultSeries = process.env.VERIFACTU_SERIES ?? 'GEN'
 
-  // 2) Eslabón previo de la cadena (org+serie)
+  const { data: issuer } = await supabase.from('org_issuer').select('*').eq('org_id', invoice.orgId).maybeSingle()
+  if (issuer) {
+    issuerNif = issuer.issuer_nif || issuerNif
+    softwareId = issuer.verifactu_software_id || softwareId
+    mode = (issuer.verifactu_mode as any) || mode
+    defaultSeries = issuer.default_series || defaultSeries
+  } else {
+    // Fallback a PERFIL (por user_id), como pides
+    const { data: perfil } = await supabase.from('perfil').select('nif').eq('user_id', userId ?? invoice.orgId).maybeSingle()
+    if (perfil?.nif) issuerNif = perfil.nif
+  }
+
+  const series = invoice.series ?? defaultSeries
+
+  // 2) Eslabón previo de la cadena (org = user_id)
+  const orgKey = invoice.orgId || userId
   const { data: chain } = await supabase
     .from('verifactu_chain')
     .select('last_hash')
-    .eq('org_id', invoice.orgId)
+    .eq('org_id', orgKey)
     .eq('series', series)
     .maybeSingle()
 
   const prevHash = chain?.last_hash ?? null
 
   // 3) Hash y QR
-  const hash = calcHash(invoice, issuerNif, prevHash)
-  const qr = await buildQR(invoice, issuerNif, hash)
+  const hash = calcHash(invoice, issuerNif!, prevHash)
+  const qr = await buildQR(invoice, issuerNif!, hash)
 
   const registro = {
-    softwareId,
-    mode,
-    issuerNif,
-    orgId: invoice.orgId,
-    series,
-    invoiceNumber: invoice.number,
-    issueDate: invoice.issueDate,
-    issueTime: invoice.issueTime ?? '00:00:00',
-    total: Number(invoice.total.toFixed(2)),
-    prevHash,
-    hash,
-    qrUrl: qr.url,
+    softwareId, mode, issuerNif,
+    orgId: orgKey, series,
+    invoiceNumber: invoice.number, issueDate: invoice.issueDate, issueTime: invoice.issueTime ?? '00:00:00',
+    total: Number(invoice.total.toFixed(2)), prevHash, hash, qrUrl: qr.url
   }
 
-  // 4) (Opcional) reenviar a agregador externo
-  let forward: any = null
-  if (process.env.VERIFACTI_API_URL && process.env.VERIFACTI_API_KEY) {
-    try {
-      const res = await fetch(`${process.env.VERIFACTI_API_URL}/v1/alta`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.VERIFACTI_API_KEY}`,
-        },
-        body: JSON.stringify({ registro }),
-      })
-      forward = { ok: res.ok, status: res.status }
-    } catch (e: any) {
-      forward = { ok: false, error: String(e?.message || e) }
-    }
-  }
-
-  // 5) Guardar cadena con control de concurrencia (FIX: sin options en .select())
+  // 4) Guarda cadena (con control de concurrencia)
   if (!chain) {
-    await supabase
-      .from('verifactu_chain')
-      .insert({ org_id: invoice.orgId, series, last_hash: hash })
+    await supabase.from('verifactu_chain').insert({ org_id: orgKey, series, last_hash: hash })
   } else {
     const { data: updated, error: upderr } = await supabase
       .from('verifactu_chain')
       .update({ last_hash: hash, updated_at: new Date().toISOString() })
-      .eq('org_id', invoice.orgId)
-      .eq('series', series)
-      .eq('last_hash', prevHash)
-      .select() // ← sin segundo argumento; comprobamos longitud
-    if (upderr) {
-      return Response.json({ ok: false, error: upderr.message }, { status: 500 })
-    }
+      .eq('org_id', orgKey).eq('series', series).eq('last_hash', prevHash)
+      .select()
+    if (upderr) return Response.json({ ok:false, error: upderr.message }, { status: 500 })
     if (!updated || updated.length === 0) {
-      // nadie actualizó -> conflicto de versión (otra inserción ganó la carrera)
-      return Response.json(
-        { ok: false, conflict: true, message: 'Cadena actualizada por otra operación. Reintenta.' },
-        { status: 409 },
-      )
+      return Response.json({ ok:false, conflict:true, message:'Cadena actualizada por otra operación. Reintenta.' }, { status: 409 })
     }
   }
 
-  // 6) Log del evento
   await supabase.from('verifactu_events').insert({
-    org_id: invoice.orgId,
-    invoice_id: invoice.id,
-    kind: 'alta',
-    payload: registro,
-    response: forward,
+    org_id: orgKey, invoice_id: invoice.id, kind:'alta', payload: registro
   })
 
-  return Response.json({ ok: true, registro, qrPngDataUrl: qr.dataUrl })
+  return Response.json({ ok:true, registro, qrPngDataUrl: qr.dataUrl })
 }
