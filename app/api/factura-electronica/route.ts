@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
   return new Response(unsignedXml, {
     headers: {
-      'Content-Type':'application/xml',
+      'Content-Type': 'application/xml; charset=UTF-8',
       'X-Signed':'false',
       'Content-Disposition': `attachment; filename="${invoice.number}.xml"`
     }
