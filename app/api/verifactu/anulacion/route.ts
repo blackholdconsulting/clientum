@@ -24,15 +24,12 @@ export async function POST(req: NextRequest) {
     reason: motivo ?? 'Anulación por error'
   }
 
-  // Reenvío opcional a agregador
   let forward: any = null
-  const apiUrl = process.env.VERIFACTI_API_URL
-  const apiKey = process.env.VERIFACTI_API_KEY
-  if (apiUrl && apiKey) {
+  if (process.env.VERIFACTI_API_URL && process.env.VERIFACTI_API_KEY) {
     try {
-      const res = await fetch(`${apiUrl}/v1/anulacion`, {
+      const res = await fetch(`${process.env.VERIFACTI_API_URL}/v1/anulacion`, {
         method: 'POST',
-        headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${apiKey}` },
+        headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${process.env.VERIFACTI_API_KEY}` },
         body: JSON.stringify(payload)
       })
       forward = { ok: res.ok, status: res.status }
