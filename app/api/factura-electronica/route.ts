@@ -1,28 +1,64 @@
-import { NextRequest, NextResponse } from "next/server";
-import { buildFacturaeXML, InvoiceData } from "@/lib/facturae";
-import { signXMLFacturae } from "@/lib/xmlSigner";
-import soap from "soap";
+import { NextRequest } from 'next/server'
+import { cookies } from 'next/headers'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { buildFacturae322 } from '@/lib/facturae'
+import { Invoice, Party } from '@/lib/invoice'
+
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
-  const data = (await req.json()) as InvoiceData;
-  const xml  = buildFacturaeXML(data);
+  const supabase = createRouteHandlerClient({ cookies })
+  const { invoice } = await req.json() as { invoice: Invoice }
 
-  let signedXml: string;
-  try {
-    signedXml = signXMLFacturae(xml);
-  } catch (err: any) {
-    return NextResponse.json(
-      { success: false, error: "Error al firmar XML: " + err.message },
-      { status: 500 }
-    );
-  }
+  // Cargar emisor de la org
+  const { data: issuer } = await supabase
+    .from('org_issuer')
+    .select('*')
+    .eq('org_id', invoice.orgId)
+    .maybeSingle()
 
-  // WSDL de preproducción AEAT (ajusta si cambias de entorno)
-  const wsdlUrl =
-    "https://prewww1.aeat.es/static_files/common/internet/dep/explotacion/ws/ClienteWSAEAT_OPC.html?OPC=/static_files/common/internet/dep/aplicaciones/es/aeat/tikeV1.0/cont/ws/opciones.js";
+  const seller: Party = issuer ? {
+    name: issuer.issuer_name,
+    nif: issuer.issuer_nif,
+    address: issuer.address,
+    zip: issuer.zip,
+    city: issuer.city,
+    province: issuer.province,
+    country: issuer.country
+  } : invoice.seller
 
-  const client = await soap.createClientAsync(wsdlUrl);
-  const [res] = await client.AltaFacturaAsync({ xml: signedXml });
+  const i2: Invoice = { ...invoice, seller }  // aseguramos emisor correcto
 
-  return NextResponse.json({ success: true, response: res });
+  const unsignedXml = buildFacturae322(i2)
+
+  // Firma XAdES-BES con Chilkat
+  const chilkat = require('@chilkat/ck-node16-win64') // ajusta a tu plataforma
+  const cert = new chilkat.Cert()
+  const pfxBytes = Buffer.from(process.env.SIGN_P12_BASE64!, 'base64')
+  const ok = cert.LoadPfxData(pfxBytes, process.env.SIGN_P12_PASSWORD!)
+  if (!ok) return new Response('Certificado inválido', { status: 500 })
+
+  const gen = new chilkat.XmlDSigGen()
+  gen.SigLocation = 'fe:Facturae'
+  gen.SigLocationMod = 1
+  gen.SigNamespacePrefix = 'ds'
+  gen.SigNamespaceUri = 'http://www.w3.org/2000/09/xmldsig#'
+  gen.SignedInfoPrefixList = ''
+  gen.KeyInfoType = 'X509Data'
+  gen.X509Type = 'Certificate'
+  gen.AddSameDocRef('', 'sha256', 'EXCL_C14N', '', '')
+  gen.SetX509Cert(cert, true)
+
+  const xml = new chilkat.Xml()
+  xml.LoadXml(unsignedXml)
+  if (!gen.CreateXmlDSig(xml)) return new Response('Error firmando XML', { status: 500 })
+  const signedXml = xml.GetXml()
+
+  return new Response(signedXml, {
+    headers: {
+      'Content-Type': 'application/xml',
+      'Content-Disposition': `attachment; filename="${invoice.number}.xsig"`
+    }
+  })
 }
