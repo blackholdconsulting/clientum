@@ -14,7 +14,11 @@ import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 import type { Invoice, InvoiceItem, Party, TaxLine } from '@/lib/invoice';
 
 interface Cliente { id: string; nombre: string; nif?: string; direccion?: string; ciudad?: string; provincia?: string; cp?: string; pais?: string; }
-interface Perfil { id?: string; org_id?: string; nombre_empresa: string; nif: string; direccion: string; ciudad: string; provincia: string; cp: string; pais: string; telefono: string; email: string; web: string; }
+interface Perfil {
+  id?: string; user_id?: string;
+  nombre_empr: string; nif: string; direccion: string; ciudad: string; provincia: string; cp: string; pais: string;
+  telefono: string; email: string; web: string;
+}
 interface Cuenta { id: string; codigo: string; nombre: string; }
 interface Linea { id: number; descripcion: string; cantidad: number; precio: number; iva: number; cuentaId: string; }
 
@@ -22,13 +26,17 @@ export default function NuevaFacturaPage() {
   const supabase = createPagesBrowserClient();
   const refFactura = useRef<HTMLFormElement>(null);
 
+  // UI base
   const [origin, setOrigin] = useState('');
+  useEffect(() => { setOrigin(window.location.origin); }, []);
+
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [serie, setSerie] = useState(''); const [numero, setNumero] = useState('');
+  const [serie, setSerie] = useState('');
+  const [numero, setNumero] = useState('');
   const [clienteId, setClienteId] = useState('');
   const [tipo, setTipo] = useState<'factura'|'simplificada'>('factura');
   const [lineas, setLineas] = useState<Linea[]>([{ id: Date.now(), descripcion:'', cantidad:1, precio:0, iva:21, cuentaId:'' }]);
@@ -39,29 +47,41 @@ export default function NuevaFacturaPage() {
   const [catCuenta, setCatCuenta] = useState('');
   const [qrOpen, setQrOpen] = useState(false);
 
-  const [orgId, setOrgId] = useState<string>('');
+  // Verifactu / Facturae
+  const [orgId, setOrgId] = useState<string>('');          // = user_id
   const [verifactuQR, setVerifactuQR] = useState<string | null>(null);
   const [busyVF, setBusyVF] = useState(false);
   const [busyFAC, setBusyFAC] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
+  // Totales
   const subtotal = lineas.reduce((s, l) => s + l.cantidad * l.precio, 0);
   const ivaTotal = lineas.reduce((s, l) => s + l.cantidad * l.precio * (l.iva / 100), 0);
   const total = subtotal + ivaTotal;
 
-  useEffect(() => { setOrigin(window.location.origin); }, []);
+  // Carga inicial (lee perfil POR user_id como en /profile/page.tsx)
   useEffect(() => {
     (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setLoading(false); return; }
+      const userId = session.user.id;
+
       const { data: clientesData } = await supabase.from('clientes').select('id,nombre');
       setClientes(clientesData || []);
-      const { data: perfilData } = await supabase.from('perfil').select('id,org_id,nombre_empresa,nif,direccion,ciudad,provincia,cp,pais,telefono,email,web').single();
+
+      const { data: perfilData } = await supabase
+        .from('perfil')
+        .select('id,user_id,nombre_empr,nif,direccion,ciudad,provincia,cp,pais,telefono,email,web')
+        .eq('user_id', userId)
+        .maybeSingle();
       if (perfilData) {
-        setPerfil({ ...perfilData } as any);
-        const { data: { user } } = await supabase.auth.getUser();
-        setOrgId(perfilData.org_id || perfilData.id || user?.id || 'org-unknown');
+        setPerfil(perfilData as any);
       }
+      setOrgId(userId);
+
       const { data: cuentasData } = await supabase.from('cuentas').select('id,codigo,nombre');
       setCuentas(cuentasData || []);
+
       setLoading(false);
     })();
   }, [supabase]);
@@ -70,106 +90,165 @@ export default function NuevaFacturaPage() {
   const removeLinea = (id:number) => setLineas(ls => ls.filter(x => x.id !== id));
   const updateLinea = (id:number, f:keyof Omit<Linea,'id'>, v:any) => setLineas(ls => ls.map(x => x.id===id ? { ...x, [f]: v } : x));
 
+  // Ensambla objeto Invoice multiusuario usando PERFIL (nombre_empr, nif, etc.)
   async function assembleInvoice(insertedId?: string): Promise<Invoice> {
-    const fecha = new Date(); const issueDate = fecha.toISOString().slice(0,10); const issueTime = fecha.toTimeString().slice(0,8);
-    let buyer: Party = { name:'Cliente', nif:'', address:'', city:'', province:'', zip:'', country:'ESP' }
+    const fecha = new Date();
+    const issueDate = fecha.toISOString().slice(0,10);
+    const issueTime = fecha.toTimeString().slice(0,8);
+
+    // Buyer
+    let buyer: Party = { name:'Cliente', nif:'', address:'', city:'', province:'', zip:'', country:'ESP' };
     if (clienteId) {
-      const { data: c } = await supabase.from('clientes').select('id,nombre,nif,direccion,ciudad,provincia,cp,pais').eq('id', clienteId).maybeSingle()
-      if (c) buyer = { name:c.nombre||'Cliente', nif:(c as any).nif||'', address:(c as any).direccion||'', city:(c as any).ciudad||'', province:(c as any).provincia||'', zip:(c as any).cp||'', country:(c as any).pais||'ESP' }
+      const { data: c } = await supabase
+        .from('clientes')
+        .select('id,nombre,nif,direccion,ciudad,provincia,cp,pais')
+        .eq('id', clienteId)
+        .maybeSingle();
+      if (c) buyer = {
+        name: c.nombre || 'Cliente',
+        nif: (c as any).nif || '',
+        address: (c as any).direccion || '',
+        city: (c as any).ciudad || '',
+        province: (c as any).provincia || '',
+        zip: (c as any).cp || '',
+        country: (c as any).pais || 'ESP',
+      };
     }
+
+    // Seller desde PERFIL (coincide con tu /profile/page.tsx) :contentReference[oaicite:1]{index=1}
     const seller: Party = {
-      name: perfil?.nombre_empresa || 'Mi Empresa',
+      name: perfil?.nombre_empr || 'Mi Empresa',
       nif: perfil?.nif || '',
       address: perfil?.direccion || '',
       city: perfil?.ciudad || '',
       province: perfil?.provincia || '',
       zip: perfil?.cp || '',
       country: perfil?.pais || 'ESP',
-    }
-    const items: InvoiceItem[] = lineas.map(l => ({ description:l.descripcion, quantity:l.cantidad, unitPrice:l.precio, taxRate:l.iva }))
-    const taxMap = new Map<number, { base:number; quota:number }>()
-    lineas.forEach(l => { const b=l.cantidad*l.precio; const q=b*(l.iva/100); const p=taxMap.get(l.iva)||{base:0,quota:0}; taxMap.set(l.iva,{base:p.base+b,quota:p.quota+q}) })
-    const taxes: TaxLine[] = Array.from(taxMap.entries()).map(([rate,v]) => ({ rate, base:+v.base.toFixed(2), quota:+v.quota.toFixed(2) }))
+    };
+
+    // Items + taxes
+    const items: InvoiceItem[] = lineas.map(l => ({
+      description: l.descripcion, quantity: l.cantidad, unitPrice: l.precio, taxRate: l.iva
+    }));
+    const taxMap = new Map<number, { base:number; quota:number }>();
+    lineas.forEach(l => {
+      const base = l.cantidad * l.precio;
+      const quota = base * (l.iva/100);
+      const prev = taxMap.get(l.iva) || { base:0, quota:0 };
+      taxMap.set(l.iva, { base: prev.base + base, quota: prev.quota + quota });
+    });
+    const taxes: TaxLine[] = Array.from(taxMap.entries()).map(([rate,v]) => ({
+      rate, base:+v.base.toFixed(2), quota:+v.quota.toFixed(2)
+    }));
 
     return {
       id: insertedId || `${serie}${numero}`,
-      orgId, number: `${serie}${numero}`, series: serie || undefined,
-      issueDate, issueTime, seller, buyer, items, taxes, currency:'EUR', total:+total.toFixed(2)
-    }
+      orgId,
+      number: `${serie}${numero}`,
+      series: serie || undefined,
+      issueDate, issueTime,
+      seller, buyer, items, taxes, currency:'EUR',
+      total: +total.toFixed(2),
+    };
   }
 
+  // Guardar y Alta VERI*FACTU
   const handleGuardar = async (e:FormEvent) => {
-    e.preventDefault()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user?.id) { alert('Usuario no autenticado'); return }
+    e.preventDefault();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.id) { alert('Usuario no autenticado'); return; }
 
     const { data: inserted, error } = await supabase
       .from('facturas')
       .insert([{
-        user_id: user.id, serie, numero, cliente_id: clienteId, tipo: tipo.toUpperCase(),
+        user_id: user.id,
+        serie, numero, cliente_id: clienteId, tipo: tipo.toUpperCase(),
         lineas: lineas.map(l => ({ descripcion:l.descripcion, cantidad:l.cantidad, precio:l.precio, iva_porc:l.iva, cuenta_id:l.cuentaId })),
-        custom_fields: customFields, mensaje_final: mensajeFinal ? textoFinal : null, show_qr: showQR, categoria_id: catCuenta
-      }]).select('id').single()
-    if (error) { alert('Error guardando factura: '+error.message); return }
+        custom_fields: customFields, mensaje_final: mensajeFinal ? textoFinal : null,
+        show_qr: showQR, categoria_id: catCuenta
+      }]).select('id').single();
+    if (error) { alert('Error guardando factura: '+error.message); return; }
 
     try {
-      setBusyVF(true)
-      const invoice = await assembleInvoice(inserted?.id)
-      const r = await fetch('/api/verifactu/alta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ invoice }) })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j?.message || j?.error || 'Alta VERI*FACTU fallida')
-      setVerifactuQR(j.qrPngDataUrl || null)
-      setFlash('Registro VERI*FACTU generado ✔️')
+      setBusyVF(true);
+      const invoice = await assembleInvoice(inserted?.id);
+      const r = await fetch('/api/verifactu/alta', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ invoice })
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.message || j?.error || 'Alta VERI*FACTU fallida');
+      setVerifactuQR(j.qrPngDataUrl || null);
+      setFlash('Registro VERI*FACTU generado ✔️');
     } catch (err:any) {
-      setFlash('Error VERI*FACTU: ' + String(err?.message || err))
+      setFlash('Error VERI*FACTU: ' + String(err?.message || err));
     } finally {
-      setBusyVF(false)
+      setBusyVF(false);
     }
-    setQrOpen(true)
-  }
+    setQrOpen(true);
+  };
 
+  // Descargar Facturae (usa /api/factura-electronica)
   const descargarFacturae = async () => {
     try {
-      setBusyFAC(true)
-      const invoice = await assembleInvoice()
+      setBusyFAC(true);
+      const invoice = await assembleInvoice();
       const res = await fetch('/api/factura-electronica', {
         method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ invoice })
-      })
-      if (!res.ok) throw new Error(await res.text())
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url
-      a.download = `${invoice.number}.${(res.headers.get('X-Signed')==='false')?'xml':'xsig'}`
-      a.click(); URL.revokeObjectURL(url)
-      setFlash((res.headers.get('X-Signed')==='false') ? 'Facturae (sin firmar) descargada' : 'Facturae firmada descargada ✔️')
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url;
+      a.download = `${invoice.number}.${(res.headers.get('X-Signed')==='false') ? 'xml':'xsig'}`;
+      a.click(); URL.revokeObjectURL(url);
+      setFlash((res.headers.get('X-Signed')==='false') ? 'Facturae (sin firmar) descargada' : 'Facturae firmada descargada ✔️');
     } catch (e:any) {
-      setFlash('Error Facturae: ' + String(e?.message || e))
-    } finally {
-      setBusyFAC(false)
-    }
-  }
+      setFlash('Error Facturae: ' + String(e?.message || e));
+    } finally { setBusyFAC(false); }
+  };
 
+  // Export PDF (si tenemos QR VERI*FACTU, se usa)
   const exportPDF = async () => {
-    const doc = new jsPDF()
-    doc.setFontSize(16); doc.text(`Factura ${serie}${numero}`, 14, 20)
+    const doc = new jsPDF();
+    doc.setFontSize(16); doc.text(`Factura ${serie}${numero}`, 14, 20);
+
     if (perfil) {
-      doc.setFontSize(10)
-      doc.text([perfil.nombre_empresa, perfil.direccion, `${perfil.cp} ${perfil.ciudad} (${perfil.provincia})`, perfil.pais, `NIF/CIF: ${perfil.nif}`, `Tel: ${perfil.telefono}`, `Email: ${perfil.email}`, `Web: ${perfil.web}`], 14, 30)
+      doc.setFontSize(10);
+      doc.text([
+        perfil.nombre_empr,
+        perfil.direccion,
+        `${perfil.cp} ${perfil.ciudad} (${perfil.provincia})`,
+        perfil.pais,
+        `NIF/CIF: ${perfil.nif}`,
+        `Tel: ${perfil.telefono}`,
+        `Email: ${perfil.email}`,
+        `Web: ${perfil.web}`,
+      ], 14, 30);
     }
+
     // @ts-ignore
-    autoTable(doc, { startY: 70, head: [['Desc.','Cant.','Precio','IVA','Total','Cuenta']],
-      body: lineas.map(l => [l.descripcion, String(l.cantidad), l.precio.toFixed(2), `${l.iva}%`, (l.cantidad*l.precio*(1+l.iva/100)).toFixed(2), cuentas.find(c=>c.id===l.cuentaId)?.codigo || '' ]) })
-    const finalY = (doc as any).lastAutoTable.finalY || 100
-    doc.setFontSize(10)
-    doc.text(`Subtotal: ${subtotal.toFixed(2)} €`, 140, finalY+10, { align:'right' })
-    doc.text(`IVA: ${ivaTotal.toFixed(2)} €`, 140, finalY+16, { align:'right' })
-    doc.setFontSize(12); doc.text(`Total: ${total.toFixed(2)} €`, 140, finalY+24, { align:'right' })
+    autoTable(doc, {
+      startY: 70,
+      head: [['Desc.','Cant.','Precio','IVA','Total','Cuenta']],
+      body: lineas.map(l => [
+        l.descripcion, String(l.cantidad), l.precio.toFixed(2), `${l.iva}%`,
+        (l.cantidad*l.precio*(1+l.iva/100)).toFixed(2),
+        cuentas.find(c=>c.id===l.cuentaId)?.codigo || ''
+      ]),
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY || 100;
+    doc.setFontSize(10);
+    doc.text(`Subtotal: ${subtotal.toFixed(2)} €`, 140, finalY+10, { align:'right' });
+    doc.text(`IVA: ${ivaTotal.toFixed(2)} €`, 140, finalY+16, { align:'right' });
+    doc.setFontSize(12); doc.text(`Total: ${total.toFixed(2)} €`, 140, finalY+24, { align:'right' });
+
     if (showQR && origin) {
-      const imgData = verifactuQR ? verifactuQR : await toDataURL(`${origin}/facturas/${serie}${numero}`)
-      doc.addImage(imgData, 'PNG', 14, finalY+32, 40, 40)
+      const imgData = verifactuQR ? verifactuQR : await toDataURL(`${origin}/facturas/${serie}${numero}`);
+      doc.addImage(imgData, 'PNG', 14, finalY+32, 40, 40);
     }
-    doc.save(`factura-${serie}${numero}.pdf`)
-  }
+    doc.save(`factura-${serie}${numero}.pdf`);
+  };
 
   if (loading) return <div className="p-6">Cargando datos…</div>;
 
@@ -235,7 +314,8 @@ export default function NuevaFacturaPage() {
           <div className="flex gap-2">
             <button type="submit" disabled={busyVF} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">{busyVF ? 'Guardando…' : 'Guardar Factura'}</button>
             <button type="button" onClick={exportPDF} className="px-4 py-2 bg-gray-200 rounded">Exportar PDF</button>
-            <button type="button" onClick={descargarFacturae} disabled={busyFAC} className="px-4 py-2 bg-emerald-600 text-white rounded disabled:opacity-50">
+            <button type="button" onClick={descar
+garFacturae} disabled={busyFAC} className="px-4 py-2 bg-emerald-600 text-white rounded disabled:opacity-50">
               {busyFAC ? 'Firmando…' : 'Descargar Facturae'}
             </button>
           </div>
@@ -257,5 +337,5 @@ export default function NuevaFacturaPage() {
         </Dialog>
       </Transition>
     </div>
-  )
+  );
 }
