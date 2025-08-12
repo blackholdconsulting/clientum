@@ -14,11 +14,7 @@ import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 import type { Invoice, InvoiceItem, Party, TaxLine } from '@/lib/invoice';
 
 interface Cliente { id: string; nombre: string; nif?: string; direccion?: string; ciudad?: string; provincia?: string; cp?: string; pais?: string; }
-interface Perfil {
-  id?: string; user_id?: string;
-  nombre_empr: string; nif: string; direccion: string; ciudad: string; provincia: string; cp: string; pais: string;
-  telefono: string; email: string; web: string;
-}
+interface Perfil { id?: string; user_id?: string; nombre_empr: string; nif: string; direccion: string; ciudad: string; provincia: string; cp: string; pais: string; telefono: string; email: string; web: string; }
 interface Cuenta { id: string; codigo: string; nombre: string; }
 interface Linea { id: number; descripcion: string; cantidad: number; precio: number; iva: number; cuentaId: string; }
 
@@ -26,17 +22,15 @@ export default function NuevaFacturaPage() {
   const supabase = createPagesBrowserClient();
   const refFactura = useRef<HTMLFormElement>(null);
 
-  // UI base
-  const [origin, setOrigin] = useState('');
-  useEffect(() => { setOrigin(window.location.origin); }, []);
-
+  // base UI
+  const [origin, setOrigin] = useState(''); useEffect(() => { setOrigin(window.location.origin); }, []);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [serie, setSerie] = useState('');
-  const [numero, setNumero] = useState('');
+  // datos factura
+  const [serie, setSerie] = useState(''); const [numero, setNumero] = useState('');
   const [clienteId, setClienteId] = useState('');
   const [tipo, setTipo] = useState<'factura'|'simplificada'>('factura');
   const [lineas, setLineas] = useState<Linea[]>([{ id: Date.now(), descripcion:'', cantidad:1, precio:0, iva:21, cuentaId:'' }]);
@@ -47,24 +41,24 @@ export default function NuevaFacturaPage() {
   const [catCuenta, setCatCuenta] = useState('');
   const [qrOpen, setQrOpen] = useState(false);
 
-  // Verifactu / Facturae
-  const [orgId, setOrgId] = useState<string>('');          // = user_id
+  // verifactu/facturae
+  const [orgId, setOrgId] = useState<string>('');      // = user_id (multiusuario)
   const [verifactuQR, setVerifactuQR] = useState<string | null>(null);
   const [busyVF, setBusyVF] = useState(false);
   const [busyFAC, setBusyFAC] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
-  // Totales
+  // totales
   const subtotal = lineas.reduce((s, l) => s + l.cantidad * l.precio, 0);
   const ivaTotal = lineas.reduce((s, l) => s + l.cantidad * l.precio * (l.iva / 100), 0);
   const total = subtotal + ivaTotal;
 
-  // Carga inicial (lee perfil POR user_id como en /profile/page.tsx)
+  // carga inicial (perfil por user_id como en /profile/page.tsx)
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setLoading(false); return; }
-      const userId = session.user.id;
+      const uid = session?.user.id;
+      if (!uid) { setLoading(false); return; }
 
       const { data: clientesData } = await supabase.from('clientes').select('id,nombre');
       setClientes(clientesData || []);
@@ -72,38 +66,31 @@ export default function NuevaFacturaPage() {
       const { data: perfilData } = await supabase
         .from('perfil')
         .select('id,user_id,nombre_empr,nif,direccion,ciudad,provincia,cp,pais,telefono,email,web')
-        .eq('user_id', userId)
+        .eq('user_id', uid)
         .maybeSingle();
-      if (perfilData) {
-        setPerfil(perfilData as any);
-      }
-      setOrgId(userId);
+      if (perfilData) setPerfil(perfilData as any);
+      setOrgId(uid);
 
       const { data: cuentasData } = await supabase.from('cuentas').select('id,codigo,nombre');
       setCuentas(cuentasData || []);
-
       setLoading(false);
     })();
   }, [supabase]);
 
+  // helpers líneas
   const addLinea = () => setLineas(ls => [...ls, { id: Date.now(), descripcion:'', cantidad:1, precio:0, iva:21, cuentaId:'' }]);
   const removeLinea = (id:number) => setLineas(ls => ls.filter(x => x.id !== id));
   const updateLinea = (id:number, f:keyof Omit<Linea,'id'>, v:any) => setLineas(ls => ls.map(x => x.id===id ? { ...x, [f]: v } : x));
 
-  // Ensambla objeto Invoice multiusuario usando PERFIL (nombre_empr, nif, etc.)
+  // ensamblar objeto Invoice multiusuario (emisor desde PERFIL)
   async function assembleInvoice(insertedId?: string): Promise<Invoice> {
-    const fecha = new Date();
-    const issueDate = fecha.toISOString().slice(0,10);
-    const issueTime = fecha.toTimeString().slice(0,8);
+    const now = new Date();
+    const issueDate = now.toISOString().slice(0,10);
+    const issueTime = now.toTimeString().slice(0,8);
 
-    // Buyer
     let buyer: Party = { name:'Cliente', nif:'', address:'', city:'', province:'', zip:'', country:'ESP' };
     if (clienteId) {
-      const { data: c } = await supabase
-        .from('clientes')
-        .select('id,nombre,nif,direccion,ciudad,provincia,cp,pais')
-        .eq('id', clienteId)
-        .maybeSingle();
+      const { data: c } = await supabase.from('clientes').select('id,nombre,nif,direccion,ciudad,provincia,cp,pais').eq('id', clienteId).maybeSingle();
       if (c) buyer = {
         name: c.nombre || 'Cliente',
         nif: (c as any).nif || '',
@@ -115,7 +102,6 @@ export default function NuevaFacturaPage() {
       };
     }
 
-    // Seller desde PERFIL (coincide con tu /profile/page.tsx) :contentReference[oaicite:1]{index=1}
     const seller: Party = {
       name: perfil?.nombre_empr || 'Mi Empresa',
       nif: perfil?.nif || '',
@@ -126,10 +112,7 @@ export default function NuevaFacturaPage() {
       country: perfil?.pais || 'ESP',
     };
 
-    // Items + taxes
-    const items: InvoiceItem[] = lineas.map(l => ({
-      description: l.descripcion, quantity: l.cantidad, unitPrice: l.precio, taxRate: l.iva
-    }));
+    const items: InvoiceItem[] = lineas.map(l => ({ description:l.descripcion, quantity:l.cantidad, unitPrice:l.precio, taxRate:l.iva }));
     const taxMap = new Map<number, { base:number; quota:number }>();
     lineas.forEach(l => {
       const base = l.cantidad * l.precio;
@@ -137,9 +120,7 @@ export default function NuevaFacturaPage() {
       const prev = taxMap.get(l.iva) || { base:0, quota:0 };
       taxMap.set(l.iva, { base: prev.base + base, quota: prev.quota + quota });
     });
-    const taxes: TaxLine[] = Array.from(taxMap.entries()).map(([rate,v]) => ({
-      rate, base:+v.base.toFixed(2), quota:+v.quota.toFixed(2)
-    }));
+    const taxes: TaxLine[] = Array.from(taxMap.entries()).map(([rate,v]) => ({ rate, base:+v.base.toFixed(2), quota:+v.quota.toFixed(2) }));
 
     return {
       id: insertedId || `${serie}${numero}`,
@@ -152,7 +133,7 @@ export default function NuevaFacturaPage() {
     };
   }
 
-  // Guardar y Alta VERI*FACTU
+  // guardar y alta VERI*FACTU
   const handleGuardar = async (e:FormEvent) => {
     e.preventDefault();
     const { data: { user } } = await supabase.auth.getUser();
@@ -164,42 +145,42 @@ export default function NuevaFacturaPage() {
         user_id: user.id,
         serie, numero, cliente_id: clienteId, tipo: tipo.toUpperCase(),
         lineas: lineas.map(l => ({ descripcion:l.descripcion, cantidad:l.cantidad, precio:l.precio, iva_porc:l.iva, cuenta_id:l.cuentaId })),
-        custom_fields: customFields, mensaje_final: mensajeFinal ? textoFinal : null,
-        show_qr: showQR, categoria_id: catCuenta
+        custom_fields: customFields,
+        mensaje_final: mensajeFinal ? textoFinal : null,
+        show_qr: showQR,
+        categoria_id: catCuenta
       }]).select('id').single();
-    if (error) { alert('Error guardando factura: '+error.message); return; }
+    if (error) { alert('Error guardando factura: ' + error.message); return; }
 
     try {
       setBusyVF(true);
       const invoice = await assembleInvoice(inserted?.id);
-      const r = await fetch('/api/verifactu/alta', {
-        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ invoice })
-      });
+      const r = await fetch('/api/verifactu/alta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ invoice }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.message || j?.error || 'Alta VERI*FACTU fallida');
       setVerifactuQR(j.qrPngDataUrl || null);
       setFlash('Registro VERI*FACTU generado ✔️');
     } catch (err:any) {
       setFlash('Error VERI*FACTU: ' + String(err?.message || err));
-    } finally {
-      setBusyVF(false);
-    }
+    } finally { setBusyVF(false); }
     setQrOpen(true);
   };
 
-  // Descargar Facturae (usa /api/factura-electronica)
+  // descargar facturae (endpoint sin dependencias nativas)
   const descargarFacturae = async () => {
     try {
       setBusyFAC(true);
       const invoice = await assembleInvoice();
       const res = await fetch('/api/factura-electronica', {
-        method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ invoice })
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ invoice })
       });
       if (!res.ok) throw new Error(await res.text());
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url;
-      a.download = `${invoice.number}.${(res.headers.get('X-Signed')==='false') ? 'xml':'xsig'}`;
+      a.download = `${invoice.number}.${(res.headers.get('X-Signed')==='false')?'xml':'xsig'}`;
       a.click(); URL.revokeObjectURL(url);
       setFlash((res.headers.get('X-Signed')==='false') ? 'Facturae (sin firmar) descargada' : 'Facturae firmada descargada ✔️');
     } catch (e:any) {
@@ -207,7 +188,7 @@ export default function NuevaFacturaPage() {
     } finally { setBusyFAC(false); }
   };
 
-  // Export PDF (si tenemos QR VERI*FACTU, se usa)
+  // export PDF (usa QR oficial si existe)
   const exportPDF = async () => {
     const doc = new jsPDF();
     doc.setFontSize(16); doc.text(`Factura ${serie}${numero}`, 14, 20);
@@ -231,7 +212,10 @@ export default function NuevaFacturaPage() {
       startY: 70,
       head: [['Desc.','Cant.','Precio','IVA','Total','Cuenta']],
       body: lineas.map(l => [
-        l.descripcion, String(l.cantidad), l.precio.toFixed(2), `${l.iva}%`,
+        l.descripcion,
+        String(l.cantidad),
+        l.precio.toFixed(2),
+        `${l.iva}%`,
         (l.cantidad*l.precio*(1+l.iva/100)).toFixed(2),
         cuentas.find(c=>c.id===l.cuentaId)?.codigo || ''
       ]),
@@ -241,12 +225,14 @@ export default function NuevaFacturaPage() {
     doc.setFontSize(10);
     doc.text(`Subtotal: ${subtotal.toFixed(2)} €`, 140, finalY+10, { align:'right' });
     doc.text(`IVA: ${ivaTotal.toFixed(2)} €`, 140, finalY+16, { align:'right' });
-    doc.setFontSize(12); doc.text(`Total: ${total.toFixed(2)} €`, 140, finalY+24, { align:'right' });
+    doc.setFontSize(12);
+    doc.text(`Total: ${total.toFixed(2)} €`, 140, finalY+24, { align:'right' });
 
     if (showQR && origin) {
       const imgData = verifactuQR ? verifactuQR : await toDataURL(`${origin}/facturas/${serie}${numero}`);
       doc.addImage(imgData, 'PNG', 14, finalY+32, 40, 40);
     }
+
     doc.save(`factura-${serie}${numero}.pdf`);
   };
 
@@ -261,8 +247,8 @@ export default function NuevaFacturaPage() {
 
       <form onSubmit={handleGuardar} ref={refFactura} className="bg-white p-6 rounded shadow space-y-6">
         <div className="flex gap-4">
-          <input type="text" placeholder="Serie" value={serie} onChange={e=>setSerie(e.target.value)} className="border rounded p-2 flex-1"/>
-          <input type="text" placeholder="Número" value={numero} onChange={e=>setNumero(e.target.value)} className="border rounded p-2 flex-1"/>
+          <input type="text" placeholder="Serie" value={serie} onChange={e=>setSerie(e.target.value)} className="border rounded p-2 flex-1" />
+          <input type="text" placeholder="Número" value={numero} onChange={e=>setNumero(e.target.value)} className="border rounded p-2 flex-1" />
         </div>
 
         <div className="flex gap-4">
@@ -278,9 +264,9 @@ export default function NuevaFacturaPage() {
 
         {lineas.map(l => (
           <div key={l.id} className="grid grid-cols-6 gap-2 items-end">
-            <input type="text" placeholder="Descripción" value={l.descripcion} onChange={e=>updateLinea(l.id,'descripcion',e.target.value)} className="col-span-2 border rounded p-2"/>
-            <input type="number" placeholder="Cant." value={l.cantidad} onChange={e=>updateLinea(l.id,'cantidad',Number(e.target.value))} className="border rounded p-2"/>
-            <input type="number" placeholder="Precio" value={l.precio} onChange={e=>updateLinea(l.id,'precio',Number(e.target.value))} className="border rounded p-2"/>
+            <input type="text" placeholder="Descripción" value={l.descripcion} onChange={e=>updateLinea(l.id,'descripcion',e.target.value)} className="col-span-2 border rounded p-2" />
+            <input type="number" placeholder="Cant." value={l.cantidad} onChange={e=>updateLinea(l.id,'cantidad',Number(e.target.value))} className="border rounded p-2" />
+            <input type="number" placeholder="Precio" value={l.precio} onChange={e=>updateLinea(l.id,'precio',Number(e.target.value))} className="border rounded p-2" />
             <select value={l.iva} onChange={e=>updateLinea(l.id,'iva',Number(e.target.value))} className="border rounded p-2">
               {[4,10,21].map(t => <option key={t} value={t}>{t}%</option>)}
             </select>
@@ -314,8 +300,8 @@ export default function NuevaFacturaPage() {
           <div className="flex gap-2">
             <button type="submit" disabled={busyVF} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">{busyVF ? 'Guardando…' : 'Guardar Factura'}</button>
             <button type="button" onClick={exportPDF} className="px-4 py-2 bg-gray-200 rounded">Exportar PDF</button>
-            <button type="button" onClick={descar
-garFacturae} disabled={busyFAC} className="px-4 py-2 bg-emerald-600 text-white rounded disabled:opacity-50">
+            {/* 👇 OJO: nombre correcto SIN cortes de línea */}
+            <button type="button" onClick={descargarFacturae} disabled={busyFAC} className="px-4 py-2 bg-emerald-600 text-white rounded disabled:opacity-50">
               {busyFAC ? 'Firmando…' : 'Descargar Facturae'}
             </button>
           </div>
@@ -330,7 +316,7 @@ garFacturae} disabled={busyFAC} className="px-4 py-2 bg-emerald-600 text-white r
           <Transition.Child as={Fragment} enter="transition-transform duration-200" enterFrom="scale-95" enterTo="scale-100">
             <div className="bg-white p-6 rounded shadow text-center">
               <Dialog.Title className="text-lg font-semibold mb-4">{verifactuQR ? 'QR VERI*FACTU' : 'Acceso a tu factura'}</Dialog.Title>
-              {verifactuQR ? <img src={verifactuQR} alt="QR Verifactu" className="mx-auto"/> : (origin && <ReactQRCode value={`${origin}/facturas/${serie}${numero}`} />)}
+              {verifactuQR ? <img src={verifactuQR} alt="QR Verifactu" className="mx-auto" /> : (origin && <ReactQRCode value={`${origin}/facturas/${serie}${numero}`} />)}
               <button onClick={()=>setQrOpen(false)} className="mt-4 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cerrar</button>
             </div>
           </Transition.Child>
