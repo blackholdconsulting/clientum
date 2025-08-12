@@ -1,64 +1,42 @@
+// app/api/factura-electronica/route.ts
 import { NextRequest } from 'next/server'
-import { cookies } from 'next/headers'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { buildFacturae322 } from '@/lib/facturae'
-import { Invoice, Party } from '@/lib/invoice'
+import { Invoice } from '@/lib/invoice'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
-  const supabase = createRouteHandlerClient({ cookies })
   const { invoice } = await req.json() as { invoice: Invoice }
+  const unsignedXml = buildFacturae322(invoice)
 
-  // Cargar emisor de la org
-  const { data: issuer } = await supabase
-    .from('org_issuer')
-    .select('*')
-    .eq('org_id', invoice.orgId)
-    .maybeSingle()
+  // Si defines un firmador externo (SIGNER_MODE=api + SIGNER_API_URL),
+  // enviamos el XML para que te devuelva el XAdES (.xsig)
+  if ((process.env.SIGNER_MODE ?? 'none') === 'api' && process.env.SIGNER_API_URL) {
+    const r = await fetch(process.env.SIGNER_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/xml' },
+      body: unsignedXml,
+    })
+    if (!r.ok) {
+      const t = await r.text().catch(()=> '')
+      return new Response(`Signer API error: ${t || r.statusText}`, { status: 502 })
+    }
+    const xsig = await r.text()
+    return new Response(xsig, {
+      headers: {
+        'Content-Type':'application/xml',
+        'Content-Disposition': `attachment; filename="${invoice.number}.xsig"`
+      }
+    })
+  }
 
-  const seller: Party = issuer ? {
-    name: issuer.issuer_name,
-    nif: issuer.issuer_nif,
-    address: issuer.address,
-    zip: issuer.zip,
-    city: issuer.city,
-    province: issuer.province,
-    country: issuer.country
-  } : invoice.seller
-
-  const i2: Invoice = { ...invoice, seller }  // aseguramos emisor correcto
-
-  const unsignedXml = buildFacturae322(i2)
-
-  // Firma XAdES-BES con Chilkat
-  const chilkat = require('@chilkat/ck-node16-win64') // ajusta a tu plataforma
-  const cert = new chilkat.Cert()
-  const pfxBytes = Buffer.from(process.env.SIGN_P12_BASE64!, 'base64')
-  const ok = cert.LoadPfxData(pfxBytes, process.env.SIGN_P12_PASSWORD!)
-  if (!ok) return new Response('Certificado inválido', { status: 500 })
-
-  const gen = new chilkat.XmlDSigGen()
-  gen.SigLocation = 'fe:Facturae'
-  gen.SigLocationMod = 1
-  gen.SigNamespacePrefix = 'ds'
-  gen.SigNamespaceUri = 'http://www.w3.org/2000/09/xmldsig#'
-  gen.SignedInfoPrefixList = ''
-  gen.KeyInfoType = 'X509Data'
-  gen.X509Type = 'Certificate'
-  gen.AddSameDocRef('', 'sha256', 'EXCL_C14N', '', '')
-  gen.SetX509Cert(cert, true)
-
-  const xml = new chilkat.Xml()
-  xml.LoadXml(unsignedXml)
-  if (!gen.CreateXmlDSig(xml)) return new Response('Error firmando XML', { status: 500 })
-  const signedXml = xml.GetXml()
-
-  return new Response(signedXml, {
+  // Por defecto: devolvemos XML sin firmar (compila y te sirve para validar XSD).
+  return new Response(unsignedXml, {
     headers: {
       'Content-Type': 'application/xml',
-      'Content-Disposition': `attachment; filename="${invoice.number}.xsig"`
+      'X-Signed': 'false',
+      'Content-Disposition': `attachment; filename="${invoice.number}.xml"`
     }
   })
 }
