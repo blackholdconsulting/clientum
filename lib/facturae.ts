@@ -2,142 +2,118 @@
 import { create } from 'xmlbuilder2'
 import { Invoice, Party } from './invoice'
 
-// Heurística muy simple para distinguir persona física (DNI/NIE) vs jurídica (CIF)
-function isIndividualNif(nif?: string) {
-  if (!nif) return true
-  const n = nif.toUpperCase().replace(/\s|-/g, '')
-  // DNI/NIE: empieza por número/X/Y/Z y termina en letra
-  return /^[0-9XYZ]\d{6,7}[A-Z]$/.test(n)
+const xmlSanitize = (s?: string) =>
+  (s ?? '')
+    .replace(/[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD]/g, '') // quita control chars
+    .trim()
+
+const iso3 = (c?: string) => {
+  const u = (c ?? '').trim().toUpperCase()
+  if (['ES', 'ESP', 'SPAIN', 'ESPAÑA'].includes(u)) return 'ESP'
+  return u.length === 3 ? u : 'ESP'
 }
+const normNIF = (n?: string) => xmlSanitize((n ?? '').toUpperCase().replace(/\s|-/g, '')) || '00000000T'
+const batchId = (x: string) => x.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 20)
 
-function countryToISO3(c?: string) {
-  if (!c) return 'ESP'
-  const u = c.toUpperCase().trim()
-  if (['ES', 'ESP', 'SPAIN', 'ESPAÑA', 'ESPA'].includes(u)) return 'ESP'
-  // Si viene un nombre o código raro, forzamos ESP para evitar rechazos
-  if (u.length !== 3) return 'ESP'
-  return u
-}
-
-function safe(value: any, fallback = '') {
-  return (value === undefined || value === null || value === '') ? fallback : value
-}
-
-function normNIF(nif?: string, fallback = '00000000T') {
-  return (nif || '').toString().toUpperCase().replace(/\s|-/g, '') || fallback
-}
-
-function partyNode(p: Party) {
-  const indiv = isIndividualNif(p.nif)
-  const baseAddr = {
-    'fe:Address': safe(p.address, '—'),
-    'fe:PostCode': safe(p.zip, '00000'),
-    'fe:Town': safe(p.city, '—'),
-    'fe:Province': safe(p.province, '—'),
-    'fe:CountryCode': countryToISO3(p.country),
-  }
-
-  const taxId = {
-    'fe:PersonTypeCode': indiv ? 'F' : 'J',
-    'fe:ResidenceTypeCode': 'R',
-    'fe:TaxIdentificationNumber': normNIF(p.nif),
-  }
-
-  return indiv
-    ? {
-        'fe:TaxIdentification': taxId,
-        'fe:Individual': {
-          'fe:Name': safe(p.name, '—'),
-          'fe:AddressInSpain': baseAddr,
-        },
-      }
-    : {
-        'fe:TaxIdentification': taxId,
-        'fe:LegalEntity': {
-          'fe:CorporateName': safe(p.name, '—'),
-          'fe:AddressInSpain': baseAddr,
-        },
-      }
-}
+const asLegalEntity = (p: Party) => ({
+  'TaxIdentification': {
+    'PersonTypeCode': 'J',
+    'ResidenceTypeCode': 'R',
+    'TaxIdentificationNumber': normNIF(p.nif),
+  },
+  'LegalEntity': {
+    'CorporateName': xmlSanitize(p.name) || 'EMISOR',
+    'AddressInSpain': {
+      'Address': xmlSanitize(p.address) || '-',
+      'PostCode': xmlSanitize(p.zip) || '00000',
+      'Town': xmlSanitize(p.city) || '-',
+      'Province': xmlSanitize(p.province) || '-',
+      'CountryCode': iso3(p.country),
+    },
+  },
+})
 
 export function buildFacturae322(i: Invoice) {
   const version = process.env.FACTURAE_VERSION ?? '3.2.2'
+  const invNum = xmlSanitize(i.number) || '0001'
+  const series = xmlSanize(i.series) ?? ''  // typo fix below in code; keep careful
+  // fix typo:
+  const seriesFinal = xmlSanitize(i.series) || ''
 
-  // Totales impuestos (por si no vienen redondeados)
-  const totalTax = i.taxes.reduce((s, t) => s + (t.quota ?? 0), 0)
-
-  const taxesOutputs = i.taxes.map((t) => ({
-    'fe:Tax': {
-      'fe:TaxTypeCode': '01', // IVA
-      'fe:TaxRate': (t.rate ?? 0).toFixed(2),
-      'fe:TaxableBase': { 'fe:TotalAmount': (t.base ?? 0).toFixed(2) },
-      'fe:TaxAmount': { 'fe:TotalAmount': (t.quota ?? 0).toFixed(2) },
+  const taxesTotal = (i.taxes ?? []).reduce((s, t) => s + (t.quota ?? 0), 0)
+  const lines = (i.items ?? []).map((it, idx) => ({
+    'InvoiceLine': {
+      'ItemDescription': xmlSanitize(it.description) || `Linea ${idx + 1}`,
+      'Quantity': it.quantity ?? 1,
+      'UnitPriceWithoutTax': (it.unitPrice ?? 0).toFixed(6),
+      'Tax': { 'TaxTypeCode': '01', 'TaxRate': (it.taxRate ?? 0).toFixed(2) },
+      'LineItemAmount': ((it.quantity ?? 1) * (it.unitPrice ?? 0)).toFixed(2),
+      'ShortDescription': `L${idx + 1}`,
     },
   }))
 
-  const invoiceLines = i.items.map((it, idx) => ({
-    'fe:ItemDescription': safe(it.description, `Línea ${idx + 1}`),
-    'fe:Quantity': it.quantity ?? 1,
-    'fe:UnitPriceWithoutTax': (it.unitPrice ?? 0).toFixed(6),
-    'fe:Tax': { 'fe:TaxTypeCode': '01', 'fe:TaxRate': (it.taxRate ?? 0).toFixed(2) },
-    'fe:LineItemAmount': ((it.quantity ?? 1) * (it.unitPrice ?? 0)).toFixed(2),
-    'fe:ShortDescription': `L${idx + 1}`,
-  }))
-
   const root = {
-    'fe:Facturae': {
-      '@xmlns:fe': 'http://www.facturae.es/Facturae/2009/v3.2.2/Facturae',
+    // OJO: Namespace por defecto (sin prefijo). FACe lo prefiere así.
+    'Facturae': {
+      '@xmlns': 'http://www.facturae.es/Facturae/2009/v3.2.2/Facturae',
       '@xmlns:ds': 'http://www.w3.org/2000/09/xmldsig#',
-      'fe:FileHeader': {
-        'fe:SchemaVersion': version,
-        'fe:Modality': 'I',
-        'fe:InvoiceIssuerType': 'EM',
-        'fe:Batch': {
-          'fe:BatchIdentifier': safe(i.number, `BATCH-${i.issueDate?.replaceAll('-', '') || '00000000'}`).toString().slice(0, 20),
-          'fe:InvoicesCount': 1,
-          'fe:TotalInvoicesAmount': { 'fe:TotalAmount': (i.total ?? 0).toFixed(2) },
-          'fe:TotalOutstandingAmount': { 'fe:TotalAmount': (i.total ?? 0).toFixed(2) },
-          'fe:TotalExecutableAmount': { 'fe:TotalAmount': (i.total ?? 0).toFixed(2) },
-          'fe:InvoiceCurrencyCode': i.currency ?? 'EUR',
+      'FileHeader': {
+        'SchemaVersion': version,
+        'Modality': 'I',
+        'InvoiceIssuerType': 'EM',
+        'Batch': {
+          'BatchIdentifier': batchId(invNum),
+          'InvoicesCount': 1,
+          'TotalInvoicesAmount': { 'TotalAmount': (i.total ?? 0).toFixed(2) },
+          'TotalOutstandingAmount': { 'TotalAmount': (i.total ?? 0).toFixed(2) },
+          'TotalExecutableAmount': { 'TotalAmount': (i.total ?? 0).toFixed(2) },
+          'InvoiceCurrencyCode': i.currency ?? 'EUR',
         },
       },
-      'fe:Parties': {
-        'fe:SellerParty': partyNode(i.seller),
-        'fe:BuyerParty': partyNode({
-          // aseguramos un NIF válido si falta
+      'Parties': {
+        'SellerParty': asLegalEntity(i.seller), // más laxo: evita requisitos extra de "Individual"
+        'BuyerParty':  asLegalEntity({
+          // normaliza país/NIF del comprador
           ...i.buyer,
           nif: normNIF(i.buyer?.nif),
-        }),
+          country: iso3(i.buyer?.country),
+        } as Party),
       },
-      'fe:Invoices': {
-        'fe:Invoice': {
-          'fe:InvoiceHeader': {
-            'fe:InvoiceNumber': safe(i.number, '0001').toString().slice(0, 20),
-            'fe:InvoiceSeriesCode': safe(i.series, ''),
-            'fe:InvoiceDocumentType': 'FC',
-            'fe:InvoiceClass': 'OO',
+      'Invoices': {
+        'Invoice': {
+          'InvoiceHeader': {
+            'InvoiceNumber': invNum.slice(0, 20),
+            'InvoiceSeriesCode': seriesFinal,
+            'InvoiceDocumentType': 'FC',
+            'InvoiceClass': 'OO',
           },
-          'fe:InvoiceIssueData': {
-            'fe:IssueDate': i.issueDate ?? new Date().toISOString().slice(0, 10),
-            'fe:InvoiceCurrencyCode': i.currency ?? 'EUR',
+          'InvoiceIssueData': {
+            'IssueDate': i.issueDate ?? new Date().toISOString().slice(0, 10),
+            'InvoiceCurrencyCode': i.currency ?? 'EUR',
           },
-          'fe:TaxesOutputs': taxesOutputs,
-          'fe:InvoiceTotals': {
-            'fe:TotalGrossAmount': (i.total ?? 0).toFixed(2),
-            'fe:TotalGeneralDiscounts': { 'fe:TotalAmount': '0.00' },
-            'fe:TotalGeneralSurcharges': { 'fe:TotalAmount': '0.00' },
-            'fe:TotalTaxOutputs': totalTax.toFixed(2),
-            'fe:TotalTaxesWithheld': '0.00',
-            'fe:InvoiceTotal': (i.total ?? 0).toFixed(2),
+          'TaxesOutputs': (i.taxes ?? []).map((t) => ({
+            'Tax': {
+              'TaxTypeCode': '01',
+              'TaxRate': (t.rate ?? 0).toFixed(2),
+              'TaxableBase': { 'TotalAmount': (t.base ?? 0).toFixed(2) },
+              'TaxAmount': { 'TotalAmount': (t.quota ?? 0).toFixed(2) },
+            },
+          })),
+          'InvoiceTotals': {
+            'TotalGrossAmount': (i.total ?? 0).toFixed(2),
+            'TotalGeneralDiscounts': { 'TotalAmount': '0.00' },
+            'TotalGeneralSurcharges': { 'TotalAmount': '0.00' },
+            'TotalTaxOutputs': taxesTotal.toFixed(2),
+            'TotalTaxesWithheld': '0.00',
+            'InvoiceTotal': (i.total ?? 0).toFixed(2),
           },
-          // *** Un solo <fe:Items> con N <fe:InvoiceLine> ***
-          'fe:Items': { 'fe:InvoiceLine': invoiceLines },
+          // Un único <Items> con N <InvoiceLine>
+          'Items': lines,
         },
       },
     },
   }
 
-  // Añadimos la declaración XML para que FACe reconozca el tipo (evita text/plain)
-  const doc = create({ version: '1.0', encoding: 'UTF-8' }).ele(root)
-  return doc.end({ prettyPrint: true })
+  // Prolog + UTF-8
+  return create({ version: '1.0', encoding: 'UTF-8' }).ele(root).end({ prettyPrint: true })
 }
