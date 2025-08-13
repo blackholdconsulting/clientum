@@ -178,23 +178,41 @@ export default function NuevaFacturaPage() {
     setQrOpen(true);
   };
 
-  // ===== Descargar Facturae =====
+  // ===== Descargar Facturae (punto 3 aplicado) =====
   const descargarFacturae = async () => {
     try {
       setBusyFAC(true);
       const invoice = await assembleInvoice();
       const res = await fetch('/api/factura-electronica', {
-        method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ invoice })
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ invoice })
       });
-      if (!res.ok) throw new Error(await res.text());
-      const blob = await res.blob(); const url = URL.createObjectURL(blob);
+
+      // Leemos como texto para poder verificar contenido
+      const contentType = res.headers.get('content-type') || '';
+      const text = await res.text();
+
+      // Si el backend devolvió HTML/errores, lo detectamos antes de descargar
+      if (!contentType.includes('xml') || !text.includes('<Facturae')) {
+        setFlash(`Error generando Facturae: ${text.slice(0,140)}…`);
+        return;
+      }
+
+      const blob = new Blob([text], { type: 'application/xml;charset=UTF-8' });
+      setFlash(`Facturae generada (${(blob.size/1024).toFixed(1)} KB)`);
+
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url;
-      a.download = `${invoice.number}.${(res.headers.get('X-Signed')==='false')?'xml':'xsig'}`;
-      a.click(); URL.revokeObjectURL(url);
-      setFlash((res.headers.get('X-Signed')==='false') ? 'Facturae (sin firmar) descargada' : 'Facturae firmada descargada ✔️');
+      // Si no está firmada, será .xml (cuando firmes vía API externa, podrás renombrar a .xsig)
+      a.download = `${invoice.number || 'factura'}.xml`;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (e:any) {
       setFlash('Error Facturae: ' + String(e?.message || e));
-    } finally { setBusyFAC(false); }
+    } finally {
+      setBusyFAC(false);
+    }
   };
 
   // ===== Exportar PDF =====
