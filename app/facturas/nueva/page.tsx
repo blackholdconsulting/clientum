@@ -1,113 +1,95 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useEffect, useMemo, useState } from "react";
 
-/**
- * ============================
- *   CONFIG – AJUSTA SI HACE FALTA
- * ============================
- */
-
-// Ruta del PDF de tu app "como antes". Si tu endpoint era otro, cámbialo aquí:
-const PDF_ENDPOINT = '/api/facturas/pdf';
-
-// Nombre del fichero para descargas
-const pdfFileName = (serie: string, numero: string) =>
-  `factura-${(serie || '').trim()}${(numero || '').trim() || '0001'}.pdf`;
-const xmlFileName = (serie: string, numero: string, signed?: boolean) =>
-  `facturae-${(serie || '').trim()}${(numero || '').trim() || '0001'}${signed ? '-signed' : ''}.xml`;
-
-/**
- * ============================
- *   TIPOS
- * ============================
- */
+/** ---------------------
+ *  Tipos simples
+ * --------------------- */
 type Emisor = {
-  nombre: string;
-  nif: string;
+  nombre?: string;
+  nif?: string;
   direccion?: string;
   localidad?: string;
   provincia?: string;
+  cp?: string;
+  email?: string;
+  telefono?: string;
 };
 
-type Totales = {
-  baseImponible: string; // "100.00"
-  tipoIva: string;       // "21.00"
-  cuotaIva: string;      // "21.00" (importe de IVA) – si no lo controlas, lo calculamos
-  importeTotal: string;  // "121.00"
-};
-
-type FacturaMin = {
+type FacturaForm = {
+  emisor: Emisor;
   serie: string;
   numero: string;
-  fecha: string; // YYYY-MM-DD
-  emisor: Emisor;
-  totales: Totales;
+  fecha: string;
+  baseImponible: string; // guardamos como string en inputs, convertimos al calcular
+  tipoIVA: string;
+  cuotaIVA: string;
+  importeTotal: string;
 };
 
-/**
- * ============================
- *   HELPERS
- * ============================
- */
-const esc = (s: string) =>
-  (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-// Calcula IVA si hace falta
-function normalizeTotals(t: Totales): Totales {
-  const base = Number(t.baseImponible || 0);
-  const tipo = Number(t.tipoIva || 0); // 21
-  let cuota = Number(t.cuotaIva || 0);
-  let total = Number(t.importeTotal || 0);
-
-  if (!cuota && base && tipo) {
-    cuota = +(base * (tipo / 100)).toFixed(2);
-  }
-  if (!total && (base || cuota)) {
-    total = +(base + cuota).toFixed(2);
-  }
-
-  return {
-    baseImponible: base.toFixed(2),
-    tipoIva: tipo.toFixed(2),
-    cuotaIva: cuota.toFixed(2),
-    importeTotal: total.toFixed(2),
-  };
+/** ---------------------
+ *  Utils mínimos
+ * --------------------- */
+function toNum(n?: string) {
+  const x = Number((n ?? "").toString().replace(",", "."));
+  return isFinite(x) ? x : 0;
 }
 
-function buildFacturaeXML(data: FacturaMin) {
-  const d = { ...data, totales: normalizeTotals(data.totales) };
-  const ivaImporte = (Number(d.totales.importeTotal) - Number(d.totales.baseImponible)).toFixed(2);
+function format2(n: number) {
+  return (Math.round(n * 100) / 100).toFixed(2);
+}
+
+/** ---------------------
+ *  API helpers
+ * --------------------- */
+
+// 1) Carga emisor desde tu perfil (ajusta el endpoint si usas otro)
+async function fetchEmisorFromProfile(): Promise<Emisor | null> {
+  try {
+    const resp = await fetch("/api/profile/emisor", { cache: "no-store" });
+    if (!resp.ok) return null;
+    return (await resp.json()) as Emisor;
+  } catch {
+    return null;
+  }
+}
+
+// 2) Construye un Facturae mínimo para exportar
+function buildFacturaeXML(d: FacturaForm): string {
+  const base = toNum(d.baseImponible);
+  const tipo = toNum(d.tipoIVA);
+  const cuota = d.cuotaIVA ? toNum(d.cuotaIVA) : (base * tipo) / 100;
+  const total = d.importeTotal ? toNum(d.importeTotal) : base + cuota;
+
+  const esc = (s?: string) =>
+    (s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<Facturae xmlns="http://www.facturae.es/Facturae/2009/v3.2/Facturae">
+<Facturae>
   <FileHeader>
-    <SchemaVersion>3.2</SchemaVersion>
+    <SchemaVersion>3.2.1</SchemaVersion>
     <Modality>I</Modality>
     <InvoiceIssuerType>EM</InvoiceIssuerType>
   </FileHeader>
   <Parties>
     <SellerParty>
       <TaxIdentification>
-        <PersonTypeCode>J</PersonTypeCode>
-        <ResidenceTypeCode>R</ResidenceTypeCode>
         <TaxIdentificationNumber>${esc(d.emisor.nif)}</TaxIdentificationNumber>
       </TaxIdentification>
       <LegalEntity>
         <CorporateName>${esc(d.emisor.nombre)}</CorporateName>
+        <AddressInSpain>
+          <Address>${esc(d.emisor.direccion)}</Address>
+          <PostCode>${esc(d.emisor.cp)}</PostCode>
+          <Town>${esc(d.emisor.localidad)}</Town>
+          <Province>${esc(d.emisor.provincia)}</Province>
+          <CountryCode>ESP</CountryCode>
+        </AddressInSpain>
       </LegalEntity>
     </SellerParty>
-    <BuyerParty>
-      <TaxIdentification>
-        <PersonTypeCode>J</PersonTypeCode>
-        <ResidenceTypeCode>R</ResidenceTypeCode>
-        <TaxIdentificationNumber>ES00000000T</TaxIdentificationNumber>
-      </TaxIdentification>
-      <LegalEntity>
-        <CorporateName>ACME CLIENTE</CorporateName>
-      </LegalEntity>
-    </BuyerParty>
   </Parties>
   <Invoices>
     <Invoice>
@@ -119,32 +101,47 @@ function buildFacturaeXML(data: FacturaMin) {
       </InvoiceHeader>
       <InvoiceIssueData>
         <IssueDate>${esc(d.fecha)}</IssueDate>
-        <InvoiceCurrencyCode>EUR</InvoiceCurrencyCode>
         <TaxCurrencyCode>EUR</TaxCurrencyCode>
-        <LanguageName>es</LanguageName>
       </InvoiceIssueData>
       <TaxesOutputs>
         <Tax>
           <TaxTypeCode>01</TaxTypeCode>
-          <TaxRate>${esc(d.totales.tipoIva)}</TaxRate>
-          <TaxableBase><TotalAmount>${esc(d.totales.baseImponible)}</TotalAmount></TaxableBase>
-          <TaxAmount><TotalAmount>${esc(ivaImporte)}</TotalAmount></TaxAmount>
+          <TaxRate>${format2(tipo)}</TaxRate>
+          <TaxableBase>
+            <TotalAmount>${format2(base)}</TotalAmount>
+          </TaxableBase>
+          <TaxAmount>
+            <TotalAmount>${format2(cuota)}</TotalAmount>
+          </TaxAmount>
         </Tax>
       </TaxesOutputs>
       <InvoiceTotals>
-        <TotalGrossAmount>${esc(d.totales.baseImponible)}</TotalGrossAmount>
-        <TotalTaxOutputs>${esc(ivaImporte)}</TotalTaxOutputs>
-        <TotalGeneralTaxes>${esc(ivaImporte)}</TotalGeneralTaxes>
-        <TotalInvoiceAmount>${esc(d.totales.importeTotal)}</TotalInvoiceAmount>
+        <TotalGeneralTaxes>${format2(cuota)}</TotalGeneralTaxes>
+        <TotalInvoiceAmount>${format2(total)}</TotalInvoiceAmount>
       </InvoiceTotals>
     </Invoice>
   </Invoices>
 </Facturae>`;
 }
 
+// 3) Firma el XML contra tu microservicio (proxy Next)
+async function signFacturaeXML(xml: string): Promise<Blob> {
+  const resp = await fetch("/api/sign/xml", {
+    method: "POST",
+    headers: { "Content-Type": "application/xml; charset=utf-8" },
+    body: xml,
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`Error firmando XML (${resp.status}): ${text || resp.statusText}`);
+  }
+  return await resp.blob();
+}
+
+// 4) Descarga Blob
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
@@ -153,347 +150,275 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-async function signFacturaeXML(xml: string): Promise<Blob> {
-  const resp = await fetch('/api/sign/xml', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/xml; charset=utf-8' },
-    body: xml,
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`Error firmando XML (${resp.status}): ${text || resp.statusText}`);
-  }
-  return await resp.blob();
+// 5) Nombres de archivo
+function pdfFileName(d: FacturaForm) {
+  return `factura-${(d.serie || "").trim()}${(d.numero || "").trim() || "0001"}.pdf`;
+}
+function xmlFileName(d: FacturaForm, signed = false) {
+  return `factura-${(d.serie || "").trim()}${(d.numero || "").trim() || "0001"}${signed ? "-signed" : ""}.xml`;
 }
 
-/**
- * ============================
- *   PÁGINA
- * ============================
- */
+/** ---------------------
+ *  Página
+ * --------------------- */
 export default function NuevaFacturaPage() {
-  // --- Estado del formulario ---
-  const [serie, setSerie] = useState('A');
-  const [numero, setNumero] = useState('0001');
-  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState<null | "pdf" | "xml" | "sign">(null);
 
-  const [emisor, setEmisor] = useState<Emisor>({
-    nombre: '',
-    nif: '',
-    direccion: '',
-    localidad: '',
-    provincia: '',
-  });
+  const [form, setForm] = useState<FacturaForm>(() => ({
+    emisor: {},
+    serie: "A",
+    numero: "0001",
+    // YYYY-MM-DD (como en el screenshot)
+    fecha: new Date().toISOString().slice(0, 10),
+    baseImponible: "100.00",
+    tipoIVA: "21.00",
+    cuotaIVA: "", // si va vacío se calcula
+    importeTotal: "", // si va vacío se calcula
+  }));
 
-  const [totales, setTotales] = useState<Totales>({
-    baseImponible: '100.00',
-    tipoIva: '21.00',
-    cuotaIva: '',
-    importeTotal: '',
-  });
+  // Recalcular totales cuando cambian base/tipo/cuota/importe
+  const calculos = useMemo(() => {
+    const base = toNum(form.baseImponible);
+    const tipo = toNum(form.tipoIVA);
+    const cuota = form.cuotaIVA ? toNum(form.cuotaIVA) : (base * tipo) / 100;
+    const total = form.importeTotal ? toNum(form.importeTotal) : base + cuota;
+    return {
+      baseFmt: format2(base),
+      tipoFmt: format2(tipo),
+      cuotaFmt: format2(cuota),
+      totalFmt: format2(total),
+    };
+  }, [form.baseImponible, form.tipoIVA, form.cuotaIVA, form.importeTotal]);
 
-  // --- Carga perfil de Supabase y vuelca al emisor si está vacío ---
+  // Prefill emisor automáticamente
   useEffect(() => {
     (async () => {
-      try {
-        const supabase = createClientComponentClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // Ajusta a tus campos reales de /profiles
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select(
-            'company_name, company_vat, company_address, company_city, company_province'
-          )
-          .eq('id', user.id)
-          .single();
-
-        if (!profile) return;
-
-        setEmisor((prev) => ({
-          nombre: prev.nombre || profile.company_name || '',
-          nif: prev.nif || profile.company_vat || '',
-          direccion: prev.direccion || profile.company_address || '',
-          localidad: prev.localidad || profile.company_city || '',
-          provincia: prev.provincia || profile.company_province || '',
-        }));
-      } catch {
-        // ignoramos silenciosamente para no molestar al usuario
+      const emisor = await fetchEmisorFromProfile();
+      if (emisor) {
+        setForm((f) => ({ ...f, emisor: { ...f.emisor, ...emisor } }));
       }
-    })();
+    })().catch(() => {});
   }, []);
 
-  const facturaMin: FacturaMin = useMemo(
-    () => ({
-      serie,
-      numero,
-      fecha,
-      emisor,
-      totales,
-    }),
-    [serie, numero, fecha, emisor, totales]
-  );
+  /** Handlers de cambio */
+  const setEmisor = (patch: Partial<Emisor>) =>
+    setForm((f) => ({ ...f, emisor: { ...f.emisor, ...patch } }));
+  const setField = <K extends keyof FacturaForm>(key: K, val: FacturaForm[K]) =>
+    setForm((f) => ({ ...f, [key]: val }));
 
-  // --- Acciones ---
-  const [busy, setBusy] = useState<null | 'pdf' | 'xml' | 'sign'>(null);
-  const [warning, setWarning] = useState<string | null>(null);
-
-  async function handlePdf() {
+  /** Botones superiores */
+  async function onDescargarPDF() {
     try {
-      setWarning(null);
-      setBusy('pdf');
-
-      // Enviamos la factura a tu endpoint de PDF "como antes".
-      // Si tu endpoint espera otros campos, ajusta el body:
-      const resp = await fetch(PDF_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(facturaMin),
+      setMsg(null);
+      setBusy("pdf");
+      // POST JSON (tu API de PDF exige POST, el 405 viene por GET)
+      const resp = await fetch("/api/facturas/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
       });
-
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(`Error generado PDF: ${resp.status} ${text || ''}`.trim());
-      }
-
+      if (!resp.ok) throw new Error(`Error PDF: ${resp.status}`);
       const blob = await resp.blob();
-      downloadBlob(blob, pdfFileName(serie, numero));
+      downloadBlob(blob, pdfFileName(form));
     } catch (e: any) {
-      setWarning(e?.message || 'Error generando PDF');
+      console.error(e);
+      setMsg(e?.message || "Error generando PDF");
     } finally {
       setBusy(null);
     }
   }
 
-  async function handleXML() {
+  async function onDescargarFacturae() {
     try {
-      setWarning(null);
-      setBusy('xml');
-      const xml = buildFacturaeXML(facturaMin);
-      const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
-      downloadBlob(blob, xmlFileName(serie, numero, false));
+      setMsg(null);
+      setBusy("xml");
+      const xml = buildFacturaeXML(form);
+      const blob = new Blob([xml], { type: "application/xml;charset=utf-8" });
+      downloadBlob(blob, xmlFileName(form, false));
     } catch (e: any) {
-      setWarning(e?.message || 'Error generando XML');
+      console.error(e);
+      setMsg(e?.message || "Error generando XML");
     } finally {
       setBusy(null);
     }
   }
 
-  async function handleSign() {
+  async function onFirmarFacturae() {
     try {
-      setWarning(null);
-      setBusy('sign');
-      const xml = buildFacturaeXML(facturaMin);
-      const signed = await signFacturaeXML(xml); // 401 FIX → pasa por /api/sign/xml
-      downloadBlob(signed, xmlFileName(serie, numero, true));
+      setMsg(null);
+      setBusy("sign");
+      const xml = buildFacturaeXML(form);
+      const blob = await signFacturaeXML(xml); // via /api/sign/xml -> microservicio
+      downloadBlob(blob, xmlFileName(form, true));
     } catch (e: any) {
-      setWarning(e?.message || 'Error firmando XML');
+      console.error(e);
+      setMsg(e?.message || "Error firmando XML");
     } finally {
       setBusy(null);
     }
   }
 
-  /**
-   * ============================
-   *   UI – no tocamos tu formato (cabecera con 3 botones y secciones)
-   * ============================
-   */
   return (
-    <div className="space-y-6">
-      {/* Cabecera */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Nueva factura</h1>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={handlePdf}
-            className="rounded-md bg-gray-900 text-white px-3 py-2 text-sm hover:bg-gray-800 disabled:opacity-60"
-            disabled={!!busy}
-          >
-            {busy === 'pdf' ? 'Generando PDF…' : 'Descargar PDF'}
-          </button>
+    <div className="p-6">
+      <h1 className="text-xl font-semibold mb-4">Nueva factura</h1>
 
-          <button
-            type="button"
-            onClick={handleXML}
-            className="rounded-md bg-emerald-700 text-white px-3 py-2 text-sm hover:bg-emerald-600 disabled:opacity-60"
-            disabled={!!busy}
-          >
-            {busy === 'xml' ? 'Generando XML…' : 'Descargar Facturae'}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSign}
-            className="rounded-md bg-indigo-700 text-white px-3 py-2 text-sm hover:bg-indigo-600 disabled:opacity-60"
-            disabled={!!busy}
-          >
-            {busy === 'sign'
-              ? 'Firmando…'
-              : 'Firmar y descargar Facturae (XAdES)'}
-          </button>
-        </div>
+      {/* Botonera superior */}
+      <div className="flex flex-wrap gap-3 mb-4">
+        <button
+          onClick={onDescargarPDF}
+          disabled={busy === "pdf"}
+          className="px-4 py-2 rounded bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50"
+        >
+          {busy === "pdf" ? "Generando PDF..." : "Descargar PDF"}
+        </button>
+        <button
+          onClick={onDescargarFacturae}
+          disabled={busy === "xml"}
+          className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+        >
+          {busy === "xml" ? "Generando XML..." : "Descargar Facturae"}
+        </button>
+        <button
+          onClick={onFirmarFacturae}
+          disabled={busy === "sign"}
+          className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {busy === "sign" ? "Firmando..." : "Firmar y descargar Facturae (XAdES)"}
+        </button>
       </div>
 
-      {/* Aviso/errores (igual que tu banda amarilla) */}
-      {warning && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
-          {warning}
+      {/* Aviso */}
+      {msg && (
+        <div className="mb-4 rounded border border-yellow-300 bg-yellow-50 text-yellow-800 px-4 py-3">
+          {msg}
         </div>
       )}
 
-      {/* ====== EMISOR ====== */}
-      <section className="rounded-md border bg-white p-4">
-        <h2 className="text-sm font-semibold tracking-wide text-gray-600 mb-4">
-          EMISOR
-        </h2>
-
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      {/* EMISOR */}
+      <section className="mb-6 rounded border bg-white">
+        <div className="px-4 py-3 font-medium border-b">EMISOR</div>
+        <div className="p-4 grid md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs text-gray-600">Nombre / Razón social</label>
+            <label className="block text-sm text-slate-600">Nombre / Razón social</label>
             <input
-              id="emisor_nombre"
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-              value={emisor.nombre}
-              onChange={(e) => setEmisor((p) => ({ ...p, nombre: e.target.value }))}
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={form.emisor.nombre ?? ""}
+              onChange={(e) => setEmisor({ nombre: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-600">NIF</label>
+            <label className="block text-sm text-slate-600">NIF</label>
             <input
-              id="emisor_nif"
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-              value={emisor.nif}
-              onChange={(e) => setEmisor((p) => ({ ...p, nif: e.target.value }))}
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={form.emisor.nif ?? ""}
+              onChange={(e) => setEmisor({ nif: e.target.value })}
             />
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-xs text-gray-600">Dirección</label>
+            <label className="block text-sm text-slate-600">Dirección</label>
             <input
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-              value={emisor.direccion || ''}
-              onChange={(e) => setEmisor((p) => ({ ...p, direccion: e.target.value }))}
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={form.emisor.direccion ?? ""}
+              onChange={(e) => setEmisor({ direccion: e.target.value })}
             />
           </div>
 
           <div>
-            <label className="block text-xs text-gray-600">Localidad</label>
+            <label className="block text-sm text-slate-600">Localidad</label>
             <input
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-              value={emisor.localidad || ''}
-              onChange={(e) => setEmisor((p) => ({ ...p, localidad: e.target.value }))}
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={form.emisor.localidad ?? ""}
+              onChange={(e) => setEmisor({ localidad: e.target.value })}
             />
           </div>
-
           <div>
-            <label className="block text-xs text-gray-600">Provincia</label>
+            <label className="block text-sm text-slate-600">Provincia</label>
             <input
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-              value={emisor.provincia || ''}
-              onChange={(e) => setEmisor((p) => ({ ...p, provincia: e.target.value }))}
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={form.emisor.provincia ?? ""}
+              onChange={(e) => setEmisor({ provincia: e.target.value })}
             />
           </div>
         </div>
       </section>
 
-      {/* ====== DATOS FACTURA ====== */}
-      <section className="rounded-md border bg-white p-4">
-        <h2 className="text-sm font-semibold tracking-wide text-gray-600 mb-4">
-          DATOS FACTURA
-        </h2>
-
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      {/* DATOS FACTURA */}
+      <section className="mb-6 rounded border bg-white">
+        <div className="px-4 py-3 font-medium border-b">DATOS FACTURA</div>
+        <div className="p-4 grid md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs text-gray-600">Serie</label>
+            <label className="block text-sm text-slate-600">Serie</label>
             <input
-              id="factura_serie"
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-              value={serie}
-              onChange={(e) => setSerie(e.target.value)}
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={form.serie}
+              onChange={(e) => setField("serie", e.target.value)}
             />
           </div>
-
           <div>
-            <label className="block text-xs text-gray-600">Número</label>
+            <label className="block text-sm text-slate-600">Número</label>
             <input
-              id="factura_numero"
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-              value={numero}
-              onChange={(e) => setNumero(e.target.value)}
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={form.numero}
+              onChange={(e) => setField("numero", e.target.value)}
             />
           </div>
-
           <div>
-            <label className="block text-xs text-gray-600">Fecha</label>
+            <label className="block text-sm text-slate-600">Fecha</label>
             <input
-              id="factura_fecha"
               type="date"
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-              value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={form.fecha}
+              onChange={(e) => setField("fecha", e.target.value)}
             />
           </div>
         </div>
       </section>
 
-      {/* ====== TOTALES ====== */}
-      <section className="rounded-md border bg-white p-4">
-        <h2 className="text-sm font-semibold tracking-wide text-gray-600 mb-4">
-          TOTALES
-        </h2>
-
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+      {/* TOTALES */}
+      <section className="mb-10 rounded border bg-white">
+        <div className="px-4 py-3 font-medium border-b">TOTALES</div>
+        <div className="p-4 grid md:grid-cols-4 gap-4">
           <div>
-            <label className="block text-xs text-gray-600">Base imponible</label>
+            <label className="block text-sm text-slate-600">Base imponible</label>
             <input
-              id="base_imponible"
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-              value={totales.baseImponible}
-              onChange={(e) =>
-                setTotales((p) => ({ ...p, baseImponible: e.target.value }))
-              }
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={form.baseImponible}
+              onChange={(e) => setField("baseImponible", e.target.value)}
             />
           </div>
-
           <div>
-            <label className="block text-xs text-gray-600">Tipo IVA (%)</label>
+            <label className="block text-sm text-slate-600">Tipo IVA (%)</label>
             <input
-              id="tipo_iva"
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-              value={totales.tipoIva}
-              onChange={(e) => setTotales((p) => ({ ...p, tipoIva: e.target.value }))}
+              className="mt-1 w-full rounded border px-3 py-2"
+              value={form.tipoIVA}
+              onChange={(e) => setField("tipoIVA", e.target.value)}
             />
           </div>
-
           <div>
-            <label className="block text-xs text-gray-600">Cuota IVA</label>
+            <label className="block text-sm text-slate-600">Cuota IVA</label>
             <input
-              id="cuota_iva"
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-              value={totales.cuotaIva}
-              onChange={(e) =>
-                setTotales((p) => ({ ...p, cuotaIva: e.target.value }))
-              }
+              className="mt-1 w-full rounded border px-3 py-2"
               placeholder="Se calculará si lo dejas vacío"
+              value={form.cuotaIVA}
+              onChange={(e) => setField("cuotaIVA", e.target.value)}
             />
           </div>
-
           <div>
-            <label className="block text-xs text-gray-600">Importe total</label>
+            <label className="block text-sm text-slate-600">Importe total</label>
             <input
-              id="importe_total"
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-              value={totales.importeTotal}
-              onChange={(e) =>
-                setTotales((p) => ({ ...p, importeTotal: e.target.value }))
-              }
+              className="mt-1 w-full rounded border px-3 py-2"
               placeholder="Se calculará si lo dejas vacío"
+              value={form.importeTotal}
+              onChange={(e) => setField("importeTotal", e.target.value)}
             />
           </div>
+        </div>
+
+        {/* Vista rápida de cálculo */}
+        <div className="px-4 pb-4 text-sm text-slate-600">
+          <div>Base: <b>{calculos.baseFmt}</b> — Tipo: <b>{calculos.tipoFmt}%</b> — Cuota: <b>{calculos.cuotaFmt}</b> — Total: <b>{calculos.totalFmt}</b></div>
         </div>
       </section>
     </div>
