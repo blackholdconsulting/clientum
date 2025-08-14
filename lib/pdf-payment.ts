@@ -1,4 +1,3 @@
-// lib/pdf-payment.ts
 export type PaymentMethod =
   | 'transfer'
   | 'direct_debit'
@@ -39,10 +38,8 @@ export function formatPaymentForPdf(
     case 'bizum':
       lines.push('Bizum');
       break;
-    case 'other':
     default:
       lines.push('Otro');
-      break;
   }
 
   if (notes) lines.push(notes);
