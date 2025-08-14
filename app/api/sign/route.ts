@@ -1,90 +1,96 @@
-// app/api/sign/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
+export const runtime = "nodejs"; // importante: necesitamos Buffer
 
-const BASE_URL = process.env.SIGNER_BASE_URL;          // e.g. https://clientumsign.onrender.com
-const SIGN_PATH = process.env.SIGNER_SIGN_PATH ?? '/api/sign/xml';
-const API_KEY   = process.env.SIGNER_API_KEY;          // debe coincidir con el microservicio
-const TIMEOUT   = Number(process.env.SIGNER_TIMEOUT_MS ?? 30000);
+const BASE = process.env.CLIENTUMSIGN_URL ?? process.env.SIGNER_BASE_URL;
+const PATH = process.env.SIGNER_SIGN_PATH ?? "/api/sign/xml";
+const API_KEY = process.env.SIGNER_API_KEY;
+const TIMEOUT = Number(process.env.SIGNER_TIMEOUT_MS ?? "30000");
 
-function upstreamUrl() {
-  if (!BASE_URL) {
-    throw new Error('Falta la variable de entorno SIGNER_BASE_URL');
-  }
-  return new URL(SIGN_PATH, BASE_URL).toString();
-}
+// Nombre por defecto si el upstream no lo envía
+const DEFAULT_FILENAME = "facturae-signed.xml";
 
 export async function POST(req: NextRequest) {
+  if (!BASE) {
+    return NextResponse.json(
+      { error: "Falta CLIENTUMSIGN_URL o SIGNER_BASE_URL" },
+      { status: 500 }
+    );
+  }
+
+  const xml = await req.text();
+
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), TIMEOUT);
+
   try {
-    const url = upstreamUrl();
-    const ct = req.headers.get('content-type') || '';
+    const upstream = await fetch(`${BASE}${PATH}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/xml",
+        "Accept": "application/xml, application/octet-stream, application/json",
+        ...(API_KEY ? { "x-api-key": API_KEY } : {}),
+      },
+      body: xml,
+      signal: controller.signal,
+    });
+    clearTimeout(t);
 
-    // timeout
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort('timeout'), TIMEOUT);
-
-    // cabeceras comunes hacia el microservicio
-    const commonHeaders: HeadersInit = {
-      'x-api-key': API_KEY ?? '', // SecurityConfig debe validar esta cabecera
-      'x-forwarded-host': req.headers.get('host') || '',
-    };
-
-    let upstreamResp: Response;
-
-    if (ct.includes('application/json')) {
-      const body = await req.json();
-      upstreamResp = await fetch(url, {
-        method: 'POST',
-        headers: { ...commonHeaders, 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-        cache: 'no-store',
+    // Si el micro responde con error, devolvemos el mismo status y texto
+    if (!upstream.ok) {
+      const text = await upstream.text().catch(() => "");
+      return new NextResponse(text || `Upstream error ${upstream.status}`, {
+        status: upstream.status,
+        headers: {
+          "content-type":
+            upstream.headers.get("content-type") ?? "text/plain; charset=utf-8",
+        },
       });
-    } else if (ct.includes('multipart/form-data')) {
-      // Permite enviar archivo XML (FormData)
-      const formData = await req.formData();
-      upstreamResp = await fetch(url, {
-        method: 'POST',
-        headers: { ...commonHeaders }, // undici establece el boundary automáticamente
-        body: formData as any,
-        signal: controller.signal,
-        cache: 'no-store',
-      });
-    } else if (ct.includes('text/xml') || ct.includes('application/xml')) {
-      const xml = await req.text();
-      upstreamResp = await fetch(url, {
-        method: 'POST',
-        headers: { ...commonHeaders, 'content-type': ct },
-        body: xml,
-        signal: controller.signal,
-        cache: 'no-store',
-      });
-    } else {
-      return NextResponse.json(
-        { error: 'Content-Type no soportado. Usa application/json, multipart/form-data o XML.' },
-        { status: 415 }
-      );
     }
 
-    clearTimeout(timer);
+    const ct = upstream.headers.get("content-type") ?? "";
 
-    // Propagar Content-Type y Content-Disposition (por si devuelve un archivo)
-    const resHeaders = new Headers();
-    const upstreamCT = upstreamResp.headers.get('content-type');
-    const disp = upstreamResp.headers.get('content-disposition');
-    if (upstreamCT) resHeaders.set('content-type', upstreamCT);
-    if (disp) resHeaders.set('content-disposition', disp);
+    // Caso A: el micro devuelve JSON con { signedXmlBase64, filename?, contentType? }
+    if (ct.includes("application/json")) {
+      const j = await upstream.json();
+      const b64: string =
+        j.signedXmlBase64 || j.fileBase64 || j.data || j.content;
+      if (!b64) {
+        return NextResponse.json(
+          { error: "JSON sin 'signedXmlBase64' ni contenido" },
+          { status: 502 }
+        );
+      }
+      const bin = Buffer.from(b64, "base64");
+      const fname: string = j.filename || DEFAULT_FILENAME;
+      const outType: string = j.contentType || "application/xml";
+      return new NextResponse(bin, {
+        status: 200,
+        headers: {
+          "content-type": outType,
+          "content-disposition": `attachment; filename="${fname}"`,
+        },
+      });
+    }
 
-    // Devolvemos el cuerpo tal cual
-    const buf = Buffer.from(await upstreamResp.arrayBuffer());
-    return new NextResponse(buf, { status: upstreamResp.status, headers: resHeaders });
+    // Caso B: el micro devuelve el XML/binario directamente
+    const blob = await upstream.blob();
+    const disp =
+      upstream.headers.get("content-disposition") ||
+      `attachment; filename="${DEFAULT_FILENAME}"`;
+    return new NextResponse(blob, {
+      status: 200,
+      headers: {
+        "content-type": ct || "application/xml",
+        "content-disposition": disp,
+      },
+    });
   } catch (err: any) {
-    const status = err?.name === 'AbortError' ? 504 : 502;
+    clearTimeout(t);
+    const isTimeout = err?.name === "AbortError";
     return NextResponse.json(
-      { error: err?.message ?? 'Error al contactar el microservicio' },
-      { status }
+      { error: isTimeout ? "timeout" : "proxy_error", detail: String(err) },
+      { status: 502 }
     );
   }
 }
