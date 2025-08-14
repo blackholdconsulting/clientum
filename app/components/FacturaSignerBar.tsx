@@ -7,6 +7,8 @@ import {
   buildFacturaeXML,
   signFacturaeXML,
   downloadBlob,
+  pdfFileName,
+  xmlFileName,
 } from "@/lib/invoice-signer";
 
 export default function FacturaSignerBar() {
