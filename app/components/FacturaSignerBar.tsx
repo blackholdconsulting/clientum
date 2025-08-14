@@ -7,7 +7,7 @@ import {
   buildFacturaeXML,
   signFacturaeXML,
   downloadBlob,
-} from "@/app/(lib)/invoice-signer";
+} from "@/lib/invoice-signer";
 
 export default function FacturaSignerBar() {
   const [busy, setBusy] = useState<null | "pdf" | "xml" | "sign">(null);
