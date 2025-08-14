@@ -1,219 +1,193 @@
-// lib/invoice-signer.ts
+/* ============================================================================
+ * Helpers faltantes para FacturaSignerBar
+ *  - prefillEmitterFromProfile(): carga datos del emisor desde /api/profile
+ *  - collectInvoice(document?): lee el formulario y construye FacturaMin
+ * ----------------------------------------------------------------------------
+ * NOTA: Si tus IDs/name de inputs no coinciden con los de abajo,
+ *       ajusta los selectores en get() y en la recolección de líneas.
+ * ==========================================================================*/
 
-// ---- Tipos mínimos para construir el XML ----
-export type Party = {
-  nif: string;
-  nombre: string;
+type EmisorMin = {
+  nombre?: string;
+  nif?: string;
+  direccion?: string;
+  localidad?: string;
+  provincia?: string;
+  cp?: string;
+  email?: string;
+  telefono?: string;
 };
 
-export type Totales = {
-  baseImponible: number; // taxable base
-  tipoIVA: number;       // % IVA (p.ej. 21)
-  cuotaIVA: number;      // importe IVA
-  importeTotal: number;  // total factura
+type ReceptorMin = {
+  nombre?: string;
+  nif?: string;
+};
+
+type LineaMin = {
+  descripcion: string;
+  cantidad: number;
+  precioUnitario: number;
+  ivaPorcentaje: number;
 };
 
 export type FacturaMin = {
-  emisor: Party;
-  receptor: Party;
   serie?: string;
   numero?: string;
-  fechaExpedicion: string; // YYYY-MM-DD
-  totales: Totales;
+  fecha?: string; // ISO yyyy-mm-dd
+  emisor: EmisorMin;
+  receptor: ReceptorMin;
+  lineas: LineaMin[];
+  totales: {
+    baseImponible: number;
+    importeIVA: number;
+    importeTotal: number;
+  };
 };
 
-// ---- Utilidades ----
-function esc(v: string | number): string {
-  return String(v)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function money(n: number): string {
-  // Facturae usa punto decimal y 2 decimales
-  return (Number.isFinite(n) ? n : 0).toFixed(2);
-}
-
-function normalizaFecha(d: string): string {
-  // acepta YYYY-MM-DD o Date.toISOString() y devuelve YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+/** Carga el emisor desde tu perfil (/api/profile) y devuelve un objeto parcial. */
+export async function prefillEmitterFromProfile(): Promise<Partial<EmisorMin>> {
   try {
-    const dt = new Date(d);
-    const m = String(dt.getMonth() + 1).padStart(2, "0");
-    const day = String(dt.getDate()).padStart(2, "0");
-    return `${dt.getFullYear()}-${m}-${day}`;
+    const resp = await fetch("/api/profile", { cache: "no-store" });
+    if (!resp.ok) return {};
+    const p = await resp.json();
+
+    // Mapeos tolerantes a distintos nombres de campo
+    return {
+      nombre: p?.razonSocial ?? p?.razon_social ?? p?.nombre ?? "",
+      nif: p?.nif ?? p?.cif ?? p?.nif_cif ?? "",
+      direccion: p?.direccion ?? p?.address ?? "",
+      localidad: p?.localidad ?? p?.city ?? "",
+      provincia: p?.provincia ?? p?.state ?? "",
+      cp: p?.cp ?? p?.codigo_postal ?? p?.zip ?? "",
+      email: p?.email ?? "",
+      telefono: p?.telefono ?? p?.phone ?? "",
+    };
   } catch {
-    return d;
+    return {};
   }
 }
 
-// ---- 1) Construcción de XML Facturae (mínimo) ----
-// Nota: Estructura compatible con Facturae 3.2.2; suficiente para firmar XAdES.
-// Si necesitas rellenar más campos para validaciones estrictas, amplíalo aquí.
-export function buildFacturaeXML(d: FacturaMin): string {
-  const serie = (d.serie || "").trim();
-  const numero = (d.numero || "0001").trim();
-  const fecha = normalizaFecha(d.fechaExpedicion);
+/**
+ * Lee los valores del formulario actual (document) y construye una FacturaMin.
+ * Ajusta selectores si tus inputs usan otros IDs/name.
+ */
+export function collectInvoice(doc: Document = document): FacturaMin {
+  const get = (sel: string): string => {
+    // Busca por id, name o data-field
+    const el =
+      doc.querySelector<HTMLInputElement>(sel) ||
+      doc.querySelector<HTMLInputElement>(`[name="${sel}"]`) ||
+      doc.querySelector<HTMLInputElement>(`#${sel}`) ||
+      doc.querySelector<HTMLInputElement>(`[data-field="${sel}"]`);
+    return (el?.value ?? "").toString().trim();
+  };
 
-  const base = money(d.totales.baseImponible);
-  const tipo = money(d.totales.tipoIVA);
-  const ivaImporte = money(d.totales.cuotaIVA);
-  const total = money(d.totales.importeTotal);
+  const toNum = (v: string): number => {
+    const x = parseFloat(v.replace(/\./g, "").replace(",", "."));
+    return Number.isFinite(x) ? x : 0;
+  };
 
-  // Un concepto “genérico” con la base e IVA
-  // (Facturae permite múltiples líneas; aquí usamos una para el mínimo)
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<Facturae xmlns="http://www.facturae.gob.es/formato/Versiones/Facturaev3_2/Facturae"
-          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-          xsi:schemaLocation="http://www.facturae.gob.es/formato/Versiones/Facturaev3_2/Facturae http://www.facturae.gob.es/formato/Versiones/Facturaev3_2/Facturae/FacturaeV3_2_2.xsd"
-          Version="3.2.2">
-  <FileHeader>
-    <SchemaVersion>3.2.2</SchemaVersion>
-    <Modality>I</Modality>
-    <InvoiceIssuerType>EM</InvoiceIssuerType>
-    <Batch>
-      <BatchIdentifier>${esc(serie ? `${serie}-${numero}` : numero)}</BatchIdentifier>
-      <InvoicesCount>1</InvoicesCount>
-      <TotalInvoicesAmount>
-        <TotalAmount>${esc(total)}</TotalAmount>
-      </TotalInvoicesAmount>
-      <TotalOutstandingAmount>
-        <TotalAmount>${esc(total)}</TotalAmount>
-      </TotalOutstandingAmount>
-      <TotalExecutableAmount>
-        <TotalAmount>${esc(total)}</TotalAmount>
-      </TotalExecutableAmount>
-      <InvoiceCurrencyCode>EUR</InvoiceCurrencyCode>
-    </Batch>
-  </FileHeader>
+  // --- Cabecera
+  const serie = get("serie");
+  const numero = get("numero");
+  const fecha =
+    get("fecha") ||
+    new Date().toISOString().slice(0, 10); // yyyy-mm-dd
 
-  <Parties>
-    <SellerParty>
-      <TaxIdentification>
-        <PersonTypeCode>J</PersonTypeCode>
-        <ResidenceTypeCode>R</ResidenceTypeCode>
-        <TaxIdentificationNumber>${esc(d.emisor.nif)}</TaxIdentificationNumber>
-      </TaxIdentification>
-      <LegalEntity>
-        <CorporateName>${esc(d.emisor.nombre)}</CorporateName>
-      </LegalEntity>
-    </SellerParty>
+  // --- Emisor (IDs/name típicos; ajusta si usas otros)
+  const emisor: EmisorMin = {
+    nombre: get("emisorNombre") || get("emisor_razonSocial") || get("razonSocial"),
+    nif: get("emisorNIF") || get("emisor_nif") || get("nif"),
+    direccion: get("emisorDireccion") || get("direccion"),
+    localidad: get("emisorLocalidad") || get("localidad"),
+    provincia: get("emisorProvincia") || get("provincia"),
+    cp: get("emisorCP") || get("cp"),
+    email: get("emisorEmail") || get("email"),
+    telefono: get("emisorTelefono") || get("telefono"),
+  };
 
-    <BuyerParty>
-      <TaxIdentification>
-        <PersonTypeCode>J</PersonTypeCode>
-        <ResidenceTypeCode>R</ResidenceTypeCode>
-        <TaxIdentificationNumber>${esc(d.receptor.nif)}</TaxIdentificationNumber>
-      </TaxIdentification>
-      <LegalEntity>
-        <CorporateName>${esc(d.receptor.nombre)}</CorporateName>
-      </LegalEntity>
-    </BuyerParty>
-  </Parties>
+  // --- Receptor (cliente)
+  const receptor: ReceptorMin = {
+    nombre: get("clienteNombre") || get("cliente_razonSocial") || get("cliente"),
+    nif: get("clienteNIF") || get("cliente_nif"),
+  };
 
-  <Invoices>
-    <Invoice>
-      <InvoiceHeader>
-        <InvoiceNumber>${esc(numero)}</InvoiceNumber>
-        <InvoiceSeriesCode>${esc(serie)}</InvoiceSeriesCode>
-        <InvoiceDocumentType>FC</InvoiceDocumentType>
-        <InvoiceClass>S</InvoiceClass>
-      </InvoiceHeader>
+  // --- Líneas
+  const lineas: LineaMin[] = [];
 
-      <InvoiceIssueData>
-        <IssueDate>${esc(fecha)}</IssueDate>
-        <InvoiceCurrencyCode>EUR</InvoiceCurrencyCode>
-        <TaxCurrencyCode>EUR</TaxCurrencyCode>
-        <LanguageName>es</LanguageName>
-      </InvoiceIssueData>
+  // 1) Estructura por filas con data-linea (recomendado)
+  const rows = Array.from(doc.querySelectorAll<HTMLElement>("[data-linea]"));
+  if (rows.length) {
+    for (const row of rows) {
+      const pick = (k: string) =>
+        (row.querySelector<HTMLInputElement>(`[data-${k}]`)?.value ??
+          row.querySelector<HTMLInputElement>(`[name="${k}"]`)?.value ??
+          "").trim();
 
-      <TaxesOutputs>
-        <Tax>
-          <TaxTypeCode>01</TaxTypeCode>
-          <TaxRate>${esc(tipo)}</TaxRate>
-          <TaxableBase>
-            <TotalAmount>${esc(base)}</TotalAmount>
-          </TaxableBase>
-          <TaxAmount>
-            <TotalAmount>${esc(ivaImporte)}</TotalAmount>
-          </TaxAmount>
-        </Tax>
-      </TaxesOutputs>
+      const descripcion = pick("descripcion") || pick("concepto");
+      const cantidad = toNum(pick("cantidad") || "1");
+      const precioUnitario = toNum(pick("precio") || pick("precioUnitario") || "0");
+      const ivaPorcentaje = toNum(pick("iva") || pick("ivaPorcentaje") || "21");
 
-      <InvoiceTotals>
-        <TotalGeneralTaxes>${esc(ivaImporte)}</TotalGeneralTaxes>
-        <TotalGrossAmount>${esc(base)}</TotalGrossAmount>
-        <TotalGrossAmountBeforeTaxes>${esc(base)}</TotalGrossAmountBeforeTaxes>
-        <TotalTaxOutputs>${esc(ivaImporte)}</TotalTaxOutputs>
-        <TotalTaxesWithheld>0.00</TotalTaxesWithheld>
-        <InvoiceTotal>${esc(total)}</InvoiceTotal>
-        <TotalOutstandingAmount>${esc(total)}</TotalOutstandingAmount>
-        <TotalExecutableAmount>${esc(total)}</TotalExecutableAmount>
-      </InvoiceTotals>
+      if (descripcion) {
+        lineas.push({ descripcion, cantidad, precioUnitario, ivaPorcentaje });
+      }
+    }
+  } else {
+    // 2) Estructura por arrays concepto[]/cantidad[]/precio[]/iva[]
+    const conceptos = doc.querySelectorAll<HTMLInputElement>('[name="concepto[]"]');
+    const cantidades = doc.querySelectorAll<HTMLInputElement>('[name="cantidad[]"]');
+    const precios = doc.querySelectorAll<HTMLInputElement>('[name="precio[]"]');
+    const ivas = doc.querySelectorAll<HTMLInputElement>('[name="iva[]"]');
 
-      <Items>
-        <InvoiceLine>
-          <IssuerContractReference>1</IssuerContractReference>
-          <ItemDescription>Servicios / Bienes</ItemDescription>
-          <Quantity>1.00</Quantity>
-          <UnitOfMeasure>01</UnitOfMeasure>
-          <UnitPriceWithoutTax>${esc(base)}</UnitPriceWithoutTax>
-          <TotalCost>${esc(base)}</TotalCost>
-          <GrossAmount>${esc(base)}</GrossAmount>
-          <TaxesOutputs>
-            <Tax>
-              <TaxTypeCode>01</TaxTypeCode>
-              <TaxRate>${esc(tipo)}</TaxRate>
-              <TaxAmount>
-                <TotalAmount>${esc(ivaImporte)}</TotalAmount>
-              </TaxAmount>
-            </Tax>
-          </TaxesOutputs>
-        </InvoiceLine>
-      </Items>
-    </Invoice>
-  </Invoices>
-</Facturae>`;
+    for (let i = 0; i < conceptos.length; i++) {
+      const descripcion = (conceptos[i]?.value ?? "").trim();
+      if (!descripcion) continue;
+      const cantidad = toNum(cantidades[i]?.value ?? "1");
+      const precioUnitario = toNum(precios[i]?.value ?? "0");
+      const ivaPorcentaje = toNum(ivas[i]?.value ?? "21");
+      lineas.push({ descripcion, cantidad, precioUnitario, ivaPorcentaje });
+    }
 
-  return xml;
-}
+    // 3) Último recurso: un único concepto total
+    if (!lineas.length) {
+      const descripcion = get("concepto") || "Servicio";
+      const cantidad = toNum(get("cantidad") || "1");
+      const precioUnitario = toNum(get("precio") || get("importe") || "0");
+      const ivaPorcentaje = toNum(get("iva") || "21");
+      if (precioUnitario > 0) {
+        lineas.push({ descripcion, cantidad, precioUnitario, ivaPorcentaje });
+      }
+    }
+  }
 
-// ---- 2) Firma via proxy seguro de Next (/api/sign) ----
-export async function signFacturaeXML(xml: string): Promise<Blob> {
-  const resp = await fetch("/api/sign", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/xml; charset=utf-8",
-      Accept: "application/xml",
+  // --- Totales (si vienen de inputs, úsalos; si no, calcúlalos)
+  let baseImponible = toNum(get("baseImponible"));
+  let importeIVA = toNum(get("importeIVA"));
+  let importeTotal = toNum(get("importeTotal"));
+
+  if (!(baseImponible && importeTotal)) {
+    baseImponible = 0;
+    importeIVA = 0;
+    for (const l of lineas) {
+      const baseLinea = l.cantidad * l.precioUnitario;
+      baseImponible += baseLinea;
+      importeIVA += baseLinea * (l.ivaPorcentaje / 100);
+    }
+    importeTotal = baseImponible + importeIVA;
+  }
+
+  return {
+    serie,
+    numero,
+    fecha,
+    emisor,
+    receptor,
+    lineas,
+    totales: {
+      baseImponible: +baseImponible.toFixed(2),
+      importeIVA: +importeIVA.toFixed(2),
+      importeTotal: +importeTotal.toFixed(2),
     },
-    body: xml,
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
-    throw new Error(`Error firmando XML (${resp.status}): ${text || resp.statusText}`);
-  }
-  return await resp.blob();
+  };
 }
-
-// ---- 3) Descarga de blobs ----
-export function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-// ---- 4) Nombres de archivo ----
-export const pdfFileName = (serie: string, numero: string) =>
-  `factura-${(serie || "").trim()}${(numero || "").trim() || "0001"}.pdf`;
-
-export const xmlFileName = (serie: string, numero: string, signed?: boolean) =>
-  `factura-${(serie || "").trim()}${(numero || "").trim() || "0001"}${signed ? "-signed" : ""}.xml`;
