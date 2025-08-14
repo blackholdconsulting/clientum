@@ -62,7 +62,7 @@ export async function buildFacturaeXml(payload: any): Promise<string> {
 
 /**
  * Alias para compatibilidad con páginas que importan este nombre.
- * Ahora acepta:
+ * Acepta:
  *  - string (XML) -> firma directa
  *  - object (payload) -> construye XML y luego firma
  */
@@ -162,7 +162,7 @@ export function collectInvoiceFromForm(
 
   // SERIE y NÚMERO desde varios nombres posibles o data-attrs
   const serieStr =
-    pick(['serie', 'series,', 'series', 'invoice_series', 'invoiceSeries']) ??
+    pick(['serie', 'series', 'invoice_series', 'invoiceSeries']) ??
     (target.dataset ? target.dataset.series : undefined);
   const numeroStr =
     pick(['numero', 'number', 'invoice_number', 'invoiceNumber']) ??
@@ -193,26 +193,77 @@ export function collectInvoiceFromForm(
 
 // ============================ Veri*factu (RF/QR) ===========================
 
-/**
- * Alta Veri*factu "light": construye el RF y opcionalmente genera un QR (DataURL).
- * Si necesitas enviar a AEAT, hazlo en otra función; aquí no llamamos a endpoints externos.
- */
 import type { VeriFactuPayload } from './verifactu';
 import { buildRFString, qrDataUrlFromRF } from './verifactu';
 
+/**
+ * Alta Veri*factu "light": construye el RF y genera QR en cliente.
+ * - Devuelve { rf, qr } para ser compatible con FacturaSignerBar.tsx
+ * - Para compatibilidad hacia atrás, también incluye { qrDataUrl } a nivel raíz.
+ */
 export async function verifactuAlta(
-  payload: VeriFactuPayload & { withQR?: boolean }
-): Promise<{ rf: string; qrDataUrl: string | null }> {
-  const rf = buildRFString(payload);
-  let qrDataUrl: string | null = null;
+  payload: VeriFactuPayload | Record<string, any>
+): Promise<{ rf: string; qr: { dataUrl: string | null; pngDataUrl?: string | null }; qrDataUrl: string | null }> {
+  // Permitir payloads "sueltos" (p. ej. salida de collectInvoiceFromForm)
+  const mapped: VeriFactuPayload = {
+    issuerTaxId:
+      (payload as any).issuerTaxId ??
+      (payload as any).emisor?.taxId ??
+      (payload as any).issuer?.taxId ??
+      'N/A',
+    issueDate:
+      (payload as any).issueDate ??
+      (payload as any).fecha ??
+      (payload as any).issue_date ??
+      new Date().toISOString().slice(0, 10),
+    invoiceType: ((): 'completa' | 'simplificada' | 'rectificativa' => {
+      const t = String(
+        (payload as any).invoiceType ?? (payload as any).type ?? 'completa'
+      ).toLowerCase();
+      if (t.startsWith('simp')) return 'simplificada';
+      if (t.startsWith('rect')) return 'rectificativa';
+      return 'completa';
+    })(),
+    total:
+      Number(
+        (payload as any).total ??
+          (payload as any).totals?.total ??
+          (payload as any).importe_total ??
+          0
+      ) || 0,
+    software: 'Clientum Signer v0.0.1',
+    series:
+      (payload as any).series ??
+      (payload as any).serie ??
+      (payload as any).invoice_series ??
+      'A',
+    number:
+      Number(
+        (payload as any).number ??
+          (payload as any).numero ??
+          (payload as any).invoice_number ??
+          0
+      ) || 0,
+  };
 
-  if (payload.withQR) {
+  const rf = buildRFString(mapped);
+
+  // Intentar generar el QR solo en cliente
+  let dataUrl: string | null = null;
+  if (typeof window !== 'undefined') {
     try {
-      qrDataUrl = await qrDataUrlFromRF(rf);
+      dataUrl = await qrDataUrlFromRF(rf);
     } catch {
-      qrDataUrl = null;
+      dataUrl = null;
     }
   }
 
-  return { rf, qrDataUrl };
+  // Estructura compatible con FacturaSignerBar.tsx:
+  const qr = {
+    dataUrl,
+    pngDataUrl: dataUrl, // alias
+  };
+
+  return { rf, qr, qrDataUrl: dataUrl };
 }
+
