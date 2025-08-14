@@ -67,16 +67,21 @@ export async function signFacturaeXML(xml: string) {
 
 /** Descargar blob (solo cliente). Para SSR lanza excepción controlada. */
 export function downloadBlob(
-  data: Uint8Array | string,
+  data: Uint8Array | string | Blob,
   filename: string,
-  mime: string = 'application/xml'
+  mime: string = 'application/octet-stream'
 ) {
   if (typeof window === 'undefined') {
     throw new Error('downloadBlob solo puede usarse en el cliente (navegador).');
   }
-  const bytes =
-    typeof data === 'string' ? Uint8Array.from(atob(data), (c) => c.charCodeAt(0)) : data;
-  const blob = new Blob([bytes], { type: mime });
+  let blob: Blob;
+  if (data instanceof Blob) {
+    blob = data;
+  } else {
+    const bytes =
+      typeof data === 'string' ? Uint8Array.from(atob(data), (c) => c.charCodeAt(0)) : data;
+    blob = new Blob([bytes], { type: mime });
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -102,12 +107,13 @@ export function pdfFileName(series: string, number: number, ext: string = 'pdf')
 /**
  * Recoger datos desde un <form>.
  * Compatibilidad: puede llamarse SIN argumentos (detecta automáticamente el form).
- * Intenta resolver 'serie/numero' desde múltiples nombres de campo o data-attrs.
+ * Garante: devuelve SIEMPRE { serie, numero } y lanza error si no puede resolverlos.
  */
-export function collectInvoiceFromForm(form?: HTMLFormElement | null): CollectedInvoice {
+export function collectInvoiceFromForm(
+  form?: HTMLFormElement | null
+): CollectedInvoice & { serie: string; numero: number } {
   if (typeof window === 'undefined') {
-    // En SSR no hay DOM; devolvemos estructura vacía segura
-    return {};
+    throw new Error('collectInvoiceFromForm requiere entorno de navegador.');
   }
 
   // Autodetección si no se pasa form:
@@ -125,7 +131,7 @@ export function collectInvoiceFromForm(form?: HTMLFormElement | null): Collected
     target = document.querySelector('form') as HTMLFormElement | null;
   }
   if (!target) {
-    return {};
+    throw new Error('No se encontró el formulario de factura en la página.');
   }
 
   const fd = new FormData(target);
@@ -145,9 +151,9 @@ export function collectInvoiceFromForm(form?: HTMLFormElement | null): Collected
   const tax = Number(pick(['totalTax', 'iva', 'tax']) ?? 0);
   const total = Number(pick(['total', 'total_amount', 'importe_total']) ?? 0);
 
-  // SERIE y NÚMERO desde varios nombres posibles
+  // SERIE y NÚMERO desde varios nombres posibles o data-attrs
   const serieStr =
-    pick(['serie', 'series', 'invoice_series', 'invoiceSeries']) ??
+    pick(['serie', 'series,', 'series', 'invoice_series', 'invoiceSeries']) ??
     (target.dataset ? target.dataset.series : undefined);
   const numeroStr =
     pick(['numero', 'number', 'invoice_number', 'invoiceNumber']) ??
@@ -157,18 +163,23 @@ export function collectInvoiceFromForm(form?: HTMLFormElement | null): Collected
   const numeroParsed = numeroStr ? Number(numeroStr) : NaN;
   const numero = Number.isFinite(numeroParsed) ? numeroParsed : undefined;
 
-  const collected: CollectedInvoice = {
+  if (!serie || typeof numero !== 'number') {
+    throw new Error(
+      'No se pudieron determinar "serie" y "numero" de la factura. Asegúrate de que existan inputs ' +
+        '(serie/numero o invoice_series/invoice_number) o data-series/data-number en el <form>.'
+    );
+  }
+
+  return {
     issueDate,
     type,
     totals: { base, tax, total },
-    // exponemos tanto en ES como EN para máxima compatibilidad
     serie,
     numero,
+    // exponemos también duplicados habituales por compatibilidad
     series: serie,
     number: numero,
   };
-
-  return collected;
 }
 
 // ============================ Veri*factu (RF/QR) ===========================
