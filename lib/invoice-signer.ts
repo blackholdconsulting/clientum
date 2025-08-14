@@ -1,75 +1,59 @@
-// app/(lib)/invoice-signer.ts
-"use client";
+// lib/invoice-signer.ts
+// Utilidades para generar y firmar Facturae + descargas
 
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-
-type FacturaMin = {
-  emisorNombre: string;
-  emisorNif: string;
-  serie: string;
-  numero: string;
-  fecha: string;          // YYYY-MM-DD
-  baseImponible: string;  // "100.00"
-  cuotaIva: string;       // "21.00"
-  importeTotal: string;   // "121.00"
+export type Emisor = {
+  nombre: string;
+  nif: string;
+  direccion?: string;
+  localidad?: string;
+  provincia?: string;
 };
 
-// ⬇️ Mapea aquí tus IDs reales de los inputs ya existentes
-const FIELDS = {
-  emisorNombre: "emisor_nombre",
-  emisorNif: "emisor_nif",
-  serie: "factura_serie",
-  numero: "factura_numero",
-  fecha: "factura_fecha",
-  baseImponible: "base_imponible",
-  cuotaIva: "cuota_iva",
-  importeTotal: "importe_total",
-} as const;
+export type Totales = {
+  baseImponible: string; // "100.00"
+  tipoIva: string;       // "21.00"
+  cuotaIva?: string;     // si viene vacío lo calculamos
+  importeTotal?: string; // si viene vacío lo calculamos
+};
 
-function q<T extends keyof typeof FIELDS>(key: T): HTMLInputElement | null {
-  return document.getElementById(FIELDS[key]) as HTMLInputElement | null;
-}
+export type FacturaMin = {
+  serie: string;
+  numero: string;
+  fecha: string; // YYYY-MM-DD
+  emisor: Emisor;
+  totales: Totales;
+};
 
-// Rellena emisor con datos del perfil si están vacíos
-export async function prefillEmitterFromProfile() {
-  try {
-    const supabase = createClientComponentClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+// ===== Helpers =====
+const esc = (s: string) =>
+  (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("company_name, company_vat")
-      .eq("id", user.id)
-      .single();
+function normalizeTotals(t: Totales): Required<Totales> {
+  const base = Number(t.baseImponible || 0);
+  const tipo = Number(t.tipoIva || 0);
+  let cuota = Number(t.cuotaIva || 0);
+  let total = Number(t.importeTotal || 0);
 
-    if (!profile) return;
+  if (!cuota && base && tipo) cuota = +(base * (tipo / 100)).toFixed(2);
+  if (!total && (base || cuota)) total = +(base + cuota).toFixed(2);
 
-    const nombre = q("emisorNombre");
-    const nif = q("emisorNif");
-
-    if (nombre && !nombre.value) nombre.value = profile.company_name || "";
-    if (nif && !nif.value) nif.value = profile.company_vat || "";
-  } catch {}
-}
-
-export function collectInvoice(): FacturaMin {
-  const get = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.value?.trim() || "";
   return {
-    emisorNombre: get(FIELDS.emisorNombre),
-    emisorNif: get(FIELDS.emisorNif),
-    serie: get(FIELDS.serie),
-    numero: get(FIELDS.numero),
-    fecha: get(FIELDS.fecha),
-    baseImponible: get(FIELDS.baseImponible),
-    cuotaIva: get(FIELDS.cuotaIva),
-    importeTotal: get(FIELDS.importeTotal),
+    baseImponible: base.toFixed(2),
+    tipoIva: tipo.toFixed(2),
+    cuotaIva: cuota.toFixed(2),
+    importeTotal: total.toFixed(2),
   };
 }
 
-// XML Facturae mínimo (para homologación) – ajusta si lo necesitas
-export function buildFacturaeXML(d: FacturaMin) {
-  const esc = (s: string) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+// ===== API =====
+
+/** Genera un XML Facturae 3.2 mínimo para homologación. */
+export function buildFacturaeXML(data: FacturaMin): string {
+  const d = { ...data, totales: normalizeTotals(data.totales) };
+  const ivaImporte = (
+    Number(d.totales.importeTotal) - Number(d.totales.baseImponible)
+  ).toFixed(2);
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Facturae xmlns="http://www.facturae.es/Facturae/2009/v3.2/Facturae">
   <FileHeader>
@@ -82,10 +66,10 @@ export function buildFacturaeXML(d: FacturaMin) {
       <TaxIdentification>
         <PersonTypeCode>J</PersonTypeCode>
         <ResidenceTypeCode>R</ResidenceTypeCode>
-        <TaxIdentificationNumber>${esc(d.emisorNif)}</TaxIdentificationNumber>
+        <TaxIdentificationNumber>${esc(d.emisor.nif)}</TaxIdentificationNumber>
       </TaxIdentification>
       <LegalEntity>
-        <CorporateName>${esc(d.emisorNombre)}</CorporateName>
+        <CorporateName>${esc(d.emisor.nombre)}</CorporateName>
       </LegalEntity>
     </SellerParty>
     <BuyerParty>
@@ -116,32 +100,23 @@ export function buildFacturaeXML(d: FacturaMin) {
       <TaxesOutputs>
         <Tax>
           <TaxTypeCode>01</TaxTypeCode>
-          <TaxRate>${esc(d.cuotaIva)}</TaxRate>
-          <TaxableBase><TotalAmount>${esc(d.baseImponible)}</TotalAmount></TaxableBase>
-          <TaxAmount><TotalAmount>${esc((Number(d.importeTotal)-Number(d.baseImponible)).toFixed(2))}</TotalAmount></TaxAmount>
+          <TaxRate>${esc(d.totales.tipoIva)}</TaxRate>
+          <TaxableBase><TotalAmount>${esc(d.totales.baseImponible)}</TotalAmount></TaxableBase>
+          <TaxAmount><TotalAmount>${esc(ivaImporte)}</TotalAmount></TaxAmount>
         </Tax>
       </TaxesOutputs>
       <InvoiceTotals>
-        <TotalGrossAmount>${esc(d.baseImponible)}</TotalGrossAmount>
-        <TotalTaxOutputs>${esc((Number(d.importeTotal)-Number(d.baseImponible)).toFixed(2))}</TotalTaxOutputs>
-        <TotalGeneralTaxes>${esc((Number(d.importeTotal)-Number(d.baseImponible)).toFixed(2))}</TotalGeneralTaxes>
-        <TotalInvoiceAmount>${esc(d.importeTotal)}</TotalInvoiceAmount>
+        <TotalGrossAmount>${esc(d.totales.baseImponible)}</TotalGrossAmount>
+        <TotalTaxOutputs>${esc(ivaImporte)}</TotalTaxOutputs>
+        <TotalGeneralTaxes>${esc(ivaImporte)}</TotalGeneralTaxes>
+        <TotalInvoiceAmount>${esc(d.totales.importeTotal)}</TotalInvoiceAmount>
       </InvoiceTotals>
     </Invoice>
   </Invoices>
 </Facturae>`;
 }
 
-// Descarga helper (blob → file)
-export function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click();
-  a.remove(); URL.revokeObjectURL(url);
-}
-
-// Firma vía proxy
+/** Firma el XML via tu proxy `/api/sign/xml`. */
 export async function signFacturaeXML(xml: string): Promise<Blob> {
   const resp = await fetch("/api/sign/xml", {
     method: "POST",
@@ -149,8 +124,26 @@ export async function signFacturaeXML(xml: string): Promise<Blob> {
     body: xml,
   });
   if (!resp.ok) {
-    const txt = await resp.text().catch(() => "");
-    throw new Error(`Error firmando: ${resp.status} ${txt || resp.statusText}`);
+    const text = await resp.text().catch(() => "");
+    throw new Error(`Error firmando XML (${resp.status}): ${text || resp.statusText}`);
   }
   return await resp.blob();
 }
+
+/** Descarga un Blob. */
+export function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export const pdfFileName = (serie: string, numero: string) =>
+  `factura-${(serie || "").trim()}${(numero || "").trim() || "0001"}.pdf`;
+
+export const xmlFileName = (serie: string, numero: string, signed?: boolean) =>
+  `facturae-${(serie || "").trim()}${(numero || "").trim() || "0001"}${signed ? "-signed" : ""}.xml`;
