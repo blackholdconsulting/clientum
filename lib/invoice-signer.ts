@@ -60,8 +60,14 @@ export async function buildFacturaeXml(payload: any): Promise<string> {
 
 // ============================== SHIMS/ALIASES ==============================
 
-/** Alias para compatibilidad con páginas que importan este nombre concreto */
-export async function signFacturaeXML(xml: string) {
+/**
+ * Alias para compatibilidad con páginas que importan este nombre.
+ * Ahora acepta:
+ *  - string (XML) -> firma directa
+ *  - object (payload) -> construye XML y luego firma
+ */
+export async function signFacturaeXML(input: string | Record<string, any>) {
+  const xml = typeof input === 'string' ? input : await buildFacturaeXml(input);
   return await signFacturaeXml(xml);
 }
 
@@ -92,16 +98,22 @@ export function downloadBlob(
   URL.revokeObjectURL(url);
 }
 
-/** Nombre de archivo XML a partir de serie y número */
-export function xmlFileName(series: string, number: number, ext: string = 'xml') {
+/** Nombre de archivo XML; tercer parámetro puede ser ext string o boolean "signed" */
+export function xmlFileName(series: string, number: number, extOrSigned: string | boolean = 'xml') {
   const n = String(number ?? 0).padStart(6, '0');
-  return `FACT_${series}-${n}.${ext}`;
+  const isSigned = typeof extOrSigned === 'boolean' ? extOrSigned : false;
+  const ext = typeof extOrSigned === 'string' ? extOrSigned.replace(/^\./, '') : 'xml';
+  const suffix = isSigned ? '-signed' : '';
+  return `FACT_${series}-${n}${suffix}.${ext}`;
 }
 
-/** Nombre de archivo PDF a partir de serie y número */
-export function pdfFileName(series: string, number: number, ext: string = 'pdf') {
+/** Nombre de archivo PDF; tercer parámetro puede ser ext string o boolean "signed" */
+export function pdfFileName(series: string, number: number, extOrSigned: string | boolean = 'pdf') {
   const n = String(number ?? 0).padStart(6, '0');
-  return `FACT_${series}-${n}.${ext}`;
+  const isSigned = typeof extOrSigned === 'boolean' ? extOrSigned : false;
+  const ext = typeof extOrSigned === 'string' ? extOrSigned.replace(/^\./, '') : 'pdf';
+  const suffix = isSigned ? '-signed' : '';
+  return `FACT_${series}-${n}${suffix}.${ext}`;
 }
 
 /**
@@ -119,15 +131,12 @@ export function collectInvoiceFromForm(
   // Autodetección si no se pasa form:
   let target: HTMLFormElement | null = form ?? null;
   if (!target) {
-    // prioridad 1: form marcado para facturas
     target = document.querySelector('form[data-invoice-form]') as HTMLFormElement | null;
   }
   if (!target) {
-    // prioridad 2: id común
     target = document.getElementById('invoice-form') as HTMLFormElement | null;
   }
   if (!target) {
-    // prioridad 3: primer <form> del documento
     target = document.querySelector('form') as HTMLFormElement | null;
   }
   if (!target) {
@@ -176,7 +185,7 @@ export function collectInvoiceFromForm(
     totals: { base, tax, total },
     serie,
     numero,
-    // exponemos también duplicados habituales por compatibilidad
+    // duplicados habituales por compatibilidad
     series: serie,
     number: numero,
   };
