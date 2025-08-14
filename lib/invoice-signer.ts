@@ -3,6 +3,17 @@
 // Evita dependencias nuevas e intenta ser isomórfico (cliente/servidor).
 // Solo 'downloadBlob' exige navegador.
 
+export type CollectedInvoice = {
+  issueDate?: string;
+  type?: string;
+  totals?: { base: number; tax: number; total: number };
+  // claves usadas en distintos sitios
+  serie?: string;      // ES
+  numero?: number;     // ES
+  series?: string;     // EN
+  number?: number;     // EN
+};
+
 // =================== Firma XAdES vía proxy /api/sign/xml ===================
 
 export async function signFacturaeXml(xml: string): Promise<Uint8Array> {
@@ -41,17 +52,15 @@ export async function signFacturaeXml(xml: string): Promise<Uint8Array> {
  * - Mantenemos la firma para no romper importadores.
  */
 export async function buildFacturaeXml(payload: any): Promise<string> {
-  // Si tu app ya define la función real en algún sitio y la expone global, úsala:
   if ((globalThis as any).__existing_buildFacturaeXml) {
     return (globalThis as any).__existing_buildFacturaeXml(payload);
   }
-  // Placeholder mínimo (no usar en prod si no tienes el real):
   return `<?xml version="1.0" encoding="UTF-8"?><Facturae><PlaceHolder/></Facturae>`;
 }
 
 // ============================== SHIMS/ALIASES ==============================
 
-// Alias de compatibilidad con páginas que importan este nombre concreto
+/** Alias para compatibilidad con páginas que importan este nombre concreto */
 export async function signFacturaeXML(xml: string) {
   return await signFacturaeXml(xml);
 }
@@ -90,18 +99,76 @@ export function pdfFileName(series: string, number: number, ext: string = 'pdf')
   return `FACT_${series}-${n}.${ext}`;
 }
 
-/** Recoger datos mínimos desde un <form>. Amplía según tus campos reales. */
-export function collectInvoiceFromForm(form: HTMLFormElement): any {
-  const fd = new FormData(form);
-  const issueDate = (fd.get('issueDate') as string) || '';
-  const type = (fd.get('type') as string) || 'completa';
-  const totals = {
-    base: Number(fd.get('totalBase') ?? 0),
-    tax: Number(fd.get('totalTax') ?? 0),
-    total: Number(fd.get('total') ?? 0),
+/**
+ * Recoger datos desde un <form>.
+ * Compatibilidad: puede llamarse SIN argumentos (detecta automáticamente el form).
+ * Intenta resolver 'serie/numero' desde múltiples nombres de campo o data-attrs.
+ */
+export function collectInvoiceFromForm(form?: HTMLFormElement | null): CollectedInvoice {
+  if (typeof window === 'undefined') {
+    // En SSR no hay DOM; devolvemos estructura vacía segura
+    return {};
+  }
+
+  // Autodetección si no se pasa form:
+  let target: HTMLFormElement | null = form ?? null;
+  if (!target) {
+    // prioridad 1: form marcado para facturas
+    target = document.querySelector('form[data-invoice-form]') as HTMLFormElement | null;
+  }
+  if (!target) {
+    // prioridad 2: id común
+    target = document.getElementById('invoice-form') as HTMLFormElement | null;
+  }
+  if (!target) {
+    // prioridad 3: primer <form> del documento
+    target = document.querySelector('form') as HTMLFormElement | null;
+  }
+  if (!target) {
+    return {};
+  }
+
+  const fd = new FormData(target);
+
+  const pick = (names: string[]): string | undefined => {
+    for (const n of names) {
+      const v = fd.get(n);
+      if (v != null && String(v).trim() !== '') return String(v);
+    }
+    return undefined;
   };
-  // Añade aquí mapeo de customer/items/payment/etc. si tu formulario ya los aporta.
-  return { issueDate, type, totals };
+
+  const issueDate = pick(['issueDate', 'fecha', 'fecha_emision', 'issue_date']);
+  const type = pick(['type', 'tipo', 'invoice_type']);
+
+  const base = Number(pick(['totalBase', 'base', 'subtotal']) ?? 0);
+  const tax = Number(pick(['totalTax', 'iva', 'tax']) ?? 0);
+  const total = Number(pick(['total', 'total_amount', 'importe_total']) ?? 0);
+
+  // SERIE y NÚMERO desde varios nombres posibles
+  const serieStr =
+    pick(['serie', 'series', 'invoice_series', 'invoiceSeries']) ??
+    (target.dataset ? target.dataset.series : undefined);
+  const numeroStr =
+    pick(['numero', 'number', 'invoice_number', 'invoiceNumber']) ??
+    (target.dataset ? target.dataset.number : undefined);
+
+  const serie = serieStr ? String(serieStr).trim() : undefined;
+  const numeroParsed = numeroStr ? Number(numeroStr) : NaN;
+  const numero = Number.isFinite(numeroParsed) ? numeroParsed : undefined;
+
+  const collected: CollectedInvoice = {
+    issueDate,
+    type,
+    totals: { base, tax, total },
+    // exponemos tanto en ES como EN para máxima compatibilidad
+    serie,
+    numero,
+    series: serie,
+    number: numero,
+  };
+
+  return collected;
 }
 
 // ============================ Veri*factu (RF/QR) ===========================
@@ -119,7 +186,6 @@ export async function verifactuAlta(
   const rf = buildRFString(payload);
   let qrDataUrl: string | null = null;
 
-  // Generar QR solo si se solicita explícitamente
   if (payload.withQR) {
     try {
       qrDataUrl = await qrDataUrlFromRF(rf);
