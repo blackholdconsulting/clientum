@@ -1,30 +1,34 @@
-// app/api/factura-electronica/route.ts
-import { NextRequest } from 'next/server'
-import { buildFacturae322 } from '@/lib/facturae'
-import { Invoice } from '@/lib/invoice'
+// Proxy a clientumsign: genera + firma Facturae (XAdES-EPES)
+import { NextResponse } from "next/server";
 
-export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
+const BASE = process.env.SIGNER_BASE_URL!;
+const API_KEY = process.env.SIGNER_API_KEY || "";
+const TIMEOUT = Number(process.env.SIGNER_TIMEOUT_MS || 30000);
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const { invoice } = (await req.json()) as { invoice: Invoice }
-    const unsignedXml = buildFacturae322(invoice)
+    const body = await req.json(); // { invoice: FacturaMin }
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), TIMEOUT);
 
-    // Pequeña guarda: si por error fuese HTML, avisamos
-    if (!unsignedXml.startsWith('<?xml') && !unsignedXml.includes('<Facturae')) {
-      return new Response('Generation error: not XML', { status: 500 })
-    }
-
-    return new Response(unsignedXml, {
+    const resp = await fetch(`${BASE}/api/facturae/sign`, {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/xml; charset=UTF-8',
-        'X-Signed': 'false',
-        'Content-Disposition': `attachment; filename="${invoice.number || 'factura'}.xml"`,
-        'Cache-Control': 'no-store',
+        "Content-Type": "application/json",
+        ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
       },
-    })
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+
+    const text = await resp.text();
+    if (!resp.ok) {
+      return NextResponse.json({ error: text || resp.statusText }, { status: resp.status });
+    }
+    return new Response(text, { status: 200, headers: { "Content-Type": "application/xml; charset=utf-8" } });
   } catch (e: any) {
-    return new Response('Bad request', { status: 400 })
+    return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
   }
 }
+
