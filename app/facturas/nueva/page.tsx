@@ -1,426 +1,382 @@
-"use client";
+// app/facturas/nueva/page.tsx
+'use client';
+export const dynamic = 'force-dynamic';
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useState, useEffect, Fragment, FormEvent, useRef } from 'react';
+import Link from 'next/link';
+import { Dialog, Transition } from '@headlessui/react';
+import ReactQRCode from 'react-qr-code';
+import { toDataURL } from 'qrcode';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 
-/** ---------------------
- *  Tipos simples
- * --------------------- */
-type Emisor = {
-  nombre?: string;
-  nif?: string;
-  direccion?: string;
-  localidad?: string;
-  provincia?: string;
-  cp?: string;
-  email?: string;
-  telefono?: string;
-};
+import type { Invoice, InvoiceItem, Party, TaxLine } from '@/lib/invoice';
 
-type FacturaForm = {
-  emisor: Emisor;
-  serie: string;
-  numero: string;
-  fecha: string;
-  baseImponible: string; // guardamos como string en inputs, convertimos al calcular
-  tipoIVA: string;
-  cuotaIVA: string;
-  importeTotal: string;
-};
-
-/** ---------------------
- *  Utils mínimos
- * --------------------- */
-function toNum(n?: string) {
-  const x = Number((n ?? "").toString().replace(",", "."));
-  return isFinite(x) ? x : 0;
+// === Tipos locales que ya usabas ===
+interface Cliente { id: string; nombre: string; nif?: string; direccion?: string; ciudad?: string; provincia?: string; cp?: string; pais?: string; }
+interface Perfil {
+  id?: string; user_id?: string;
+  // Posibles nombres de campos en tu tabla perfil
+  nombre_empr?: string; empresa?: string; nombre?: string; razon_social?: string;
+  nif?: string; direccion?: string; ciudad?: string; provincia?: string; cp?: string; pais?: string;
+  telefono?: string; email?: string; web?: string;
 }
+interface Cuenta { id: string; codigo: string; nombre: string; }
+interface Linea { id: number; descripcion: string; cantidad: number; precio: number; iva: number; cuentaId: string; }
 
-function format2(n: number) {
-  return (Math.round(n * 100) / 100).toFixed(2);
-}
-
-/** ---------------------
- *  API helpers
- * --------------------- */
-
-// 1) Carga emisor desde tu perfil (ajusta el endpoint si usas otro)
-async function fetchEmisorFromProfile(): Promise<Emisor | null> {
-  try {
-    const resp = await fetch("/api/profile/emisor", { cache: "no-store" });
-    if (!resp.ok) return null;
-    return (await resp.json()) as Emisor;
-  } catch {
-    return null;
-  }
-}
-
-// 2) Construye un Facturae mínimo para exportar
-function buildFacturaeXML(d: FacturaForm): string {
-  const base = toNum(d.baseImponible);
-  const tipo = toNum(d.tipoIVA);
-  const cuota = d.cuotaIVA ? toNum(d.cuotaIVA) : (base * tipo) / 100;
-  const total = d.importeTotal ? toNum(d.importeTotal) : base + cuota;
-
-  const esc = (s?: string) =>
-    (s ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<Facturae>
-  <FileHeader>
-    <SchemaVersion>3.2.1</SchemaVersion>
-    <Modality>I</Modality>
-    <InvoiceIssuerType>EM</InvoiceIssuerType>
-  </FileHeader>
-  <Parties>
-    <SellerParty>
-      <TaxIdentification>
-        <TaxIdentificationNumber>${esc(d.emisor.nif)}</TaxIdentificationNumber>
-      </TaxIdentification>
-      <LegalEntity>
-        <CorporateName>${esc(d.emisor.nombre)}</CorporateName>
-        <AddressInSpain>
-          <Address>${esc(d.emisor.direccion)}</Address>
-          <PostCode>${esc(d.emisor.cp)}</PostCode>
-          <Town>${esc(d.emisor.localidad)}</Town>
-          <Province>${esc(d.emisor.provincia)}</Province>
-          <CountryCode>ESP</CountryCode>
-        </AddressInSpain>
-      </LegalEntity>
-    </SellerParty>
-  </Parties>
-  <Invoices>
-    <Invoice>
-      <InvoiceHeader>
-        <InvoiceNumber>${esc(d.numero)}</InvoiceNumber>
-        <InvoiceSeriesCode>${esc(d.serie)}</InvoiceSeriesCode>
-        <InvoiceDocumentType>FC</InvoiceDocumentType>
-        <InvoiceClass>OO</InvoiceClass>
-      </InvoiceHeader>
-      <InvoiceIssueData>
-        <IssueDate>${esc(d.fecha)}</IssueDate>
-        <TaxCurrencyCode>EUR</TaxCurrencyCode>
-      </InvoiceIssueData>
-      <TaxesOutputs>
-        <Tax>
-          <TaxTypeCode>01</TaxTypeCode>
-          <TaxRate>${format2(tipo)}</TaxRate>
-          <TaxableBase>
-            <TotalAmount>${format2(base)}</TotalAmount>
-          </TaxableBase>
-          <TaxAmount>
-            <TotalAmount>${format2(cuota)}</TotalAmount>
-          </TaxAmount>
-        </Tax>
-      </TaxesOutputs>
-      <InvoiceTotals>
-        <TotalGeneralTaxes>${format2(cuota)}</TotalGeneralTaxes>
-        <TotalInvoiceAmount>${format2(total)}</TotalInvoiceAmount>
-      </InvoiceTotals>
-    </Invoice>
-  </Invoices>
-</Facturae>`;
-}
-
-// 3) Firma el XML contra tu microservicio (proxy Next)
-async function signFacturaeXML(xml: string): Promise<Blob> {
-  const resp = await fetch("/api/sign/xml", {
-    method: "POST",
-    headers: { "Content-Type": "application/xml; charset=utf-8" },
-    body: xml,
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
-    throw new Error(`Error firmando XML (${resp.status}): ${text || resp.statusText}`);
-  }
-  return await resp.blob();
-}
-
-// 4) Descarga Blob
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-// 5) Nombres de archivo
-function pdfFileName(d: FacturaForm) {
-  return `factura-${(d.serie || "").trim()}${(d.numero || "").trim() || "0001"}.pdf`;
-}
-function xmlFileName(d: FacturaForm, signed = false) {
-  return `factura-${(d.serie || "").trim()}${(d.numero || "").trim() || "0001"}${signed ? "-signed" : ""}.xml`;
-}
-
-/** ---------------------
- *  Página
- * --------------------- */
 export default function NuevaFacturaPage() {
-  const [msg, setMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState<null | "pdf" | "xml" | "sign">(null);
+  const supabase = createPagesBrowserClient();
+  const refFactura = useRef<HTMLFormElement>(null);
 
-  const [form, setForm] = useState<FacturaForm>(() => ({
-    emisor: {},
-    serie: "A",
-    numero: "0001",
-    // YYYY-MM-DD (como en el screenshot)
-    fecha: new Date().toISOString().slice(0, 10),
-    baseImponible: "100.00",
-    tipoIVA: "21.00",
-    cuotaIVA: "", // si va vacío se calcula
-    importeTotal: "", // si va vacío se calcula
-  }));
+  // ===== UI base =====
+  const [origin, setOrigin] = useState(''); useEffect(() => { setOrigin(window.location.origin); }, []);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [perfil, setPerfil] = useState<Perfil | null>(null);
+  const [cuentas, setCuentas] = useState<Cuenta[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Recalcular totales cuando cambian base/tipo/cuota/importe
-  const calculos = useMemo(() => {
-    const base = toNum(form.baseImponible);
-    const tipo = toNum(form.tipoIVA);
-    const cuota = form.cuotaIVA ? toNum(form.cuotaIVA) : (base * tipo) / 100;
-    const total = form.importeTotal ? toNum(form.importeTotal) : base + cuota;
-    return {
-      baseFmt: format2(base),
-      tipoFmt: format2(tipo),
-      cuotaFmt: format2(cuota),
-      totalFmt: format2(total),
-    };
-  }, [form.baseImponible, form.tipoIVA, form.cuotaIVA, form.importeTotal]);
+  // ===== Datos de la factura =====
+  const [serie, setSerie] = useState(''); const [numero, setNumero] = useState('');
+  const [clienteId, setClienteId] = useState('');
+  const [tipo, setTipo] = useState<'factura'|'simplificada'>('factura');
+  const [lineas, setLineas] = useState<Linea[]>([{ id: Date.now(), descripcion:'', cantidad:1, precio:0, iva:21, cuentaId:'' }]);
+  const [customFields, setCustomFields] = useState(false);
+  const [mensajeFinal, setMensajeFinal] = useState(false);
+  const [textoFinal, setTextoFinal] = useState('');
+  const [showQR, setShowQR] = useState(false);
+  const [catCuenta, setCatCuenta] = useState('');
+  const [qrOpen, setQrOpen] = useState(false);
 
-  // Prefill emisor automáticamente
+  // ===== VERI*FACTU / Facturae =====
+  const [orgId, setOrgId] = useState<string>('');      // = user_id (multiusuario)
+  const [verifactuQR, setVerifactuQR] = useState<string | null>(null);
+  const [busyVF, setBusyVF] = useState(false);
+  const [busyFAC, setBusyFAC] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
+
+  // Totales
+  const subtotal = lineas.reduce((s, l) => s + l.cantidad * l.precio, 0);
+  const ivaTotal = lineas.reduce((s, l) => s + l.cantidad * l.precio * (l.iva / 100), 0);
+  const total = subtotal + ivaTotal;
+
+  // ===== Mapper: PERFIL -> Party (robusto a nombres de campos) =====
+  const sellerFromPerfil = (p?: Perfil | null): Party => ({
+    name: (p?.nombre_empr || p?.empresa || p?.razon_social || p?.nombre || '—').toString(),
+    nif: (p?.nif || '—').toString(),
+    address: (p?.direccion || '—').toString(),
+    city: (p?.ciudad || '—').toString(),
+    province: (p?.provincia || '—').toString(),
+    zip: (p?.cp || '—').toString(),
+    country: (p?.pais || 'ESP').toString(),
+  });
+
+  // ===== Carga inicial (perfil, clientes, cuentas) =====
   useEffect(() => {
     (async () => {
-      const emisor = await fetchEmisorFromProfile();
-      if (emisor) {
-        setForm((f) => ({ ...f, emisor: { ...f.emisor, ...emisor } }));
-      }
-    })().catch(() => {});
-  }, []);
+      const { data: { session} } = await supabase.auth.getSession();
+      const uid = session?.user.id;
+      if (!uid) { setLoading(false); return; }
 
-  /** Handlers de cambio */
-  const setEmisor = (patch: Partial<Emisor>) =>
-    setForm((f) => ({ ...f, emisor: { ...f.emisor, ...patch } }));
-  const setField = <K extends keyof FacturaForm>(key: K, val: FacturaForm[K]) =>
-    setForm((f) => ({ ...f, [key]: val }));
+      const { data: clientesData } = await supabase.from('clientes').select('id,nombre');
+      setClientes(clientesData || []);
 
-  /** Botones superiores */
-  async function onDescargarPDF() {
+      const { data: perfilData } = await supabase
+        .from('perfil')
+        .select('*')
+        .eq('user_id', uid)
+        .maybeSingle();
+      if (perfilData) setPerfil(perfilData as any);
+      setOrgId(uid);
+
+      const { data: cuentasData } = await supabase.from('cuentas').select('id,codigo,nombre');
+      setCuentas(cuentasData || []);
+
+      setLoading(false);
+    })();
+  }, [supabase]);
+
+  // ===== Líneas =====
+  const addLinea = () => setLineas(ls => [...ls, { id: Date.now(), descripcion:'', cantidad:1, precio:0, iva:21, cuentaId:'' }]);
+  const removeLinea = (id:number) => setLineas(ls => ls.filter(x => x.id !== id));
+  const updateLinea = (id:number, f:keyof Omit<Linea,'id'>, v:any) => setLineas(ls => ls.map(x => x.id===id ? { ...x, [f]: v } : x));
+
+  // ===== Ensambla objeto Invoice (para APIs) =====
+  async function assembleInvoice(insertedId?: string): Promise<Invoice> {
+    const now = new Date();
+    const issueDate = now.toISOString().slice(0,10);
+    const issueTime = now.toTimeString().slice(0,8);
+
+    // Buyer
+    let buyer: Party = { name:'Cliente', nif:'', address:'', city:'', province:'', zip:'', country:'ESP' };
+    if (clienteId) {
+      const { data: c } = await supabase
+        .from('clientes')
+        .select('id,nombre,nif,direccion,ciudad,provincia,cp,pais')
+        .eq('id', clienteId)
+        .maybeSingle();
+      if (c) buyer = {
+        name: c.nombre || 'Cliente',
+        nif: (c as any).nif || '',
+        address: (c as any).direccion || '',
+        city: (c as any).ciudad || '',
+        province: (c as any).provincia || '',
+        zip: (c as any).cp || '',
+        country: (c as any).pais || 'ESP',
+      };
+    }
+
+    // Seller desde PERFIL
+    const seller = sellerFromPerfil(perfil);
+
+    // Items + taxes
+    const items: InvoiceItem[] = lineas.map(l => ({ description:l.descripcion, quantity:l.cantidad, unitPrice:l.precio, taxRate:l.iva }));
+    const taxMap = new Map<number, { base:number; quota:number }>();
+    lineas.forEach(l => {
+      const base = l.cantidad*l.precio; const quota = base*(l.iva/100);
+      const prev = taxMap.get(l.iva) || { base:0, quota:0 };
+      taxMap.set(l.iva, { base: prev.base + base, quota: prev.quota + quota });
+    });
+    const taxes: TaxLine[] = Array.from(taxMap.entries()).map(([rate,v]) => ({ rate, base:+v.base.toFixed(2), quota:+v.quota.toFixed(2) }));
+
+    return {
+      id: insertedId || `${serie}${numero}`, orgId,
+      number: `${serie}${numero}`, series: serie || undefined,
+      issueDate, issueTime, seller, buyer, items, taxes, currency:'EUR',
+      total: +total.toFixed(2),
+    };
+  }
+
+  // ===== Guardar + Alta VERI*FACTU =====
+  const handleGuardar = async (e:FormEvent) => {
+    e.preventDefault();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.id) { alert('Usuario no autenticado'); return; }
+
+    const { data: inserted, error } = await supabase
+      .from('facturas')
+      .insert([{
+        user_id: user.id,
+        serie, numero, cliente_id: clienteId, tipo: tipo.toUpperCase(),
+        lineas: lineas.map(l => ({ descripcion:l.descripcion, cantidad:l.cantidad, precio:l.precio, iva_porc:l.iva, cuenta_id:l.cuentaId })),
+        custom_fields: customFields, mensaje_final: mensajeFinal ? textoFinal : null,
+        show_qr: showQR, categoria_id: catCuenta
+      }]).select('id').single();
+    if (error) { alert('Error guardando factura: '+error.message); return; }
+
     try {
-      setMsg(null);
-      setBusy("pdf");
-      // POST JSON (tu API de PDF exige POST, el 405 viene por GET)
-      const resp = await fetch("/api/facturas/pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+      setBusyVF(true);
+      const invoice = await assembleInvoice(inserted?.id);
+      const r = await fetch('/api/verifactu/alta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ invoice }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.message || j?.error || 'Alta VERI*FACTU fallida');
+      setVerifactuQR(j.qrPngDataUrl || null);
+      setFlash('Registro VERI*FACTU generado ✔️');
+    } catch (err:any) {
+      setFlash('Error VERI*FACTU: ' + String(err?.message || err));
+    } finally { setBusyVF(false); }
+    setQrOpen(true);
+  };
+
+  // ===== Descargar Facturae (XML) =====
+  const descargarFacturae = async () => {
+    try {
+      setBusyFAC(true);
+      const invoice = await assembleInvoice();
+      const res = await fetch('/api/factura-electronica', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ invoice })
       });
-      if (!resp.ok) throw new Error(`Error PDF: ${resp.status}`);
-      const blob = await resp.blob();
-      downloadBlob(blob, pdfFileName(form));
-    } catch (e: any) {
-      console.error(e);
-      setMsg(e?.message || "Error generando PDF");
-    } finally {
-      setBusy(null);
-    }
-  }
 
-  async function onDescargarFacturae() {
-    try {
-      setMsg(null);
-      setBusy("xml");
-      const xml = buildFacturaeXML(form);
-      const blob = new Blob([xml], { type: "application/xml;charset=utf-8" });
-      downloadBlob(blob, xmlFileName(form, false));
-    } catch (e: any) {
-      console.error(e);
-      setMsg(e?.message || "Error generando XML");
-    } finally {
-      setBusy(null);
-    }
-  }
+      // Leemos como texto para poder validar contenido
+      const contentType = res.headers.get('content-type') || '';
+      const text = await res.text();
 
-  async function onFirmarFacturae() {
-    try {
-      setMsg(null);
-      setBusy("sign");
-      const xml = buildFacturaeXML(form);
-      const blob = await signFacturaeXML(xml); // via /api/sign/xml -> microservicio
-      downloadBlob(blob, xmlFileName(form, true));
-    } catch (e: any) {
-      console.error(e);
-      setMsg(e?.message || "Error firmando XML");
+      if (!contentType.includes('xml') || !text.includes('<Facturae')) {
+        setFlash(`Error generando Facturae: ${text.slice(0,140)}…`);
+        return;
+      }
+
+      const blob = new Blob([text], { type: 'application/xml;charset=UTF-8' });
+      setFlash(`Facturae generada (${(blob.size/1024).toFixed(1)} KB)`);
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url;
+      a.download = `${invoice.number || 'factura'}.xml`; // si firmas externamente, renómbralo a .xsig
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e:any) {
+      setFlash('Error Facturae: ' + String(e?.message || e));
     } finally {
-      setBusy(null);
+      setBusyFAC(false);
     }
-  }
+  };
+
+  // ===== Exportar PDF en cliente (misma estética) =====
+  const exportPDF = async () => {
+    const doc = new jsPDF();
+    doc.setFontSize(16); doc.text(`Factura ${serie}${numero}`, 14, 20);
+
+    // Bloque “Mi perfil” (emisor)
+    const s = sellerFromPerfil(perfil);
+    doc.setFontSize(10);
+    doc.text([
+      s.name || '—',
+      s.address || '—',
+      `${s.zip || '—'} ${s.city || '—'} (${s.province || '—'})`,
+      s.country || 'ESP',
+      `NIF/CIF: ${s.nif || '—'}`,
+      ...(perfil?.telefono ? [`Tel: ${perfil.telefono}`] : []),
+      ...(perfil?.email ?   [`Email: ${perfil.email}`]   : []),
+      ...(perfil?.web ?     [`Web: ${perfil.web}`]       : []),
+    ], 14, 30);
+
+    // Tabla de líneas
+    // @ts-ignore
+    autoTable(doc, {
+      startY: 70,
+      head: [['Desc.','Cant.','Precio','IVA','Total','Cuenta']],
+      body: lineas.map(l => [
+        l.descripcion,
+        String(l.cantidad),
+        l.precio.toFixed(2),
+        `${l.iva}%`,
+        (l.cantidad*l.precio*(1+l.iva/100)).toFixed(2),
+        cuentas.find(c=>c.id===l.cuentaId)?.codigo || ''
+      ]),
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY || 100;
+    doc.setFontSize(10);
+    doc.text(`Subtotal: ${subtotal.toFixed(2)} €`, 140, finalY+10, { align:'right' });
+    doc.text(`IVA: ${ivaTotal.toFixed(2)} €`, 140, finalY+16, { align:'right' });
+    doc.setFontSize(12);
+    doc.text(`Total: ${total.toFixed(2)} €`, 140, finalY+24, { align:'right' });
+
+    if (showQR && origin) {
+      const imgData = verifactuQR ? verifactuQR : await toDataURL(`${origin}/facturas/${serie}${numero}`);
+      doc.addImage(imgData, 'PNG', 14, finalY+32, 40, 40);
+    }
+
+    doc.save(`factura-${serie}${numero}.pdf`);
+  };
+
+  if (loading) return <div className="p-6">Cargando datos…</div>;
 
   return (
     <div className="p-6">
-      <h1 className="text-xl font-semibold mb-4">Nueva factura</h1>
+      <Link href="/facturas" className="text-blue-600 mb-4 inline-block">← Volver a Facturas</Link>
+      <h1 className="text-2xl font-semibold mb-6">Crear Factura</h1>
 
-      {/* Botonera superior */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        <button
-          onClick={onDescargarPDF}
-          disabled={busy === "pdf"}
-          className="px-4 py-2 rounded bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50"
-        >
-          {busy === "pdf" ? "Generando PDF..." : "Descargar PDF"}
-        </button>
-        <button
-          onClick={onDescargarFacturae}
-          disabled={busy === "xml"}
-          className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
-        >
-          {busy === "xml" ? "Generando XML..." : "Descargar Facturae"}
-        </button>
-        <button
-          onClick={onFirmarFacturae}
-          disabled={busy === "sign"}
-          className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {busy === "sign" ? "Firmando..." : "Firmar y descargar Facturae (XAdES)"}
-        </button>
+      {/* Vista previa: Datos del emisor (Mi perfil) */}
+      <div className="mb-4 rounded border bg-slate-50 px-4 py-3 text-sm">
+        <p className="font-medium mb-1">Datos del emisor (Mi perfil)</p>
+        {(() => {
+          const s = sellerFromPerfil(perfil);
+          return (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div><b>Nombre</b>: {s.name}</div>
+                <div><b>NIF</b>: {s.nif}</div>
+                <div><b>Dirección</b>: {s.address}</div>
+                <div><b>Localidad</b>: {s.zip} {s.city} ({s.province})</div>
+                <div><b>País</b>: {s.country}</div>
+              </div>
+              <div>
+                <div><b>Tel.</b>: {perfil?.telefono || '—'}</div>
+                <div><b>Email</b>: {perfil?.email || '—'}</div>
+                <div><b>Web</b>: {perfil?.web || '—'}</div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
-      {/* Aviso */}
-      {msg && (
-        <div className="mb-4 rounded border border-yellow-300 bg-yellow-50 text-yellow-800 px-4 py-3">
-          {msg}
-        </div>
-      )}
+      {flash && <div className="mb-4 text-sm rounded border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700">{flash}</div>}
 
-      {/* EMISOR */}
-      <section className="mb-6 rounded border bg-white">
-        <div className="px-4 py-3 font-medium border-b">EMISOR</div>
-        <div className="p-4 grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-slate-600">Nombre / Razón social</label>
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={form.emisor.nombre ?? ""}
-              onChange={(e) => setEmisor({ nombre: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-600">NIF</label>
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={form.emisor.nif ?? ""}
-              onChange={(e) => setEmisor({ nif: e.target.value })}
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-sm text-slate-600">Dirección</label>
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={form.emisor.direccion ?? ""}
-              onChange={(e) => setEmisor({ direccion: e.target.value })}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm text-slate-600">Localidad</label>
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={form.emisor.localidad ?? ""}
-              onChange={(e) => setEmisor({ localidad: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-600">Provincia</label>
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={form.emisor.provincia ?? ""}
-              onChange={(e) => setEmisor({ provincia: e.target.value })}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* DATOS FACTURA */}
-      <section className="mb-6 rounded border bg-white">
-        <div className="px-4 py-3 font-medium border-b">DATOS FACTURA</div>
-        <div className="p-4 grid md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm text-slate-600">Serie</label>
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={form.serie}
-              onChange={(e) => setField("serie", e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-600">Número</label>
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={form.numero}
-              onChange={(e) => setField("numero", e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-600">Fecha</label>
-            <input
-              type="date"
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={form.fecha}
-              onChange={(e) => setField("fecha", e.target.value)}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* TOTALES */}
-      <section className="mb-10 rounded border bg-white">
-        <div className="px-4 py-3 font-medium border-b">TOTALES</div>
-        <div className="p-4 grid md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm text-slate-600">Base imponible</label>
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={form.baseImponible}
-              onChange={(e) => setField("baseImponible", e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-600">Tipo IVA (%)</label>
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              value={form.tipoIVA}
-              onChange={(e) => setField("tipoIVA", e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-600">Cuota IVA</label>
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              placeholder="Se calculará si lo dejas vacío"
-              value={form.cuotaIVA}
-              onChange={(e) => setField("cuotaIVA", e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-600">Importe total</label>
-            <input
-              className="mt-1 w-full rounded border px-3 py-2"
-              placeholder="Se calculará si lo dejas vacío"
-              value={form.importeTotal}
-              onChange={(e) => setField("importeTotal", e.target.value)}
-            />
-          </div>
+      <form onSubmit={handleGuardar} ref={refFactura} className="bg-white p-6 rounded shadow space-y-6">
+        {/* Serie y número */}
+        <div className="flex gap-4">
+          <input type="text" placeholder="Serie" value={serie} onChange={e=>setSerie(e.target.value)} className="border rounded p-2 flex-1" />
+          <input type="text" placeholder="Número" value={numero} onChange={e=>setNumero(e.target.value)} className="border rounded p-2 flex-1" />
         </div>
 
-        {/* Vista rápida de cálculo */}
-        <div className="px-4 pb-4 text-sm text-slate-600">
-          <div>Base: <b>{calculos.baseFmt}</b> — Tipo: <b>{calculos.tipoFmt}%</b> — Cuota: <b>{calculos.cuotaFmt}</b> — Total: <b>{calculos.totalFmt}</b></div>
+        {/* Cliente y tipo */}
+        <div className="flex gap-4">
+          <select value={clienteId} onChange={e=>setClienteId(e.target.value)} className="border rounded p-2 flex-1">
+            <option value="">Selecciona cliente</option>
+            {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+          <select value={tipo} onChange={e=>setTipo(e.target.value as any)} className="border rounded p-2 flex-1">
+            <option value="factura">Factura Completa</option>
+            <option value="simplificada">Factura Simplificada</option>
+          </select>
         </div>
-      </section>
+
+        {/* Líneas */}
+        {lineas.map(l => (
+          <div key={l.id} className="grid grid-cols-6 gap-2 items-end">
+            <input type="text" placeholder="Descripción" value={l.descripcion} onChange={e=>updateLinea(l.id,'descripcion',e.target.value)} className="col-span-2 border rounded p-2" />
+            <input type="number" placeholder="Cant." value={l.cantidad} onChange={e=>updateLinea(l.id,'cantidad',Number(e.target.value))} className="border rounded p-2" />
+            <input type="number" placeholder="Precio" value={l.precio} onChange={e=>updateLinea(l.id,'precio',Number(e.target.value))} className="border rounded p-2" />
+            <select value={l.iva} onChange={e=>updateLinea(l.id,'iva',Number(e.target.value))} className="border rounded p-2">
+              {[4,10,21].map(t => <option key={t} value={t}>{t}%</option>)}
+            </select>
+            <select value={l.cuentaId} onChange={e=>updateLinea(l.id,'cuentaId',e.target.value)} className="border rounded p-2">
+              <option value="">Cuenta</option>
+              {cuentas.map(c => <option key={c.id} value={c.id}>{c.codigo} – {c.nombre}</option>)}
+            </select>
+            <button type="button" onClick={()=>removeLinea(l.id)} className="text-red-600">×</button>
+          </div>
+        ))}
+        <button type="button" onClick={addLinea} className="text-blue-600">+ Añadir línea</button>
+
+        {/* Opciones */}
+        <div className="flex items-center gap-4">
+          <label><input type="checkbox" checked={customFields} onChange={e=>setCustomFields(e.target.checked)} /> Campos extra</label>
+          <label><input type="checkbox" checked={mensajeFinal} onChange={e=>setMensajeFinal(e.target.checked)} /> Mensaje final</label>
+          <label><input type="checkbox" checked={showQR} onChange={e=>setShowQR(e.target.checked)} /> Mostrar QR</label>
+          <select value={catCuenta} onChange={e=>setCatCuenta(e.target.value)} className="border rounded p-2 ml-auto">
+            <option value="">Categoría</option>
+            {cuentas.map(c => <option key={c.id} value={c.id}>{c.codigo}</option>)}
+          </select>
+        </div>
+
+        {mensajeFinal && <textarea placeholder="Texto final..." value={textoFinal} onChange={e=>setTextoFinal(e.target.value)} className="w-full border rounded p-2" />}
+
+        {/* Acciones */}
+        <div className="flex flex-wrap gap-2 justify-between items-center">
+          <div className="mb-2">
+            <p>Subtotal: {subtotal.toFixed(2)}€</p>
+            <p>IVA: {ivaTotal.toFixed(2)}€</p>
+            <p className="font-bold">Total: {total.toFixed(2)}€</p>
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" disabled={busyVF} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">{busyVF ? 'Guardando…' : 'Guardar Factura'}</button>
+            <button type="button" onClick={exportPDF} className="px-4 py-2 bg-gray-200 rounded">Exportar PDF</button>
+            <button type="button" onClick={descargarFacturae} disabled={busyFAC} className="px-4 py-2 bg-emerald-600 text-white rounded disabled:opacity-50">
+              {busyFAC ? 'Firmando…' : 'Descargar Facturae'}
+            </button>
+          </div>
+        </div>
+      </form>
+
+      {/* Modal QR */}
+      <Transition show={qrOpen} as={Fragment}>
+        <Dialog open onClose={()=>setQrOpen(false)} className="fixed inset-0 z-50 flex items-center justify-center">
+          <Transition.Child as={Fragment} enter="transition-opacity duration-200" enterFrom="opacity-0" enterTo="opacity-100">
+            <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+          </Transition.Child>
+          <Transition.Child as={Fragment} enter="transition-transform duration-200" enterFrom="scale-95" enterTo="scale-100">
+            <div className="bg-white p-6 rounded shadow text-center">
+              <Dialog.Title className="text-lg font-semibold mb-4">{verifactuQR ? 'QR VERI*FACTU' : 'Acceso a tu factura'}</Dialog.Title>
+              {verifactuQR ? <img src={verifactuQR} alt="QR Verifactu" className="mx-auto" /> : (origin && <ReactQRCode value={`${origin}/facturas/${serie}${numero}`} />)}
+              <button onClick={()=>setQrOpen(false)} className="mt-4 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cerrar</button>
+            </div>
+          </Transition.Child>
+        </Dialog>
+      </Transition>
     </div>
   );
 }
