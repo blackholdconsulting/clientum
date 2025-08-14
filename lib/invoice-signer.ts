@@ -1,6 +1,9 @@
 // lib/invoice-signer.ts
-// Mantiene compatibilidad con páginas existentes y añade helpers seguros.
-// Si ya tienes implementaciones, conserva las tuyas y asegura estos exports.
+// Helpers de firma + compatibilidad con páginas existentes.
+// Evita dependencias nuevas e intenta ser isomórfico (cliente/servidor).
+// Solo 'downloadBlob' exige navegador.
+
+// =================== Firma XAdES vía proxy /api/sign/xml ===================
 
 export async function signFacturaeXml(xml: string): Promise<Uint8Array> {
   const apiKey = process.env.SIGNER_API_KEY!;
@@ -33,21 +36,22 @@ export async function signFacturaeXml(xml: string): Promise<Uint8Array> {
 }
 
 /**
- * Builder de Facturae. Si ya tienes el real, exporta ese.
- * Para no romper importadores, dejamos esta firma.
+ * Builder de Facturae.
+ * - Si ya tienes el real, exporta ese en lugar de este placeholder.
+ * - Mantenemos la firma para no romper importadores.
  */
 export async function buildFacturaeXml(payload: any): Promise<string> {
-  // Si tu proyecto ya define la función real, reemplaza esta por tu import:
-  // return buildFacturaeXmlReal(payload)
+  // Si tu app ya define la función real en algún sitio y la expone global, úsala:
   if ((globalThis as any).__existing_buildFacturaeXml) {
     return (globalThis as any).__existing_buildFacturaeXml(payload);
   }
-  // Placeholder mínimo (no usar en producción si no tienes el real):
+  // Placeholder mínimo (no usar en prod si no tienes el real):
   return `<?xml version="1.0" encoding="UTF-8"?><Facturae><PlaceHolder/></Facturae>`;
 }
 
-/* ===================== SHIMS para compatibilidad ===================== */
-/** Alias para compatibilidad con páginas que importan signFacturaeXML */
+// ============================== SHIMS/ALIASES ==============================
+
+// Alias de compatibilidad con páginas que importan este nombre concreto
 export async function signFacturaeXML(xml: string) {
   return await signFacturaeXml(xml);
 }
@@ -74,8 +78,14 @@ export function downloadBlob(
   URL.revokeObjectURL(url);
 }
 
-/** Generar nombre de archivo XML a partir de serie y número */
+/** Nombre de archivo XML a partir de serie y número */
 export function xmlFileName(series: string, number: number, ext: string = 'xml') {
+  const n = String(number ?? 0).padStart(6, '0');
+  return `FACT_${series}-${n}.${ext}`;
+}
+
+/** Nombre de archivo PDF a partir de serie y número */
+export function pdfFileName(series: string, number: number, ext: string = 'pdf') {
   const n = String(number ?? 0).padStart(6, '0');
   return `FACT_${series}-${n}.${ext}`;
 }
@@ -90,5 +100,33 @@ export function collectInvoiceFromForm(form: HTMLFormElement): any {
     tax: Number(fd.get('totalTax') ?? 0),
     total: Number(fd.get('total') ?? 0),
   };
+  // Añade aquí mapeo de customer/items/payment/etc. si tu formulario ya los aporta.
   return { issueDate, type, totals };
+}
+
+// ============================ Veri*factu (RF/QR) ===========================
+
+/**
+ * Alta Veri*factu "light": construye el RF y opcionalmente genera un QR (DataURL).
+ * Si necesitas enviar a AEAT, hazlo en otra función; aquí no llamamos a endpoints externos.
+ */
+import type { VeriFactuPayload } from './verifactu';
+import { buildRFString, qrDataUrlFromRF } from './verifactu';
+
+export async function verifactuAlta(
+  payload: VeriFactuPayload & { withQR?: boolean }
+): Promise<{ rf: string; qrDataUrl: string | null }> {
+  const rf = buildRFString(payload);
+  let qrDataUrl: string | null = null;
+
+  // Generar QR solo si se solicita explícitamente
+  if (payload.withQR) {
+    try {
+      qrDataUrl = await qrDataUrlFromRF(rf);
+    } catch {
+      qrDataUrl = null;
+    }
+  }
+
+  return { rf, qrDataUrl };
 }
