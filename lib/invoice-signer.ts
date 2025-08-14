@@ -1,133 +1,47 @@
-// Funciones reutilizables para leer tu formulario actual y llamar a los proxies
-
-export type FacturaMin = {
-  emisor: {
-    nombre: string;
-    nif: string;
-    direccion?: string;
-    localidad?: string;
-    provincia?: string;
-  };
-  serie: string;
-  numero: string;
-  fecha: string; // ISO yyyy-MM-dd o dd/MM/yyyy
-  totales: {
-    baseImponible: number;
-    tipoIVA: number;
-    cuotaIVA?: number;
-    importeTotal?: number;
-  };
-  software?: { nombre: string; version: string };
-};
-
-// --- Utilidades DOM (no cambia tu formato) -----------------------------
-
-function v(idOrName: string): string {
-  // Busca por [name] y si no por [id]
-  const byName = document.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-    `[name="${idOrName}"]`
-  );
-  if (byName) return (byName.value ?? "").trim();
-
-  const byId = document.getElementById(idOrName) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
-  if (byId) return (byId.value ?? "").trim();
-
-  return "";
-}
-
-function toNumber(s: string): number {
-  if (!s) return 0;
-  // admite coma o punto
-  const n = Number(s.replace(/\./g, "").replace(",", "."));
-  return isFinite(n) ? n : 0;
-}
-
-function normFecha(fecha: string): string {
-  // admite dd/MM/yyyy o yyyy-MM-dd
-  if (!fecha) return new Date().toISOString().slice(0, 10);
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(fecha)) {
-    const [d, m, y] = fecha.split("/");
-    return `${y}-${m}-${d}`;
-  }
-  return fecha;
-}
-
-// --- Lectura del formulario de "Nueva factura" ------------------------
+// --- ADD: helpers seguros para reutilizar desde el API ---
 
 /**
- * Lee tu formulario actual SIN cambiarlo.
- * Ajusta los "names" aquí si en tu form son otros.
+ * Firma un XML Facturae llamando al proxy /api/sign/xml con X-API-Key y Content-Type: application/xml.
+ * Devuelve los bytes del documento XAdES (Uint8Array).
  */
-export function collectInvoiceFromForm(): FacturaMin {
-  const base = toNumber(v("base") || v("baseImponible"));
-  const tipo = toNumber(v("tipoiva") || v("tipoIVA"));
-  // Si el usuario no rellena cuota/total, los calculamos
-  const cuota = toNumber(v("cuotaiva") || v("cuotaIVA")) || +(base * tipo / 100).toFixed(2);
-  const total = toNumber(v("importetotal") || v("importeTotal")) || +(base + cuota).toFixed(2);
+export async function signFacturaeXml(xml: string): Promise<Uint8Array> {
+  const apiKey = process.env.SIGNER_API_KEY!;
+  if (!apiKey) throw new Error('Falta SIGNER_API_KEY en variables de entorno.');
 
-  return {
-    emisor: {
-      nombre: v("emisor_nombre") || v("nombre_razon_social") || v("emisorNombre") || "",
-      nif: v("emisor_nif") || v("nif") || v("emisorNif") || "",
-      direccion: v("emisor_direccion") || v("direccion"),
-      localidad: v("emisor_localidad") || v("localidad"),
-      provincia: v("emisor_provincia") || v("provincia"),
+  // Construimos URL absoluta del proxy; usa NEXT_PUBLIC_APP_URL en prod si la tienes
+  const base =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+
+  const res = await fetch(new URL('/api/sign/xml', base), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/xml',
+      'X-API-Key': apiKey,
     },
-    serie: v("serie") || "A",
-    numero: v("numero") || "0001",
-    fecha: normFecha(v("fecha")),
-    totales: {
-      baseImponible: base,
-      tipoIVA: tipo,
-      cuotaIVA: cuota,
-      importeTotal: total,
-    },
-    software: { nombre: "Clientum", version: "0.0.1" },
-  };
-}
-
-// --- Llamadas a tus proxies ------------------------------------------
-
-export async function signFacturaeXML(invoice: FacturaMin): Promise<Blob> {
-  const resp = await fetch("/api/factura-electronica", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ invoice }),
+    body: xml,
+    // Importante: no reenviar cookies del usuario al microservicio
+    cache: 'no-store',
   });
-  const text = await resp.text();
-  if (!resp.ok) throw new Error(`Error firmando XML (${resp.status}): ${text || resp.statusText}`);
-  // Lo devolvemos como Blob para descargar
-  return new Blob([text], { type: "application/xml;charset=utf-8" });
+
+  if (res.status === 401 || res.status === 403) {
+    throw new Error('Autenticación inválida con el servicio de firma (401/403).');
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Error del servicio de firma (${res.status}): ${text || 'sin cuerpo'}`);
+  }
+
+  const arrayBuffer = await res.arrayBuffer();
+  return new Uint8Array(arrayBuffer);
 }
 
-export async function verifactuAlta(invoice: FacturaMin): Promise<{ rf: any; qr: any }> {
-  const resp = await fetch("/api/verifactu/alta", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ invoice }),
-  });
-  const json = await resp.json();
-  if (!resp.ok) throw new Error(`Error VERI*FACTU (${resp.status}): ${json?.error || resp.statusText}`);
-  return json;
-}
-
-// --- Descargas --------------------------------------------------------
-
-export function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-export function xmlFileName(serie: string, numero: string, signed = true) {
-  return `factura-${(serie || "").trim()}${(numero || "").trim() || "0001"}${signed ? "-signed" : ""}.xml`;
-}
-
-export function pdfFileName(serie: string, numero: string) {
-  return `factura-${(serie || "").trim()}${(numero || "").trim() || "0001"}.pdf`;
+/**
+ * Placeholder: si necesitas exponer el builder tipado hacia fuera. Ajusta el tipo `FacturaePayload` según tu implementación real.
+ * Mantén la firma existente para no romper importadores actuales.
+ */
+export async function buildFacturaeXml(payload: any): Promise<string> {
+  // Si ya tienes una función con este nombre, elimina esta y usa la tuya.
+  // Aquí solo dejamos la firma para dejar claro el contrato esperado por /app/api/facturas/route.ts.
+  return (globalThis as any).__existing_buildFacturaeXml(payload);
 }
