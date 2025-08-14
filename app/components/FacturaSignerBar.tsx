@@ -2,143 +2,97 @@
 
 import { useState } from "react";
 import {
-  prefillEmitterFromProfile,
-  collectInvoice,
-  buildFacturaeXML,
+  collectInvoiceFromForm,
   signFacturaeXML,
+  verifactuAlta,
   downloadBlob,
-  pdfFileName,
   xmlFileName,
+  pdfFileName,
 } from "@/lib/invoice-signer";
 
 export default function FacturaSignerBar() {
-  const [busy, setBusy] = useState<null | "pdf" | "xml" | "sign">(null);
+  const [busy, setBusy] = useState<null | "pdf" | "xml" | "verifactu">(null);
 
-  async function handlePrefill() {
-    try {
-      const d = await prefillEmitterFromProfile();
-      // Si tu formulario ya está lleno, esto no hace nada; si no, intenta volcar por ids/names comunes
-      const setVal = (key: string, val?: string) => {
-        const el =
-          document.querySelector<HTMLInputElement>(`[name="${key}"]`) ||
-          document.querySelector<HTMLInputElement>(`#${key}`) ||
-          document.querySelector<HTMLInputElement>(`[data-field="${key}"]`);
-        if (el && val != null) el.value = val;
-      };
-      setVal("emisorNombre", d.nombre);
-      setVal("emisor_razonSocial", d.nombre);
-      setVal("razonSocial", d.nombre);
-      setVal("emisorNIF", d.nif);
-      setVal("emisor_nif", d.nif);
-      setVal("nif", d.nif);
-      setVal("emisorDireccion", d.direccion);
-      setVal("direccion", d.direccion);
-      setVal("emisorLocalidad", d.localidad);
-      setVal("localidad", d.localidad);
-      setVal("emisorProvincia", d.provincia);
-      setVal("provincia", d.provincia);
-      setVal("emisorCP", d.cp);
-      setVal("cp", d.cp);
-      setVal("emisorEmail", d.email);
-      setVal("email", d.email);
-      setVal("emisorTelefono", d.telefono);
-      setVal("telefono", d.telefono);
-      alert("Datos del emisor volcados desde tu perfil.");
-    } catch (e: any) {
-      console.error(e);
-      alert("No se pudo volcar el emisor desde el perfil.");
-    }
-  }
-
-  async function handlePDF() {
+  async function onPdf() {
     try {
       setBusy("pdf");
-      const d = collectInvoice();
-      const serie = d.serie ?? "";
-      const numero = d.numero ?? "";
-      // Ajusta este endpoint si tu app usa otro (GET/POST). Aquí se usa GET con query.
+      const d = collectInvoiceFromForm();
+      // Usa tu endpoint PDF existente (ajústalo si es otro)
       const resp = await fetch(
-        `/api/facturas/pdf?serie=${encodeURIComponent(serie)}&numero=${encodeURIComponent(numero)}`
+        `/api/facturas/pdf?serie=${encodeURIComponent(d.serie)}&numero=${encodeURIComponent(d.numero)}`
       );
-      if (!resp.ok) throw new Error(`Error generando PDF: ${resp.status}`);
+      if (!resp.ok) throw new Error(`Error generado PDF: ${resp.status}`);
       const blob = await resp.blob();
-      downloadBlob(blob, pdfFileName(d));
+      downloadBlob(blob, pdfFileName(d.serie, d.numero));
     } catch (e: any) {
-      console.error(e);
-      alert(e?.message || "Error al generar el PDF");
+      alert(e?.message || e);
     } finally {
       setBusy(null);
     }
   }
 
-  async function handleXML() {
+  async function onFacturae() {
     try {
       setBusy("xml");
-      const d = collectInvoice();
-      const xml = buildFacturaeXML(d);
-      const blob = new Blob([xml], { type: "application/xml;charset=utf-8" });
-      downloadBlob(blob, xmlFileName(d));
+      const data = collectInvoiceFromForm();
+      const blob = await signFacturaeXML(data);
+      downloadBlob(blob, xmlFileName(data.serie, data.numero, true));
     } catch (e: any) {
-      console.error(e);
-      alert(e?.message || "Error al generar el XML");
+      alert(e?.message || e);
     } finally {
       setBusy(null);
     }
   }
 
-  async function handleSign() {
+  async function onVerifactu() {
     try {
-      setBusy("sign");
-      const d = collectInvoice();
-      const xml = buildFacturaeXML(d);
-      const blob = await signFacturaeXML(xml); // proxy a /api/sign (Node runtime)
-      // Si quieres distinguir, podrías renombrar a -firmada.xml
-      downloadBlob(blob, xmlFileName(d));
+      setBusy("verifactu");
+      const data = collectInvoiceFromForm();
+      const { rf, qr } = await verifactuAlta(data);
+
+      // Si el micro devuelve un PNG embebido en data URL:
+      const dataUrl = qr?.pngDataUrl || qr?.dataUrl || "";
+      if (dataUrl.startsWith("data:image/")) {
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = `verifactu-qr-${data.serie}${data.numero}.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      console.log("RF VERI*FACTU:", rf);
+      alert("VERI*FACTU generado. El RF está en consola/log.");
     } catch (e: any) {
-      console.error(e);
-      alert(e?.message || "Error al firmar el XML");
+      alert(e?.message || e);
     } finally {
       setBusy(null);
     }
   }
 
   return (
-    <div className="flex flex-wrap gap-2 items-center">
+    <div className="flex gap-3 justify-end mb-4">
       <button
-        type="button"
-        onClick={handlePrefill}
-        className="px-3 py-2 rounded bg-slate-100 hover:bg-slate-200 border"
-        disabled={busy !== null}
-        title="Volcar emisor desde tu perfil"
+        onClick={onPdf}
+        disabled={!!busy}
+        className="px-4 py-2 rounded bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50"
       >
-        Volcar emisor
+        {busy === "pdf" ? "Generando..." : "Descargar PDF"}
       </button>
 
       <button
-        type="button"
-        onClick={handlePDF}
-        className="px-3 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-        disabled={busy === "pdf"}
+        onClick={onFacturae}
+        disabled={!!busy}
+        className="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
       >
-        {busy === "pdf" ? "Generando PDF..." : "Descargar PDF"}
+        {busy === "xml" ? "Firmando..." : "Descargar Facturae (XAdES)"}
       </button>
 
       <button
-        type="button"
-        onClick={handleXML}
-        className="px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-        disabled={busy === "xml"}
+        onClick={onVerifactu}
+        disabled={!!busy}
+        className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
       >
-        {busy === "xml" ? "Generando XML..." : "Exportar XML"}
-      </button>
-
-      <button
-        type="button"
-        onClick={handleSign}
-        className="px-3 py-2 rounded bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
-        disabled={busy === "sign"}
-      >
-        {busy === "sign" ? "Firmando..." : "Firmar XML"}
+        {busy === "verifactu" ? "Generando..." : "VERI*FACTU (RF + QR)"}
       </button>
     </div>
   );
