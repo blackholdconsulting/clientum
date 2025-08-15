@@ -4,14 +4,18 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
-import JSZip from 'jszip';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, ctx: any) {
   try {
+    const { id: batchId } = (ctx?.params ?? {}) as { id: string };
+    if (!batchId) {
+      return NextResponse.json({ error: 'Falta id de lote' }, { status: 400 });
+    }
+
     const cookieStore = await cookies();
     const accessToken =
       cookieStore.get('sb-access-token')?.value ??
@@ -24,8 +28,6 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     const { data: userRes } = await supabaseAnon.auth.getUser(accessToken);
     const userId = userRes?.user?.id;
     if (!userId) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-
-    const batchId = params.id;
 
     const supabaseSrv = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -47,23 +49,21 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
       .order('created_at', { ascending: true });
     if (dErr) throw new Error('No se pudieron cargar docs: ' + dErr.message);
 
+    // import dinámico para evitar problemas en build y tree-shaking
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
 
-    // añadir manifest firmado (obligatorio para auditoría)
+    // añadir manifest firmado y original si existen
     if (batch.manifest_signed_path) {
-      const { data: mf, error: mfErr } = await supabaseSrv.storage
-        .from('manifests')
-        .download(batch.manifest_signed_path);
-      if (!mfErr && mf) {
+      const { data: mf } = await supabaseSrv.storage.from('manifests').download(batch.manifest_signed_path);
+      if (mf) {
         const arr = await mf.arrayBuffer();
         zip.file('manifest-signed.xml', Buffer.from(arr));
       }
     }
     if (batch.manifest_path) {
-      const { data: m, error: mErr } = await supabaseSrv.storage
-        .from('manifests')
-        .download(batch.manifest_path);
-      if (!mErr && m) {
+      const { data: m } = await supabaseSrv.storage.from('manifests').download(batch.manifest_path);
+      if (m) {
         const arr = await m.arrayBuffer();
         zip.file('manifest.xml', Buffer.from(arr));
       }
@@ -71,8 +71,8 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 
     // añadir documentos
     for (const d of docs || []) {
-      const { data: file, error: fErr } = await supabaseSrv.storage.from('scans').download(d.storage_path);
-      if (!fErr && file) {
+      const { data: file } = await supabaseSrv.storage.from('scans').download(d.storage_path);
+      if (file) {
         const arr = await file.arrayBuffer();
         zip.file(`docs/${d.filename}`, Buffer.from(arr));
       }
