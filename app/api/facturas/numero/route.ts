@@ -14,23 +14,21 @@ type Type = 'completa' | 'simplificada' | 'rectificativa';
 
 export async function GET(req: Request) {
   try {
-    // ¡Ojo! Usar el constructor global URL (no una constante llamada igual)
     const urlObj = new globalThis.URL(req.url);
     const t = (urlObj.searchParams.get('type') as Type) || 'completa';
 
-    // ---- Auth: por header Bearer o por cookies ----
-    const cookieStore = cookies();
+    // ---- Auth: Bearer o cookies ----
+    const cookieStore = await cookies(); // <- IMPORTANTE: await
     const authHeader = req.headers.get('authorization') ?? req.headers.get('Authorization');
     const tokenFromHeader =
       authHeader && authHeader.toLowerCase().startsWith('bearer ')
         ? authHeader.slice(7).trim()
         : undefined;
 
-    // Nota: según versión de Supabase, 'supabase-auth-token' puede ser JSON; aquí usamos las cookies clásicas
     const tokenFromCookie =
       cookieStore.get('sb-access-token')?.value ??
       cookieStore.get('sb:token')?.value ??
-      cookieStore.get('supabase-auth-token')?.value ??
+      cookieStore.get('supabase-auth-token')?.value ?? // puede ser JSON; lo ignoramos si no existe
       undefined;
 
     const accessToken = tokenFromHeader ?? tokenFromCookie;
@@ -50,22 +48,19 @@ export async function GET(req: Request) {
     });
     const { data: p, error } = await supaSrv
       .from('profiles')
-      .select(
-        `
+      .select(`
         invoice_series_full, invoice_next_number_full,
         invoice_series_simplified, invoice_next_number_simplified,
         invoice_series_rectified, invoice_next_number_rectified,
         invoice_number_reset_yearly, invoice_last_year
-      `
-      )
+      `)
       .eq('id', userId)
       .maybeSingle();
 
     if (error) throw error;
 
     const currYear = new Date().getFullYear();
-    const reset =
-      !!p?.invoice_number_reset_yearly && (p?.invoice_last_year ?? currYear) !== currYear;
+    const reset = !!p?.invoice_number_reset_yearly && (p?.invoice_last_year ?? currYear) !== currYear;
 
     let series = 'FAC';
     let number = 1;
