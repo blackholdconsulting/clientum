@@ -12,7 +12,6 @@ export type SaveBillingResult =
 async function _saveBilling(formData: FormData): Promise<SaveBillingResult> {
   const supa = createServerActionClient({ cookies });
   const { data: { user }, error: authErr } = await supa.auth.getUser();
-
   if (authErr || !user) {
     return { ok: false, error: 'No autenticado' };
   }
@@ -42,7 +41,7 @@ async function _saveBilling(formData: FormData): Promise<SaveBillingResult> {
     payment_paypal: (formData.get('payment_paypal') as string | null) || null,
   };
 
-  // Validaciones mínimas con retorno de error legible
+  // Validaciones
   const method = payload.payment_method_default;
   if ((method === 'transfer' || method === 'domiciliacion') && !payload.payment_iban) {
     return { ok: false, error: 'Debes indicar IBAN para transferencia/domiciliación.' };
@@ -56,10 +55,22 @@ async function _saveBilling(formData: FormData): Promise<SaveBillingResult> {
     return { ok: false, error: error.message || 'Error guardando ajustes' };
   }
 
-  // Revalida la página para reflejar cambios
+  // Revalida la página para reflejar los cambios
   revalidatePath('/ajustes/facturacion');
   return { ok: true };
 }
 
-// Export con ambos nombres para mantener compatibilidad
-export { _saveBilling as saveBillingSettings, _saveBilling as saveSettings };
+/**
+ * Para usar en <form action={saveSettings}> de la página (debe devolver void).
+ */
+export async function saveSettings(formData: FormData): Promise<void> {
+  await _saveBilling(formData); // ignoramos el resultado a propósito
+}
+
+/**
+ * Para usar desde componentes cliente (p. ej. BillingForm.tsx),
+ * donde se necesita feedback del resultado.
+ */
+export async function saveBillingSettings(formData: FormData): Promise<SaveBillingResult> {
+  return _saveBilling(formData);
+}
