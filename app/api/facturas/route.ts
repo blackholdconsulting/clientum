@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { buildFacturaeXml, signFacturaeXml } from '@/lib/invoice-signer';
-import { formatPaymentForPdf, PaymentMethod } from '@/lib/pdf-payment';
+import { formatPaymentForPdf } from '@/lib/pdf-payment';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
