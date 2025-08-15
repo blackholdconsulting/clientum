@@ -1,73 +1,73 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useRef, useState } from "react";
+import { collectInvoiceFromForm, signFacturaeXML, downloadBlob, xmlFileName } from "@/lib/invoice-signer";
 
-export default function FacturasElectronicasPage() {
-  const [facturas, setFacturas] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function FacturaElectronicaPage() {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState<null | "sign" | "form">(null);
 
-  useEffect(() => {
-    const fetchFacturas = async () => {
-      try {
-        const res = await fetch("/api/facturas");
-        const data = await res.json();
-        if (data.success) {
-          setFacturas(data.facturas);
-        }
-      } catch (error) {
-        console.error("Error cargando facturas:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchFacturas();
-  }, []);
+  async function handleSignUploaded() {
+    try {
+      setBusy("sign");
+      const f = fileRef.current?.files?.[0];
+      if (!f) return alert("Selecciona un XML de Facturae.");
+      const xml = await f.text();
+
+      // Firmar XML ya preparado (si tu micro soporta /api/sign/xml directo, puedes crear otro proxy).
+      // Aquí usamos el proxy que compone desde {invoice}. Si quieres firmar XML subido, crea /api/sign/xml aparte.
+      alert("Para firmar un XML subido directamente, expón /api/sign/xml en tu micro y crea un proxy /api/sign/xml.");
+    } catch (e: any) {
+      alert(e?.message || e);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleSignFromForm() {
+    try {
+      setBusy("form");
+      const d = collectInvoiceFromForm();
+      const blob = await signFacturaeXML(d);
+      downloadBlob(blob, xmlFileName(d.serie, d.numero, true));
+    } catch (e: any) {
+      alert(e?.message || e);
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-4">Facturas Electrónicas</h1>
+    <div className="max-w-4xl mx-auto p-4 space-y-6">
+      <h1 className="text-2xl font-semibold">Factura electrónica (Facturae 3.2.2)</h1>
 
-      {loading ? (
-        <p>Cargando...</p>
-      ) : facturas.length === 0 ? (
-        <p>No hay facturas enviadas todavía.</p>
-      ) : (
-        <table className="w-full border">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border p-2">Número</th>
-              <th className="border p-2">Fecha</th>
-              <th className="border p-2">Cliente</th>
-              <th className="border p-2">Estado AEAT</th>
-              <th className="border p-2">CSV</th>
-              <th className="border p-2">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {facturas.map((f) => (
-              <tr key={f.id}>
-                <td className="border p-2">{f.numero}</td>
-                <td className="border p-2">
-                  {f.fecha
-                    ? new Date(f.fecha).toLocaleDateString()
-                    : "-"}
-                </td>
-                <td className="border p-2">{f.cliente}</td>
-                <td className="border p-2">{f.estado}</td>
-                <td className="border p-2">{f.csv || "-"}</td>
-                <td className="border p-2">
-                  <a
-                    href={`/facturas/factura-electronica/${f.id}`}
-                    className="bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700"
-                  >
-                    Ver detalle
-                  </a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <div className="rounded border p-4 space-y-3">
+        <h2 className="font-medium">1) Firmar XML subido</h2>
+        <input ref={fileRef} type="file" accept=".xml" className="block" />
+        <button
+          onClick={handleSignUploaded}
+          disabled={!!busy}
+          className="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {busy === "sign" ? "Firmando..." : "Firmar XML (subido)"}
+        </button>
+        <p className="text-sm text-slate-500">
+          * Para firmar un XML ya generado directamente, crea un proxy <code>/api/sign/xml</code> que apunte a{" "}
+          <code>{`POST ${process.env.SIGNER_BASE_URL}/api/sign/xml`}</code>.
+        </p>
+      </div>
+
+      <div className="rounded border p-4 space-y-3">
+        <h2 className="font-medium">2) Firmar a partir del formulario de factura</h2>
+        <button
+          onClick={handleSignFromForm}
+          disabled={!!busy}
+          className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {busy === "form" ? "Firmando..." : "Firmar y descargar Facturae (XAdES)"}
+        </button>
+        <p className="text-sm text-slate-500">Lee los campos de tu formulario actual y genera el XML firmado.</p>
+      </div>
     </div>
   );
 }

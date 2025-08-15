@@ -165,21 +165,25 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 <Link href="/asientos" className={linkClass('/asientos')}>
                   🧾 Asientos
                 </Link>
+                {/* NUEVO: IVA (Trimestral) como subíndice de Contabilidad */}
+                <Link
+                  href="/iva"
+                  className={linkClass('/contabilidad/iva')}
+                >
+                  📄 IVA (Trimestral)
+                </Link>
               </div>
             </div>
 
             <Link href="/chat" className={linkClass('/chat')}>
               💬 Chat IA
             </Link>
-            <Link href="/rrhh" className={linkClass('/rrhh')}>
+            <Link href="/rrhh" className={linkClass('/RRHH')}>
               👩‍💼 RRHH
             </Link>
 
             <div>
-              <Link
-                href="/inventario"
-                className={linkClass('/inventario')}
-              >
+              <Link href="/inventario" className={linkClass('/inventario')}>
                 📦 Inventario y Almacén
               </Link>
             </div>

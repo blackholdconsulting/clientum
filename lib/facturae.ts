@@ -1,133 +1,125 @@
-import { Builder } from "xml2js";
+// lib/facturae.ts
+import { create } from 'xmlbuilder2'
+import { Invoice, Party } from './invoice'
 
-export interface InvoiceParty {
-  nombre: string;
-  nif?: string;
-  cif?: string;
-  direccion?: string;
-  cp?: string;
-  ciudad?: string;
+const xmlSanitize = (s?: string): string =>
+  (s ?? '')
+    // elimina caracteres de control no permitidos en XML 1.0
+    .replace(/[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD]/g, '')
+    .trim()
+
+const iso3 = (c?: string): string => {
+  const u = (c ?? '').trim().toUpperCase()
+  if (['ES', 'ESP', 'SPAIN', 'ESPAÑA'].includes(u)) return 'ESP'
+  return u.length === 3 ? u : 'ESP'
 }
 
-export interface InvoiceLine {
-  descripcion?: string;
-  description?: string;
-  cantidad?: number;
-  qty?: number;
-  precioUnitario?: number;
-  unitPrice?: number;
-}
+const normNIF = (n?: string): string =>
+  xmlSanitize((n ?? '').toUpperCase().replace(/\s|-/g, '')) || '00000000T'
 
-export interface InvoiceData {
-  issuerName?: string;    // ✅ ahora opcional
-  issuerNIF?: string;     // ✅ ahora opcional
-  receiverName?: string;  // ✅ ahora opcional
-  receiverNIF?: string;   // ✅ ahora opcional
-  invoiceNumber?: string;
-  invoiceDate?: string;
-  concept?: string;
-  baseAmount?: number;
-  vat?: number;
-  totalAmount?: number;
+const batchId = (x: string): string =>
+  x.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 20)
 
-  // Opcionales adicionales
-  serie?: string;
-  numero?: string;
-  fecha?: string;
-  vencimiento?: string;
+const asLegalEntity = (p: Party) => ({
+  TaxIdentification: {
+    PersonTypeCode: 'J',
+    ResidenceTypeCode: 'R',
+    TaxIdentificationNumber: normNIF(p.nif),
+  },
+  LegalEntity: {
+    CorporateName: xmlSanitize(p.name) || 'EMISOR',
+    AddressInSpain: {
+      Address: xmlSanitize(p.address) || '-',
+      PostCode: xmlSanitize(p.zip) || '00000',
+      Town: xmlSanitize(p.city) || '-',
+      Province: xmlSanitize(p.province) || '-',
+      CountryCode: iso3(p.country),
+    },
+  },
+})
 
-  emisor?: InvoiceParty;
-  receptor?: InvoiceParty;
-  lineas?: InvoiceLine[];
-  iva?: number;
-  irpf?: number;
-}
+export function buildFacturae322(i: Invoice) {
+  const version = process.env.FACTURAE_VERSION ?? '3.2.2'
+  const invNum = xmlSanitize(i.number) || '0001'
+  const seriesFinal = xmlSanitize(i.series) || ''
 
-export function generateFacturaeXML(data: InvoiceData): string {
-  const builder = new Builder({ headless: true });
+  const taxesTotal = (i.taxes ?? []).reduce((s, t) => s + (t.quota ?? 0), 0)
 
-  const issuerName = data.emisor?.nombre || data.issuerName || "";
-  const issuerNIF = data.emisor?.nif || data.emisor?.cif || data.issuerNIF || "";
-  const receiverName = data.receptor?.nombre || data.receiverName || "";
-  const receiverNIF = data.receptor?.nif || data.receptor?.cif || data.receiverNIF || "";
+  const invoiceLines = (i.items ?? []).map((it, idx) => ({
+    ItemDescription: xmlSanitize(it.description) || `Linea ${idx + 1}`,
+    Quantity: it.quantity ?? 1,
+    UnitPriceWithoutTax: (it.unitPrice ?? 0).toFixed(6),
+    Tax: { TaxTypeCode: '01', TaxRate: (it.taxRate ?? 0).toFixed(2) },
+    LineItemAmount: ((it.quantity ?? 1) * (it.unitPrice ?? 0)).toFixed(2),
+    ShortDescription: `L${idx + 1}`,
+  }))
 
-  const subtotal = data.lineas
-    ? data.lineas.reduce((acc, l) => {
-        const qty = l.cantidad ?? l.qty ?? 1;
-        const price = l.precioUnitario ?? l.unitPrice ?? 0;
-        return acc + price * qty;
-      }, 0)
-    : data.baseAmount || 0;
-
-  const iva = data.iva ?? data.vat ?? 0;
-  const totalIVA = (subtotal * iva) / 100;
-  const totalAmount = subtotal + totalIVA - (data.irpf ?? 0);
-
-  const xmlObj = {
+  const root = {
+    // Namespace por defecto (sin prefijo) para Facturae 3.2.2
     Facturae: {
+      '@xmlns': 'http://www.facturae.es/Facturae/2009/v3.2.2/Facturae',
+      '@xmlns:ds': 'http://www.w3.org/2000/09/xmldsig#',
+
       FileHeader: {
-        SchemaVersion: "3.2.2",
-        Modality: "I",
-        InvoiceIssuerType: "EM",
+        SchemaVersion: version,
+        Modality: 'I',
+        InvoiceIssuerType: 'EM',
+        Batch: {
+          BatchIdentifier: batchId(invNum),
+          InvoicesCount: 1,
+          TotalInvoicesAmount: { TotalAmount: (i.total ?? 0).toFixed(2) },
+          TotalOutstandingAmount: { TotalAmount: (i.total ?? 0).toFixed(2) },
+          TotalExecutableAmount: { TotalAmount: (i.total ?? 0).toFixed(2) },
+          InvoiceCurrencyCode: i.currency ?? 'EUR',
+        },
       },
+
       Parties: {
-        SellerParty: {
-          TaxIdentification: {
-            PersonTypeCode: "J",
-            ResidenceTypeCode: "R",
-            TaxIdentificationNumber: issuerNIF,
-          },
-          LegalEntity: { CorporateName: issuerName },
-        },
-        BuyerParty: {
-          TaxIdentification: {
-            PersonTypeCode: "J",
-            ResidenceTypeCode: "R",
-            TaxIdentificationNumber: receiverNIF,
-          },
-          LegalEntity: { CorporateName: receiverName },
-        },
+        SellerParty: asLegalEntity(i.seller),
+        BuyerParty: asLegalEntity({
+          ...i.buyer,
+          nif: normNIF(i.buyer?.nif),
+          country: iso3(i.buyer?.country),
+        } as Party),
       },
+
       Invoices: {
         Invoice: {
           InvoiceHeader: {
-            InvoiceNumber: data.invoiceNumber || data.numero || "0001",
-            InvoiceSeriesCode: data.serie || "",
-            InvoiceDocumentType: "FC",
-            InvoiceClass: "OO",
+            InvoiceNumber: invNum.slice(0, 20),
+            InvoiceSeriesCode: seriesFinal,
+            InvoiceDocumentType: 'FC',
+            InvoiceClass: 'OO',
           },
-          InvoiceIssueData: { IssueDate: data.invoiceDate || data.fecha || "" },
-          Items: {
-            InvoiceLine: data.lineas
-              ? data.lineas.map((l) => {
-                  const qty = l.cantidad ?? l.qty ?? 1;
-                  const price = l.precioUnitario ?? l.unitPrice ?? 0;
-                  return {
-                    ItemDescription: l.descripcion || l.description || "",
-                    Quantity: qty,
-                    UnitPriceWithoutTax: price,
-                    TotalCost: price * qty,
-                  };
-                })
-              : {
-                  ItemDescription: data.concept || "",
-                  Quantity: 1,
-                  UnitPriceWithoutTax: data.baseAmount || 0,
-                  TotalCost: data.baseAmount || 0,
-                },
+          InvoiceIssueData: {
+            IssueDate: i.issueDate ?? new Date().toISOString().slice(0, 10),
+            InvoiceCurrencyCode: i.currency ?? 'EUR',
           },
+          TaxesOutputs: (i.taxes ?? []).map((t) => ({
+            Tax: {
+              TaxTypeCode: '01',
+              TaxRate: (t.rate ?? 0).toFixed(2),
+              TaxableBase: { TotalAmount: (t.base ?? 0).toFixed(2) },
+              TaxAmount: { TotalAmount: (t.quota ?? 0).toFixed(2) },
+            },
+          })),
           InvoiceTotals: {
-            TotalGrossAmount: subtotal,
-            TotalTaxOutputs: totalIVA,
-            InvoiceTotal: totalAmount,
+            TotalGrossAmount: (i.total ?? 0).toFixed(2),
+            TotalGeneralDiscounts: { TotalAmount: '0.00' },
+            TotalGeneralSurcharges: { TotalAmount: '0.00' },
+            TotalTaxOutputs: taxesTotal.toFixed(2),
+            TotalTaxesWithheld: '0.00',
+            InvoiceTotal: (i.total ?? 0).toFixed(2),
           },
+          // Un único <Items> con N <InvoiceLine>
+          Items: { InvoiceLine: invoiceLines },
         },
       },
     },
-  };
+  }
 
-  return builder.buildObject(xmlObj);
+  return create({ version: '1.0', encoding: 'UTF-8' })
+    .ele(root)
+    .end({ prettyPrint: true })
 }
 
-export { generateFacturaeXML as buildFacturaeXML };
-export type { InvoiceData as FacturaeData };
