@@ -6,7 +6,9 @@ import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 
-export async function saveSettings(formData: FormData) {
+// Función interna con la lógica; la exportamos con dos nombres para
+// ser compatible con page.tsx (saveSettings) y BillingForm.tsx (saveBillingSettings).
+async function _saveBilling(formData: FormData) {
   'use server';
 
   const supa = createServerActionClient({ cookies });
@@ -15,14 +17,14 @@ export async function saveSettings(formData: FormData) {
     redirect('/auth/login?next=/ajustes/facturacion');
   }
 
-  // Helpers
+  // Helpers de normalización
   const toInt = (v: FormDataEntryValue | null) =>
     Math.max(1, Number(String(v ?? '1').replace(/\D/g, '') || '1'));
 
   const payload = {
-    id: user.id,
+    id: user!.id,
 
-    // Series + numeración por TIPO
+    // Series + numeración por tipo
     invoice_series_full: String(formData.get('invoice_series_full') ?? 'FAC').trim() || 'FAC',
     invoice_next_number_full: toInt(formData.get('invoice_next_number_full')),
 
@@ -34,7 +36,7 @@ export async function saveSettings(formData: FormData) {
 
     invoice_number_reset_yearly: formData.get('invoice_number_reset_yearly') === 'on',
 
-    // Pagos
+    // Pagos por defecto
     payment_method_default: String(formData.get('payment_method_default') ?? 'transfer'),
     payment_iban: (formData.get('payment_iban') as string | null) || null,
     payment_paypal: (formData.get('payment_paypal') as string | null) || null,
@@ -52,6 +54,9 @@ export async function saveSettings(formData: FormData) {
   const { error } = await supa.from('profiles').upsert(payload, { onConflict: 'id' });
   if (error) throw error;
 
-  // Revalida esta ruta
+  // Revalida esta página
   revalidatePath('/ajustes/facturacion');
 }
+
+// Export con ambos nombres para que cualquier import existente funcione
+export { _saveBilling as saveBillingSettings, _saveBilling as saveSettings };
