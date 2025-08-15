@@ -3,73 +3,18 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
-import { createServerComponentClient, createServerActionClient } from '@supabase/auth-helpers-nextjs';
-import { revalidatePath } from 'next/cache';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { saveSettings } from './actions';
 
-// ====== SERVER ACTION: guarda ajustes en "profiles" ======
-export async function saveSettings(formData: FormData) {
-  'use server';
-
-  const supa = createServerActionClient({ cookies });
-  const { data: { user } } = await supa.auth.getUser();
-  if (!user) {
-    // Si no hay sesión, volvemos a la página con el mensaje
-    redirect('/auth/login?next=/ajustes/facturacion');
-  }
-
-  // Normaliza y castea
-  const toInt = (v: FormDataEntryValue | null) =>
-    Math.max(1, Number(String(v ?? '1').replace(/\D/g, '') || '1'));
-
-  const payload = {
-    id: user.id,
-    invoice_series_full: String(formData.get('invoice_series_full') ?? 'FAC').trim() || 'FAC',
-    invoice_next_number_full: toInt(formData.get('invoice_next_number_full')),
-
-    invoice_series_simplified: String(formData.get('invoice_series_simplified') ?? 'FACS').trim() || 'FACS',
-    invoice_next_number_simplified: toInt(formData.get('invoice_next_number_simplified')),
-
-    invoice_series_rectified: String(formData.get('invoice_series_rectified') ?? 'FAR').trim() || 'FAR',
-    invoice_next_number_rectified: toInt(formData.get('invoice_next_number_rectified')),
-
-    invoice_number_reset_yearly: formData.get('invoice_number_reset_yearly') === 'on',
-
-    payment_method_default: String(formData.get('payment_method_default') ?? 'transfer'),
-    payment_iban: (formData.get('payment_iban') as string | null) || null,
-    payment_paypal: (formData.get('payment_paypal') as string | null) || null,
-  };
-
-  // Validaciones básicas
-  const method = payload.payment_method_default;
-  if ((method === 'transfer' || method === 'domiciliacion') && !payload.payment_iban) {
-    throw new Error('Debes indicar IBAN para transferencia/domiciliación.');
-  }
-  if (method === 'paypal' && payload.payment_paypal && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.payment_paypal)) {
-    throw new Error('Email de PayPal no válido.');
-  }
-
-  const { error } = await supa.from('profiles').upsert(payload, { onConflict: 'id' });
-  if (error) throw error;
-
-  // Revalida y vuelve a la misma ruta con mensaje (opcional)
-  revalidatePath('/ajustes/facturacion');
-}
-
-// ============ SERVER COMPONENT ============
 export default async function BillingSettingsPage() {
   const supa = createServerComponentClient({ cookies });
   const { data: { user } } = await supa.auth.getUser();
 
   if (!user) {
-    return (
-      <main className="p-6">
-        Debes iniciar sesión.
-      </main>
-    );
+    return <main className="p-6">Debes iniciar sesión.</main>;
   }
 
-  // Cargamos los ajustes actuales
+  // Cargar perfil de facturación
   const { data: profile } = await supa
     .from('profiles')
     .select(`
@@ -83,7 +28,6 @@ export default async function BillingSettingsPage() {
     .eq('id', user.id)
     .maybeSingle();
 
-  // Valores por defecto si no hay fila
   const p = {
     invoice_series_full: profile?.invoice_series_full ?? 'FAC',
     invoice_next_number_full: profile?.invoice_next_number_full ?? 1,
@@ -102,7 +46,7 @@ export default async function BillingSettingsPage() {
       <h1 className="text-2xl font-semibold">Ajustes de facturación</h1>
 
       <form action={saveSettings} className="bg-white rounded-xl border p-4 space-y-6">
-        {/* Numeración por tipo */}
+        {/* Series y numeración */}
         <section>
           <h2 className="font-medium mb-3">Series y numeración</h2>
 
@@ -153,14 +97,12 @@ export default async function BillingSettingsPage() {
 
           <div className="grid md:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm">IBAN (para transferencia / domiciliación)</label>
-              <input name="payment_iban" defaultValue={p.payment_iban} placeholder="ES00 0000 0000 00 0000000000"
-                     className="mt-1 w-full border rounded p-2" />
+              <label className="block text-sm">IBAN (transferencia/domiciliación)</label>
+              <input name="payment_iban" defaultValue={p.payment_iban} className="mt-1 w-full border rounded p-2" placeholder="ES00 0000 0000 00 0000000000" />
             </div>
             <div>
               <label className="block text-sm">Email PayPal (si aplica)</label>
-              <input name="payment_paypal" type="email" defaultValue={p.payment_paypal}
-                     className="mt-1 w-full border rounded p-2" />
+              <input name="payment_paypal" type="email" defaultValue={p.payment_paypal} className="mt-1 w-full border rounded p-2" />
             </div>
           </div>
         </section>
@@ -171,7 +113,7 @@ export default async function BillingSettingsPage() {
       </form>
 
       <p className="text-sm text-slate-500">
-        Consejo: si cambias la serie o el número, la siguiente factura creada usará esos valores según el tipo (FAC/FACS/FAR).
+        Al crear una factura se reserva numeración por tipo (FAC/FACS/FAR) y, si está activado, se reinicia al cambiar de año.
       </p>
     </main>
   );
