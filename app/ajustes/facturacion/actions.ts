@@ -7,92 +7,64 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-export type PaymentMethod =
-  | 'transfer'
-  | 'direct_debit'
-  | 'paypal'
-  | 'card'
-  | 'cash'
-  | 'bizum'
-  | 'other';
-
-export type BillingSettings = {
-  invoice_series: string;
-  invoice_next_number: number;
-  invoice_number_reset_yearly: boolean;
-  payment_method_default: PaymentMethod;
-  payment_iban: string | null;
-  payment_paypal: string | null;
-};
-
-export type BillingSettingsInput = BillingSettings;
-
-function isEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
-function isIBAN(value: string): boolean {
-  const v = value.replace(/\s+/g, '').toUpperCase();
-  return /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(v);
+// IBAN sencillo (genérico). Si quieres ES estricto, afina el regex.
+function isValidIban(iban: string) {
+  return /^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(iban.replace(/\s+/g, '').toUpperCase());
 }
 
-export async function saveBillingSettings(
-  values: BillingSettingsInput
-): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function saveBillingSettings(formData: FormData) {
+  const serie = String(formData.get('invoice_series') ?? '').trim();
+  const nextNumber = Number(formData.get('invoice_next_number') ?? 1);
+  const resetYearly = formData.get('invoice_number_reset_yearly') === 'on';
+  const method = String(formData.get('payment_method_default') ?? 'transfer');
+  const iban = String(formData.get('payment_iban') ?? '').trim();
+  const paypal = String(formData.get('payment_paypal') ?? '').trim();
+
+  if (!serie) return { ok: false, error: 'La serie no puede estar vacía.' };
+  if (!Number.isFinite(nextNumber) || nextNumber < 1) {
+    return { ok: false, error: 'El número debe ser ≥ 1.' };
+  }
+  if ((method === 'transfer' || method === 'domiciliacion') && !isValidIban(iban)) {
+    return { ok: false, error: 'IBAN no válido para el método seleccionado.' };
+  }
+  if (method === 'paypal' && !isValidEmail(paypal)) {
+    return { ok: false, error: 'Email de PayPal no válido.' };
+  }
+
+  // auth (usuario actual)
   const cookieStore = await cookies();
   const accessToken =
     cookieStore.get('sb-access-token')?.value ??
     cookieStore.get('sb:token')?.value ??
-    null;
-
-  if (!accessToken) return { ok: false, error: 'No autenticado.' };
+    undefined;
 
   const supabaseAnon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data: userRes, error: userErr } = await supabaseAnon.auth.getUser(accessToken);
-  if (userErr || !userRes?.user?.id) return { ok: false, error: 'No se pudo resolver el usuario actual.' };
-  const userId = userRes.user.id;
+  const { data: userRes } = await supabaseAnon.auth.getUser(accessToken);
+  const userId = userRes?.user?.id;
+  if (!userId) return { ok: false, error: 'No autenticado.' };
 
-  const series = (values.invoice_series ?? '').trim();
-  if (!series) return { ok: false, error: 'La serie no puede estar vacía.' };
-  const num = Number(values.invoice_next_number);
-  if (!Number.isInteger(num) || num < 1) return { ok: false, error: 'El número debe ser un entero ≥ 1.' };
-
-  const method = values.payment_method_default;
-  let payment_iban: string | null = values.payment_iban ? values.payment_iban.trim() : null;
-  let payment_paypal: string | null = values.payment_paypal ? values.payment_paypal.trim() : null;
-
-  if (method === 'transfer' || method === 'direct_debit') {
-    if (!payment_iban || !isIBAN(payment_iban)) {
-      return { ok: false, error: 'IBAN requerido o inválido para el método seleccionado.' };
-    }
-  } else {
-    payment_iban = null;
-  }
-  if (method === 'paypal') {
-    if (!payment_paypal || !isEmail(payment_paypal)) {
-      return { ok: false, error: 'Email de PayPal requerido o inválido.' };
-    }
-  } else {
-    payment_paypal = null;
-  }
-
+  // usamos service role para evitar fricciones de RLS al actualizar profiles
   const supabaseSrv = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { error: upErr } = await supabaseSrv
+  const { error } = await supabaseSrv
     .from('profiles')
     .update({
-      invoice_series: series,
-      invoice_next_number: num,
-      invoice_number_reset_yearly: !!values.invoice_number_reset_yearly,
+      invoice_series: serie,
+      invoice_next_number: nextNumber,
+      invoice_number_reset_yearly: resetYearly,
       payment_method_default: method,
-      payment_iban,
-      payment_paypal,
+      payment_iban: iban || null,
+      payment_paypal: paypal || null,
     })
     .eq('id', userId);
 
-  if (upErr) return { ok: false, error: 'Error al guardar ajustes: ' + upErr.message };
+  if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
