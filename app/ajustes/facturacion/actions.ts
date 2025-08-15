@@ -12,11 +12,8 @@ export type SaveBillingResult =
 async function _saveBilling(formData: FormData): Promise<SaveBillingResult> {
   const supa = createServerActionClient({ cookies });
   const { data: { user }, error: authErr } = await supa.auth.getUser();
-  if (authErr || !user) {
-    return { ok: false, error: 'No autenticado' };
-  }
+  if (authErr || !user) return { ok: false, error: 'No autenticado' };
 
-  // Helpers
   const toInt = (v: FormDataEntryValue | null) =>
     Math.max(1, Number(String(v ?? '1').replace(/\D/g, '') || '1'));
 
@@ -41,7 +38,7 @@ async function _saveBilling(formData: FormData): Promise<SaveBillingResult> {
     payment_paypal: (formData.get('payment_paypal') as string | null) || null,
   };
 
-  // Validaciones
+  // Validaciones mínimas
   const method = payload.payment_method_default;
   if ((method === 'transfer' || method === 'domiciliacion') && !payload.payment_iban) {
     return { ok: false, error: 'Debes indicar IBAN para transferencia/domiciliación.' };
@@ -51,26 +48,18 @@ async function _saveBilling(formData: FormData): Promise<SaveBillingResult> {
   }
 
   const { error } = await supa.from('profiles').upsert(payload, { onConflict: 'id' });
-  if (error) {
-    return { ok: false, error: error.message || 'Error guardando ajustes' };
-  }
+  if (error) return { ok: false, error: error.message || 'Error guardando ajustes' };
 
-  // Revalida la página para reflejar los cambios
   revalidatePath('/ajustes/facturacion');
   return { ok: true };
 }
 
-/**
- * Para usar en <form action={saveSettings}> de la página (debe devolver void).
- */
+/** Para <form action={saveSettings}> (no debe devolver nada) */
 export async function saveSettings(formData: FormData): Promise<void> {
-  await _saveBilling(formData); // ignoramos el resultado a propósito
+  await _saveBilling(formData);
 }
 
-/**
- * Para usar desde componentes cliente (p. ej. BillingForm.tsx),
- * donde se necesita feedback del resultado.
- */
+/** Para componentes cliente: devuelve { ok, error } */
 export async function saveBillingSettings(formData: FormData): Promise<SaveBillingResult> {
   return _saveBilling(formData);
 }
