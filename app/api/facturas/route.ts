@@ -7,109 +7,86 @@ import { createClient } from '@supabase/supabase-js';
 import { buildFacturaeXml, signFacturaeXml } from '@/lib/invoice-signer';
 import { formatPaymentForPdf } from '@/lib/pdf-payment';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const SRV  = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const SIGNER_API_KEY = process.env.SIGNER_API_KEY!;
 
+type InvoiceType = 'completa' | 'simplificada' | 'rectificativa';
+
 type Payment = {
-  method:
-    | 'transfer'
-    | 'domiciliacion'
-    | 'paypal'
-    | 'tarjeta'
-    | 'efectivo'
-    | 'bizum'
-    | 'otro';
-  iban?: string | null;
-  paypalEmail?: string | null;
-  notes?: string | null;
+  method: 'transfer' | 'domiciliacion' | 'paypal' | 'tarjeta' | 'efectivo' | 'bizum' | 'otro';
+  iban?: string | null; paypalEmail?: string | null; notes?: string | null;
 };
 
 type InvoiceBody = {
   issueDate?: string; // YYYY-MM-DD
-  type?: 'completa' | 'simplificada' | 'rectificativa';
+  type?: InvoiceType;
   customer?: any;
   items?: any[];
-  totals?: { base: number; tax: number; total: number };
+  totals?: { base?: number; tax?: number; total: number };
   payment: Payment;
-  // ...otros campos que ya uses en tu builder
 };
 
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as InvoiceBody;
+    const type: InvoiceType = (body.type ?? 'completa');
 
-    // 1) Usuario autenticado
+    // auth
     const cookieStore = await cookies();
     const accessToken =
       cookieStore.get('sb-access-token')?.value ??
       cookieStore.get('sb:token')?.value ??
       undefined;
 
-    const supabaseAnon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: userRes } = await supabaseAnon.auth.getUser(accessToken);
-    const userId = userRes?.user?.id;
-    if (!userId) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-    }
+    const anon = createClient(URL, ANON, { auth: { persistSession: false } });
+    const { data: u } = await anon.auth.getUser(accessToken);
+    const userId = u?.user?.id;
+    if (!userId) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    // 2) Reservar numeración de forma atómica (reseteo anual dentro de la función)
-    const supabaseSrv = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+    const srv = createClient(URL, SRV, { auth: { persistSession: false } });
+
+    // reserva numeración por tipo
     const today = (body.issueDate && body.issueDate.slice(0, 10)) || new Date().toISOString().slice(0, 10);
-
-    const { data: numData, error: numErr } = await supabaseSrv.rpc(
-      'fn_use_next_invoice_number',
-      { p_user: userId, p_date: today }
-    );
+    const { data: numData, error: numErr } = await srv.rpc('fn_use_next_invoice_number_v2', {
+      p_user: userId, p_date: today, p_type: type
+    });
     if (numErr) throw numErr;
-
     const { series, number } = (Array.isArray(numData) ? numData[0] : numData) || {};
     if (!series || typeof number !== 'number') {
       return NextResponse.json({ error: 'No se pudo reservar numeración' }, { status: 500 });
     }
 
-    // 3) Preparar bloque “Forma de pago” legible para PDF (opcional en la respuesta)
+    // bloque forma de pago para PDF (opcional)
     const paymentBlock = formatPaymentForPdf(body.payment.method as any, {
       iban: body.payment.iban ?? null,
       paypal: body.payment.paypalEmail ?? null,
       other: body.payment.notes ?? null,
     });
 
-    // 4) Construir Facturae XML (usa tu builder real si ya lo tienes)
+    // construir facturae con tipo (si rectificativa, tu builder incluirá <Corrective/>)
     const facturaePayload = {
       ...body,
       serie: series,
       numero: number,
-      // puedes pasar paymentBlock si tu builder lo usa para el PDF paralelo
+      type,
+      _paymentBlock: paymentBlock,
     };
     const xml = await buildFacturaeXml(facturaePayload);
 
-    // 5) Firmar con el proxy /api/sign/xml (signFacturaeXml ya lo llama)
     if (!SIGNER_API_KEY) throw new Error('Falta SIGNER_API_KEY');
-    const signed = await signFacturaeXml(xml); // devuelve Uint8Array
+    const signed = await signFacturaeXml(xml); // Uint8Array/XML firmado XAdES
     const facturaeBase64 = Buffer.from(signed).toString('base64');
 
-    // 6) (Opcional) Persistir tu entidad factura aquí si ya tienes tabla definida
-    //    — omitido para no romper tu schema, puedes añadirlo después.
-
-    // 7) Responder con datos clave
     return NextResponse.json({
       ok: true,
-      series,
-      number,
+      series, number, type,
       paymentBlock,
-      facturaeBase64, // útil para "Descargar XAdES" en el cliente
-      pdfUrl: null,   // integra tu generador si lo tienes
+      facturaeBase64,
+      pdfUrl: null
     });
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message ?? 'Error creando factura' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: e?.message ?? 'Error creando factura' }, { status: 500 });
   }
 }
