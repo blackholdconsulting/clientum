@@ -21,16 +21,14 @@ export default function VeriFactuQR({ enabled, payload }: Props) {
       }
       try {
         const rf = buildRFString(payload);
-        const url = await qrDataUrlFromRF(rf);
+        const url = await qrDataUrlFromRF(rf); // requiere 'qrcode' instalada para ver el QR
         if (!cancelled) setDataUrl(url);
       } catch {
         if (!cancelled) setDataUrl(null);
       }
     }
     run();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [enabled, payload]);
 
   if (!enabled || !payload) return null;
@@ -49,7 +47,9 @@ export default function VeriFactuQR({ enabled, payload }: Props) {
           </div>
         </>
       ) : (
-        <div className="text-sm text-gray-500">Generando QR…</div>
+        <div className="text-sm text-gray-500">
+          Generando QR… {`(instala "qrcode" para visualizarlo)`}
+        </div>
       )}
     </div>
   );
