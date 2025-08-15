@@ -6,18 +6,19 @@ import React, { useState, useEffect, Fragment, FormEvent, useRef } from 'react';
 import Link from 'next/link';
 import { Dialog, Transition } from '@headlessui/react';
 import ReactQRCode from 'react-qr-code';
-import { toDataURL } from 'qrcode';
+import { toDataURL } from 'qrcode'; // para incrustar en PDF
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 
 import type { Invoice, InvoiceItem, Party, TaxLine } from '@/lib/invoice';
+import VeriFactuQR from './VeriFactuQR';
+import type { VeriFactuPayload } from '@/lib/verifactu';
 
 // === Tipos locales que ya usabas ===
 interface Cliente { id: string; nombre: string; nif?: string; direccion?: string; ciudad?: string; provincia?: string; cp?: string; pais?: string; }
 interface Perfil {
   id?: string; user_id?: string;
-  // Posibles nombres de campos en tu tabla perfil
   nombre_empr?: string; empresa?: string; nombre?: string; razon_social?: string;
   nif?: string; direccion?: string; ciudad?: string; provincia?: string; cp?: string; pais?: string;
   telefono?: string; email?: string; web?: string;
@@ -50,10 +51,11 @@ export default function NuevaFacturaPage() {
 
   // ===== VERI*FACTU / Facturae =====
   const [orgId, setOrgId] = useState<string>('');      // = user_id (multiusuario)
-  const [verifactuQR, setVerifactuQR] = useState<string | null>(null);
+  const [verifactuPayload, setVerifactuPayload] = useState<VeriFactuPayload | null>(null);
   const [busyVF, setBusyVF] = useState(false);
   const [busyFAC, setBusyFAC] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [facturaeBase64, setFacturaeBase64] = useState<string | null>(null);
 
   // Totales
   const subtotal = lineas.reduce((s, l) => s + l.cantidad * l.precio, 0);
@@ -147,65 +149,87 @@ export default function NuevaFacturaPage() {
     };
   }
 
-  // ===== Guardar + Alta VERI*FACTU =====
+  // Helper: mapea 'factura'|'simplificada' -> 'completa'|'simplificada'
+  const invoiceTypeForVerifactu = (t: 'factura'|'simplificada'): 'completa'|'simplificada' =>
+    t === 'simplificada' ? 'simplificada' : 'completa';
+
+  // ===== Guardar: reserva numeración + XAdES + (opcional) insertar en tu tabla =====
   const handleGuardar = async (e:FormEvent) => {
     e.preventDefault();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user?.id) { alert('Usuario no autenticado'); return; }
-
-    const { data: inserted, error } = await supabase
-      .from('facturas')
-      .insert([{
-        user_id: user.id,
-        serie, numero, cliente_id: clienteId, tipo: tipo.toUpperCase(),
-        lineas: lineas.map(l => ({ descripcion:l.descripcion, cantidad:l.cantidad, precio:l.precio, iva_porc:l.iva, cuenta_id:l.cuentaId })),
-        custom_fields: customFields, mensaje_final: mensajeFinal ? textoFinal : null,
-        show_qr: showQR, categoria_id: catCuenta
-      }]).select('id').single();
-    if (error) { alert('Error guardando factura: '+error.message); return; }
-
     try {
       setBusyVF(true);
-      const invoice = await assembleInvoice(inserted?.id);
-      const r = await fetch('/api/verifactu/alta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ invoice }) });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j?.message || j?.error || 'Alta VERI*FACTU fallida');
-      setVerifactuQR(j.qrPngDataUrl || null);
-      setFlash('Registro VERI*FACTU generado ✔️');
+      setFlash(null);
+
+      const issueDate = new Date().toISOString().slice(0,10);
+      const res = await fetch('/api/facturas', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({
+          issueDate,
+          type: invoiceTypeForVerifactu(tipo), // para Facturae builder
+          totals: { total: +total.toFixed(2) },
+          payment: { method: 'transfer', iban: null, paypalEmail: null, notes: null }, // mapea desde tu UI si ya la tienes
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || 'No se pudo guardar');
+
+      // serie / numero definitivos (reservados atómicamente)
+      setSerie(String(j.series || ''));
+      setNumero(String(j.number || ''));
+      setFacturaeBase64(j.facturaeBase64 || null);
+
+      // (Opcional) persistir en tu tabla 'facturas' con esos valores
+      // const { data: { user } } = await supabase.auth.getUser();
+      // if (user?.id) {
+      //   await supabase.from('facturas').insert([{
+      //     user_id: user.id,
+      //     serie: j.series, numero: j.number,
+      //     cliente_id: clienteId, tipo: tipo.toUpperCase(),
+      //     lineas: lineas.map(l => ({ descripcion:l.descripcion, cantidad:l.cantidad, precio:l.precio, iva_porc:l.iva, cuenta_id:l.cuentaId })),
+      //     custom_fields: customFields, mensaje_final: mensajeFinal ? textoFinal : null,
+      //     show_qr: showQR, categoria_id: catCuenta
+      //   }]);
+      // }
+
+      // Preparar payload para QR Veri*factu (se muestra si showQR está activo)
+      const emisorNif = sellerFromPerfil(perfil).nif || '';
+      setVerifactuPayload({
+        issuerTaxId: emisorNif,
+        issueDate,
+        invoiceType: invoiceTypeForVerifactu(tipo),
+        total: +total.toFixed(2),
+        software: 'Clientum Signer v0.0.1',
+        series: String(j.series),
+        number: Number(j.number),
+      });
+
+      setFlash(`Guardado: ${j.series}-${String(j.number).padStart(6,'0')} ✔️`);
+      if (showQR) setQrOpen(true);
     } catch (err:any) {
-      setFlash('Error VERI*FACTU: ' + String(err?.message || err));
-    } finally { setBusyVF(false); }
-    setQrOpen(true);
+      setFlash('Error al guardar: ' + String(err?.message || err));
+    } finally {
+      setBusyVF(false);
+    }
   };
 
-  // ===== Descargar Facturae (XML) =====
+  // ===== Descargar Facturae (usa el XAdES devuelto por el server) =====
   const descargarFacturae = async () => {
     try {
       setBusyFAC(true);
-      const invoice = await assembleInvoice();
-      const res = await fetch('/api/factura-electronica', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({ invoice })
-      });
-
-      // Leemos como texto para poder validar contenido
-      const contentType = res.headers.get('content-type') || '';
-      const text = await res.text();
-
-      if (!contentType.includes('xml') || !text.includes('<Facturae')) {
-        setFlash(`Error generando Facturae: ${text.slice(0,140)}…`);
+      if (!facturaeBase64) {
+        // Si no tenemos en memoria (p.ej. recargas), vuelve a guardar para obtenerlo
+        setFlash('Vuelve a “Guardar factura” para regenerar el XAdES.');
         return;
       }
-
-      const blob = new Blob([text], { type: 'application/xml;charset=UTF-8' });
-      setFlash(`Facturae generada (${(blob.size/1024).toFixed(1)} KB)`);
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url;
-      a.download = `${invoice.number || 'factura'}.xml`; // si firmas externamente, renómbralo a .xsig
+      const bytes = Uint8Array.from(atob(facturaeBase64), c => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: 'application/xml' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${(serie||'S')}${(numero||'000001')}.xsig`; // o .xml si tu firmador devuelve XML firmado
       a.click();
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(a.href);
+      setFlash(`Facturae firmada descargada (${((bytes.length)/1024).toFixed(1)} KB)`);
     } catch (e:any) {
       setFlash('Error Facturae: ' + String(e?.message || e));
     } finally {
@@ -255,7 +279,10 @@ export default function NuevaFacturaPage() {
     doc.text(`Total: ${total.toFixed(2)} €`, 140, finalY+24, { align:'right' });
 
     if (showQR && origin) {
-      const imgData = verifactuQR ? verifactuQR : await toDataURL(`${origin}/facturas/${serie}${numero}`);
+      // Si tenemos QR Veri*factu previo (dataURL), úsalo; si no, un QR de acceso simple
+      const imgData = verifactuPayload
+        ? await toDataURL(window.location.href) // (opcional) sustituye por QR Veri*factu si lo quieres en el PDF
+        : await toDataURL(`${origin}/facturas/${serie}${numero}`);
       doc.addImage(imgData, 'PNG', 14, finalY+32, 40, 40);
     }
 
@@ -295,8 +322,8 @@ export default function NuevaFacturaPage() {
 
       {flash && <div className="mb-4 text-sm rounded border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700">{flash}</div>}
 
-      <form onSubmit={handleGuardar} ref={refFactura} className="bg-white p-6 rounded shadow space-y-6">
-        {/* Serie y número */}
+      <form onSubmit={handleGuardar} ref={refFactura} className="bg-white p-6 rounded shadow space-y-6" data-invoice-form>
+        {/* Serie y número (se rellenan tras guardar) */}
         <div className="flex gap-4">
           <input type="text" placeholder="Serie" value={serie} onChange={e=>setSerie(e.target.value)} className="border rounded p-2 flex-1" />
           <input type="text" placeholder="Número" value={numero} onChange={e=>setNumero(e.target.value)} className="border rounded p-2 flex-1" />
@@ -353,16 +380,24 @@ export default function NuevaFacturaPage() {
             <p className="font-bold">Total: {total.toFixed(2)}€</p>
           </div>
           <div className="flex gap-2">
-            <button type="submit" disabled={busyVF} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">{busyVF ? 'Guardando…' : 'Guardar Factura'}</button>
+            <button type="submit" disabled={busyVF} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">
+              {busyVF ? 'Guardando…' : 'Guardar Factura'}
+            </button>
             <button type="button" onClick={exportPDF} className="px-4 py-2 bg-gray-200 rounded">Exportar PDF</button>
-            <button type="button" onClick={descargarFacturae} disabled={busyFAC} className="px-4 py-2 bg-emerald-600 text-white rounded disabled:opacity-50">
+            <button type="button" onClick={descargarFacturae} disabled={busyFAC || !facturaeBase64} className="px-4 py-2 bg-emerald-600 text-white rounded disabled:opacity-50">
               {busyFAC ? 'Firmando…' : 'Descargar Facturae'}
             </button>
           </div>
         </div>
       </form>
 
-      {/* Modal QR */}
+      {/* Bloque QR Veri*factu (inline) */}
+      <VeriFactuQR
+        enabled={showQR && !!verifactuPayload}
+        payload={verifactuPayload}
+      />
+
+      {/* Modal QR fallback (acceso simple) */}
       <Transition show={qrOpen} as={Fragment}>
         <Dialog open onClose={()=>setQrOpen(false)} className="fixed inset-0 z-50 flex items-center justify-center">
           <Transition.Child as={Fragment} enter="transition-opacity duration-200" enterFrom="opacity-0" enterTo="opacity-100">
@@ -370,8 +405,13 @@ export default function NuevaFacturaPage() {
           </Transition.Child>
           <Transition.Child as={Fragment} enter="transition-transform duration-200" enterFrom="scale-95" enterTo="scale-100">
             <div className="bg-white p-6 rounded shadow text-center">
-              <Dialog.Title className="text-lg font-semibold mb-4">{verifactuQR ? 'QR VERI*FACTU' : 'Acceso a tu factura'}</Dialog.Title>
-              {verifactuQR ? <img src={verifactuQR} alt="QR Verifactu" className="mx-auto" /> : (origin && <ReactQRCode value={`${origin}/facturas/${serie}${numero}`} />)}
+              <Dialog.Title className="text-lg font-semibold mb-4">
+                {verifactuPayload ? 'QR VERI*FACTU' : 'Acceso a tu factura'}
+              </Dialog.Title>
+              {verifactuPayload
+                ? <div className="text-sm text-slate-500">El QR Veri*factu se muestra abajo en la página.</div>
+                : (origin && <ReactQRCode value={`${origin}/facturas/${serie}${numero}`} />)
+              }
               <button onClick={()=>setQrOpen(false)} className="mt-4 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cerrar</button>
             </div>
           </Transition.Child>
