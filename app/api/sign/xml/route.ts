@@ -9,38 +9,22 @@ const API_KEY = process.env.SIGNER_API_KEY!;
 
 export async function POST(req: Request) {
   try {
+    if (!BASE || !API_KEY) return NextResponse.json({ error: 'Falta configuración de firma.' }, { status: 500 });
     const xml = await req.text();
-    if (!xml || !xml.trim()) {
-      return NextResponse.json({ error: 'Body XML vacío.' }, { status: 400 });
-    }
-
-    const upstream = await fetch(`${BASE}${PATH}`, {
+    const r = await fetch(new URL(PATH, BASE).toString(), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/xml',
-        'X-API-Key': API_KEY,
-      },
+      headers: { 'Content-Type': 'application/xml', 'X-API-Key': API_KEY },
       body: xml,
     });
-
-    const buf = await upstream.arrayBuffer();
-    // Reenviamos tal cual el status y content-type del microservicio
-    return new NextResponse(buf, {
-      status: upstream.status,
-      headers: {
-        'Content-Type':
-          upstream.headers.get('Content-Type') ?? 'application/octet-stream',
-      },
-    });
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message ?? 'Fallo al proxyar la firma' },
-      { status: 502 }
-    );
+    if (r.status === 401 || r.status === 403) {
+      const t = await r.text().catch(()=> ''); return new NextResponse(`Firma no autorizada (${r.status}). ${t}`, { status: r.status });
+    }
+    if (!r.ok) {
+      const t = await r.text().catch(()=> ''); return new NextResponse(`Error firmando (${r.status}). ${t}`, { status: r.status });
+    }
+    const buf = await r.arrayBuffer();
+    return new NextResponse(buf, { headers: { 'Content-Type': 'application/xml' } });
+  } catch (e:any) {
+    return NextResponse.json({ error: e?.message ?? 'Error en proxy de firma' }, { status: 500 });
   }
-}
-
-export async function GET() {
-  // Health simple del proxy
-  return NextResponse.json({ ok: true, use: 'POST application/xml' });
 }
