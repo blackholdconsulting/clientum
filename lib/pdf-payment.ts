@@ -1,6 +1,5 @@
 // lib/pdf-payment.ts
 
-// Métodos admitidos en la UI
 export type PaymentMethod =
   | 'transfer'
   | 'domiciliacion'
@@ -10,32 +9,22 @@ export type PaymentMethod =
   | 'bizum'
   | 'otro';
 
-// Etiqueta legible para el PDF
 export function paymentMethodLabel(method: PaymentMethod): string {
   switch (method) {
-    case 'transfer':
-      return 'Transferencia';
-    case 'domiciliacion':
-      return 'Domiciliación bancaria';
-    case 'paypal':
-      return 'PayPal';
-    case 'tarjeta':
-      return 'Tarjeta';
-    case 'efectivo':
-      return 'Efectivo';
-    case 'bizum':
-      return 'Bizum';
+    case 'transfer':      return 'Transferencia';
+    case 'domiciliacion': return 'Domiciliación bancaria';
+    case 'paypal':        return 'PayPal';
+    case 'tarjeta':       return 'Tarjeta';
+    case 'efectivo':      return 'Efectivo';
+    case 'bizum':         return 'Bizum';
     case 'otro':
-    default:
-      return 'Otro';
+    default:              return 'Otro';
   }
 }
 
 /**
- * Bloque de “Forma de pago” listo para inyectar en el PDF (string multilinea).
- * - Si método = transferencia/domiciliación → muestra IBAN
- * - Si método = paypal → muestra email
- * - Otros → muestra etiqueta y texto libre si se pasa
+ * Bloque “Forma de pago” para el PDF (texto multilínea).
+ * Usar SIEMPRE con objeto de opciones: { iban?, paypal?, other? }
  */
 export function formatPaymentForPdf(
   method: PaymentMethod,
@@ -48,7 +37,6 @@ export function formatPaymentForPdf(
 
   switch (method) {
     case 'transfer':
-      return `Forma de pago: ${label}\n${iban ? `IBAN: ${iban}` : ''}`.trim();
     case 'domiciliacion':
       return `Forma de pago: ${label}\n${iban ? `IBAN: ${iban}` : ''}`.trim();
     case 'paypal':
@@ -63,8 +51,5 @@ export function formatPaymentForPdf(
   }
 }
 
-/**
- * Alias mantenido por compatibilidad con código anterior.
- * Hace exactamente lo mismo que formatPaymentForPdf.
- */
+// Alias por compatibilidad histórica
 export const formatPaymentBlock = formatPaymentForPdf;
