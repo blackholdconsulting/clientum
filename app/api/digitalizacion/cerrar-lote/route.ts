@@ -22,18 +22,17 @@ export async function POST(req: Request) {
     const supabaseAnon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: userRes } = await supabaseAnon.auth.getUser(accessToken);
+    const { data: userRes } = await supabaseAnon.auth.getUser(accessToken ?? undefined);
     const userId = userRes?.user?.id;
     if (!userId) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const { batchId } = await req.json() as { batchId: string };
+    const { batchId } = (await req.json()) as { batchId: string };
     if (!batchId) return NextResponse.json({ error: 'Falta batchId' }, { status: 400 });
 
     const supabaseSrv = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // cargar docs del lote
     const { data: docs, error: dErr } = await supabaseSrv
       .from('scan_docs')
       .select('id, filename, mime, size_bytes, sha256, storage_path')
@@ -49,7 +48,6 @@ export async function POST(req: Request) {
       docs: docs as any,
     });
 
-    // firmar manifiesto con el proxy existente
     const base =
       process.env.NEXT_PUBLIC_APP_URL ??
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
@@ -68,24 +66,24 @@ export async function POST(req: Request) {
     const signedBuf = await signRes.arrayBuffer();
     const signedXml = Buffer.from(signedBuf);
 
-    // subir a storage: manifests
     const manifestPath = `${userId}/${batchId}/manifest.xml`;
     const signedPath = `${userId}/${batchId}/manifest-signed.xml`;
 
-    const up1 = await supabaseSrv.storage.from('manifests').upload(manifestPath, xml, {
+    const supabaseSrv2 = supabaseSrv;
+
+    const up1 = await supabaseSrv2.storage.from('manifests').upload(manifestPath, xml, {
       contentType: 'application/xml',
       upsert: true,
     });
     if (up1.error) throw new Error('No se pudo subir manifest.xml: ' + up1.error.message);
 
-    const up2 = await supabaseSrv.storage.from('manifests').upload(signedPath, signedXml, {
+    const up2 = await supabaseSrv2.storage.from('manifests').upload(signedPath, signedXml, {
       contentType: 'application/xml',
       upsert: true,
     });
     if (up2.error) throw new Error('No se pudo subir manifest-signed.xml: ' + up2.error.message);
 
-    // cerrar lote
-    const { error: upErr } = await supabaseSrv
+    const { error: upErr } = await supabaseSrv2
       .from('scan_batches')
       .update({
         status: 'sealed',
@@ -96,10 +94,9 @@ export async function POST(req: Request) {
       })
       .eq('id', batchId)
       .eq('user_id', userId);
-
     if (upErr) throw new Error('No se pudo cerrar el lote: ' + upErr.message);
 
-    await supabaseSrv.from('scan_events').insert({
+    await supabaseSrv2.from('scan_events').insert({
       user_id: userId,
       batch_id: batchId,
       type: 'seal',
