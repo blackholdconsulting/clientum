@@ -12,9 +12,7 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 export async function GET(_req: Request, ctx: any) {
   try {
     const { id: batchId } = (ctx?.params ?? {}) as { id: string };
-    if (!batchId) {
-      return NextResponse.json({ error: 'Falta id de lote' }, { status: 400 });
-    }
+    if (!batchId) return NextResponse.json({ error: 'Falta id de lote' }, { status: 400 });
 
     const cookieStore = await cookies();
     const accessToken =
@@ -25,7 +23,7 @@ export async function GET(_req: Request, ctx: any) {
     const supabaseAnon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: userRes } = await supabaseAnon.auth.getUser(accessToken);
+    const { data: userRes } = await supabaseAnon.auth.getUser(accessToken ?? undefined);
     const userId = userRes?.user?.id;
     if (!userId) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
@@ -33,7 +31,6 @@ export async function GET(_req: Request, ctx: any) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // lote + docs
     const { data: batch, error: bErr } = await supabaseSrv
       .from('scan_batches')
       .select('*')
@@ -49,11 +46,9 @@ export async function GET(_req: Request, ctx: any) {
       .order('created_at', { ascending: true });
     if (dErr) throw new Error('No se pudieron cargar docs: ' + dErr.message);
 
-    // import dinámico para evitar problemas en build y tree-shaking
     const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
 
-    // añadir manifest firmado y original si existen
     if (batch.manifest_signed_path) {
       const { data: mf } = await supabaseSrv.storage.from('manifests').download(batch.manifest_signed_path);
       if (mf) {
@@ -69,7 +64,6 @@ export async function GET(_req: Request, ctx: any) {
       }
     }
 
-    // añadir documentos
     for (const d of docs || []) {
       const { data: file } = await supabaseSrv.storage.from('scans').download(d.storage_path);
       if (file) {
