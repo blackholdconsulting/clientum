@@ -1,47 +1,25 @@
 export type PaymentMethod =
-  | 'transfer'
-  | 'direct_debit'
-  | 'paypal'
-  | 'card'
-  | 'cash'
-  | 'bizum'
-  | 'other';
+  | 'transfer' | 'domiciliacion' | 'paypal' | 'tarjeta' | 'efectivo' | 'bizum' | 'otro';
 
-export function formatPaymentForPdf(
+export function formatPaymentBlock(
   method: PaymentMethod,
-  iban: string | null,
-  paypalEmail: string | null,
-  notes?: string | null
-): { title: string; lines: string[] } {
-  const lines: string[] = [];
-  let title = 'Forma de pago';
-
+  { iban, paypal, other }: { iban?: string | null; paypal?: string | null; other?: string | null }
+) {
   switch (method) {
     case 'transfer':
-      lines.push('Transferencia bancaria');
-      if (iban) lines.push(`IBAN: ${iban}`);
-      break;
-    case 'direct_debit':
-      lines.push('Domiciliación bancaria');
-      if (iban) lines.push(`IBAN: ${iban}`);
-      break;
+      return `Forma de pago: Transferencia\nIBAN: ${iban ?? ''}`;
+    case 'domiciliacion':
+      return `Forma de pago: Domiciliación bancaria\nIBAN: ${iban ?? ''}`;
     case 'paypal':
-      lines.push('PayPal');
-      if (paypalEmail) lines.push(`Cuenta: ${paypalEmail}`);
-      break;
-    case 'card':
-      lines.push('Tarjeta');
-      break;
-    case 'cash':
-      lines.push('Efectivo');
-      break;
+      return `Forma de pago: PayPal\nCuenta: ${paypal ?? ''}`;
+    case 'tarjeta':
+      return `Forma de pago: Tarjeta`;
+    case 'efectivo':
+      return `Forma de pago: Efectivo`;
     case 'bizum':
-      lines.push('Bizum');
-      break;
+      return `Forma de pago: Bizum`;
+    case 'otro':
     default:
-      lines.push('Otro');
+      return `Forma de pago: Otro\n${other ?? ''}`;
   }
-
-  if (notes) lines.push(notes);
-  return { title, lines };
 }
