@@ -12,7 +12,6 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 export async function POST(req: Request) {
   try {
-    // auth
     const cookieStore = await cookies();
     const accessToken =
       cookieStore.get('sb-access-token')?.value ??
@@ -22,20 +21,15 @@ export async function POST(req: Request) {
     const supabaseAnon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: userRes } = await supabaseAnon.auth.getUser(accessToken);
+    const { data: userRes } = await supabaseAnon.auth.getUser(accessToken ?? undefined);
     const userId = userRes?.user?.id;
     if (!userId) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    // form-data con file + (opcional) batchId
     const form = await req.formData();
     const file = form.get('file') as File | null;
     const batchId = (form.get('batchId') as string) || null;
+    if (!file) return NextResponse.json({ error: 'Falta file' }, { status: 400 });
 
-    if (!file) {
-      return NextResponse.json({ error: 'Falta file' }, { status: 400 });
-    }
-
-    // Abrimos/creamos batch "open" si no hay
     const supabaseSrv = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -64,17 +58,15 @@ export async function POST(req: Request) {
       }
     }
 
-    // subir a Storage
     const buf = Buffer.from(await file.arrayBuffer());
     const sha256 = sha256Hex(buf);
 
     const storagePath = `${userId}/${effBatchId}/${file.name}`;
     const { error: upErr } = await supabaseSrv.storage
       .from('scans')
-      .upload(storagePath, buf, { contentType: file.type, upsert: true });
+      .upload(storagePath, buf, { contentType: file.type || 'application/octet-stream', upsert: true });
     if (upErr) throw new Error('No se pudo subir a storage: ' + upErr.message);
 
-    // registrar en BD
     const { data: inserted, error: iErr } = await supabaseSrv
       .from('scan_docs')
       .insert({
