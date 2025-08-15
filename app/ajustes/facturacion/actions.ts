@@ -3,26 +3,26 @@
 
 import { cookies } from 'next/headers';
 import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
-import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 
-// Función interna con la lógica; la exportamos con dos nombres para
-// ser compatible con page.tsx (saveSettings) y BillingForm.tsx (saveBillingSettings).
-async function _saveBilling(formData: FormData) {
-  'use server';
+export type SaveBillingResult =
+  | { ok: true }
+  | { ok: false; error: string };
 
+async function _saveBilling(formData: FormData): Promise<SaveBillingResult> {
   const supa = createServerActionClient({ cookies });
-  const { data: { user } } = await supa.auth.getUser();
-  if (!user) {
-    redirect('/auth/login?next=/ajustes/facturacion');
+  const { data: { user }, error: authErr } = await supa.auth.getUser();
+
+  if (authErr || !user) {
+    return { ok: false, error: 'No autenticado' };
   }
 
-  // Helpers de normalización
+  // Helpers
   const toInt = (v: FormDataEntryValue | null) =>
     Math.max(1, Number(String(v ?? '1').replace(/\D/g, '') || '1'));
 
   const payload = {
-    id: user!.id,
+    id: user.id,
 
     // Series + numeración por tipo
     invoice_series_full: String(formData.get('invoice_series_full') ?? 'FAC').trim() || 'FAC',
@@ -36,27 +36,30 @@ async function _saveBilling(formData: FormData) {
 
     invoice_number_reset_yearly: formData.get('invoice_number_reset_yearly') === 'on',
 
-    // Pagos por defecto
+    // Pago por defecto
     payment_method_default: String(formData.get('payment_method_default') ?? 'transfer'),
     payment_iban: (formData.get('payment_iban') as string | null) || null,
     payment_paypal: (formData.get('payment_paypal') as string | null) || null,
   };
 
-  // Validaciones mínimas
+  // Validaciones mínimas con retorno de error legible
   const method = payload.payment_method_default;
   if ((method === 'transfer' || method === 'domiciliacion') && !payload.payment_iban) {
-    throw new Error('Debes indicar IBAN para transferencia/domiciliación.');
+    return { ok: false, error: 'Debes indicar IBAN para transferencia/domiciliación.' };
   }
   if (method === 'paypal' && payload.payment_paypal && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.payment_paypal)) {
-    throw new Error('Email de PayPal no válido.');
+    return { ok: false, error: 'Email de PayPal no válido.' };
   }
 
   const { error } = await supa.from('profiles').upsert(payload, { onConflict: 'id' });
-  if (error) throw error;
+  if (error) {
+    return { ok: false, error: error.message || 'Error guardando ajustes' };
+  }
 
-  // Revalida esta página
+  // Revalida la página para reflejar cambios
   revalidatePath('/ajustes/facturacion');
+  return { ok: true };
 }
 
-// Export con ambos nombres para que cualquier import existente funcione
+// Export con ambos nombres para mantener compatibilidad
 export { _saveBilling as saveBillingSettings, _saveBilling as saveSettings };
