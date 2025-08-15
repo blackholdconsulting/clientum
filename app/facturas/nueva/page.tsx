@@ -80,6 +80,30 @@ export default function NuevaFacturaPage() {
   const invoiceTypeForVerifactu = (t: TipoUI): 'completa'|'simplificada'|'rectificativa' =>
     t === 'simplificada' ? 'simplificada' : (t === 'rectificativa' ? 'rectificativa' : 'completa');
 
+  // ---- Prefijo serie+número desde ajustes (sin reservar numeración) ----
+  const prefillSeriesAndNumber = async (t: TipoUI) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const typeParam = invoiceTypeForVerifactu(t); // 'completa' | 'simplificada' | 'rectificativa'
+      const res = await fetch(`/api/facturas/numero?type=${typeParam}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+      });
+
+      const j = await res.json();
+      if (res.ok) {
+        setSerie(String(j.series || ''));
+        setNumero(String(j.number || ''));
+      }
+    } catch {
+      // Silencioso: si falla, el usuario puede escribir manualmente
+    }
+  };
+
   // ===== Carga inicial (perfil, clientes, cuentas) =====
   useEffect(() => {
     (async () => {
@@ -101,8 +125,16 @@ export default function NuevaFacturaPage() {
       setCuentas(cuentasData || []);
 
       setLoading(false);
+      // Prefija serie+número según el tipo actual
+      prefillSeriesAndNumber(tipo);
     })();
-  }, [supabase]);
+  }, [supabase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Prefijar de nuevo al cambiar el tipo
+  useEffect(() => {
+    if (!loading) prefillSeriesAndNumber(tipo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipo, loading]);
 
   // ===== Líneas =====
   const addLinea = () => setLineas(ls => [...ls, { id: Date.now(), descripcion:'', cantidad:1, precio:0, iva:21, cuentaId:'' }]);
@@ -279,7 +311,7 @@ export default function NuevaFacturaPage() {
             {clientes.map(c=> <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
 
-          <select className="border rounded p-2 flex-1" value={tipo} onChange={e=>setTipo(e.target.value as TipoUI)}>
+        <select className="border rounded p-2 flex-1" value={tipo} onChange={e=>setTipo(e.target.value as TipoUI)}>
             <option value="factura">Factura Completa</option>
             <option value="simplificada">Factura Simplificada</option>
             <option value="rectificativa">Factura Rectificativa</option>
