@@ -1,3 +1,4 @@
+// app/layout.tsx  
 'use client';
 
 import './globals.css';
@@ -13,9 +14,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 
   const isActive = (prefix: string) =>
     pathname === prefix || pathname.startsWith(prefix + '/');
+
+  // helpers para marcar activo cuando un grupo tiene varias rutas hijas
+  const isAnyActive = (...prefixes: string[]) => prefixes.some(isActive);
   const linkClass = (prefix: string) =>
     `block py-2 px-3 rounded hover:bg-indigo-100 ${
       isActive(prefix) ? 'bg-indigo-100 font-semibold' : ''
+    }`;
+  const linkClassMulti = (...prefixes: string[]) =>
+    `block py-2 px-3 rounded hover:bg-indigo-100 ${
+      isAnyActive(...prefixes) ? 'bg-indigo-100 font-semibold' : ''
     }`;
 
   const handleLogout = async () => {
@@ -40,31 +48,53 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               👥 Clientes
             </Link>
 
+            {/* ====== FACTURAS ====== */}
             <div>
-              <Link href="/facturas" className={linkClass('/facturas')}>
+              <Link
+                href="/facturas"
+                className={linkClassMulti('/facturas', '/ajustes/facturacion')}
+              >
                 🧾 Facturas
               </Link>
               <div className="pl-4 space-y-1">
-                <Link href="/facturas" className={linkClass('/facturas')}>
-                  Crear Factura
+                {/* Crear */}
+                <Link
+                  href="/facturas/nueva"
+                  className={linkClass('/facturas/nueva')}
+                >
+                  ➕ Crear factura
                 </Link>
+
+                {/* Histórico */}
                 <Link
                   href="/facturas/historico"
                   className={linkClass('/facturas/historico')}
                 >
-                  Histórico Facturas
+                  📚 Histórico facturas
                 </Link>
+
+                {/* Factura electrónica (firma XAdES) */}
                 <Link
                   href="/facturas/factura-electronica"
                   className={linkClass('/facturas/factura-electronica')}
                 >
-                  📤 Factura Electrónica
+                  📤 Factura electrónica
                 </Link>
+
+                {/* (Opcional) atajo legacy si lo usas */}
                 <Link
                   href="/facturas/factura-simplificada"
                   className={linkClass('/facturas/factura-simplificada')}
                 >
-                  🎫 Factura Simplificada
+                  🎫 Factura simplificada
+                </Link>
+
+                {/* NUEVO: Ajustes de facturación dentro de Facturas */}
+                <Link
+                  href="/ajustes/facturacion"
+                  className={linkClass('/ajustes/facturacion')}
+                >
+                  ⚙️ Ajustes de facturación
                 </Link>
               </div>
             </div>
@@ -165,9 +195,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 <Link href="/asientos" className={linkClass('/asientos')}>
                   🧾 Asientos
                 </Link>
-                {/* NUEVO: IVA (Trimestral) como subíndice de Contabilidad */}
                 <Link
-                  href="/iva"
+                  href="/contabilidad/iva"
                   className={linkClass('/contabilidad/iva')}
                 >
                   📄 IVA (Trimestral)
