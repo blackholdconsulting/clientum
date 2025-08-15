@@ -6,19 +6,18 @@ import React, { useState, useEffect, Fragment, FormEvent, useRef } from 'react';
 import Link from 'next/link';
 import { Dialog, Transition } from '@headlessui/react';
 import ReactQRCode from 'react-qr-code';
-import { toDataURL } from 'qrcode'; // para incrustar en PDF
+import { toDataURL } from 'qrcode';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 
-import type { Invoice, InvoiceItem, Party, TaxLine } from '@/lib/invoice';
 import VeriFactuQR from './VeriFactuQR';
 import type { VeriFactuPayload } from '@/lib/verifactu';
 
-// === Tipos locales que ya usabas ===
+// === Tipos mínimos locales ===
 interface Cliente { id: string; nombre: string; nif?: string; direccion?: string; ciudad?: string; provincia?: string; cp?: string; pais?: string; }
 interface Perfil {
-  id?: string; user_id?: string;
+  user_id?: string;
   nombre_empr?: string; empresa?: string; nombre?: string; razon_social?: string;
   nif?: string; direccion?: string; ciudad?: string; provincia?: string; cp?: string; pais?: string;
   telefono?: string; email?: string; web?: string;
@@ -26,25 +25,28 @@ interface Perfil {
 interface Cuenta { id: string; codigo: string; nombre: string; }
 interface Linea { id: number; descripcion: string; cantidad: number; precio: number; iva: number; cuentaId: string; }
 
-// NUEVO: tercer tipo de UI
 type TipoUI = 'factura' | 'simplificada' | 'rectificativa';
 
 export default function NuevaFacturaPage() {
   const supabase = createPagesBrowserClient();
   const refFactura = useRef<HTMLFormElement>(null);
 
-  // ===== UI base =====
-  const [origin, setOrigin] = useState(''); useEffect(() => { setOrigin(window.location.origin); }, []);
+  // ===== Estado base =====
+  const [origin, setOrigin] = useState('');
+  useEffect(() => { setOrigin(window.location.origin); }, []);
+
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
+  const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // ===== Datos de la factura =====
+  // Factura
   const [serie, setSerie] = useState(''); const [numero, setNumero] = useState('');
   const [clienteId, setClienteId] = useState('');
-  const [tipo, setTipo] = useState<TipoUI>('factura'); // ahora incluye rectificativa
+  const [tipo, setTipo] = useState<TipoUI>('factura');
   const [lineas, setLineas] = useState<Linea[]>([{ id: Date.now(), descripcion:'', cantidad:1, precio:0, iva:21, cuentaId:'' }]);
+
+  // UI extra
   const [customFields, setCustomFields] = useState(false);
   const [mensajeFinal, setMensajeFinal] = useState(false);
   const [textoFinal, setTextoFinal] = useState('');
@@ -52,11 +54,10 @@ export default function NuevaFacturaPage() {
   const [catCuenta, setCatCuenta] = useState('');
   const [qrOpen, setQrOpen] = useState(false);
 
-  // ===== VERI*FACTU / Facturae =====
-  const [orgId, setOrgId] = useState<string>('');      // = user_id (multiusuario)
+  // Veri*factu / firma
   const [verifactuPayload, setVerifactuPayload] = useState<VeriFactuPayload | null>(null);
-  const [busyVF, setBusyVF] = useState(false);
-  const [busyFAC, setBusyFAC] = useState(false);
+  const [busySave, setBusySave] = useState(false);
+  const [busyXades, setBusyXades] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const [facturaeBase64, setFacturaeBase64] = useState<string | null>(null);
 
@@ -65,8 +66,8 @@ export default function NuevaFacturaPage() {
   const ivaTotal = lineas.reduce((s, l) => s + l.cantidad * l.precio * (l.iva / 100), 0);
   const total = subtotal + ivaTotal;
 
-  // ===== Mapper: PERFIL -> Party (robusto a nombres de campos) =====
-  const sellerFromPerfil = (p?: Perfil | null): Party => ({
+  // ===== Helpers =====
+  const sellerFromPerfil = (p?: Perfil | null) => ({
     name: (p?.nombre_empr || p?.empresa || p?.razon_social || p?.nombre || '—').toString(),
     nif: (p?.nif || '—').toString(),
     address: (p?.direccion || '—').toString(),
@@ -76,10 +77,13 @@ export default function NuevaFacturaPage() {
     country: (p?.pais || 'ESP').toString(),
   });
 
+  const invoiceTypeForVerifactu = (t: TipoUI): 'completa'|'simplificada'|'rectificativa' =>
+    t === 'simplificada' ? 'simplificada' : (t === 'rectificativa' ? 'rectificativa' : 'completa');
+
   // ===== Carga inicial (perfil, clientes, cuentas) =====
   useEffect(() => {
     (async () => {
-      const { data: { session} } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       const uid = session?.user.id;
       if (!uid) { setLoading(false); return; }
 
@@ -92,7 +96,6 @@ export default function NuevaFacturaPage() {
         .eq('user_id', uid)
         .maybeSingle();
       if (perfilData) setPerfil(perfilData as any);
-      setOrgId(uid);
 
       const { data: cuentasData } = await supabase.from('cuentas').select('id,codigo,nombre');
       setCuentas(cuentasData || []);
@@ -106,78 +109,39 @@ export default function NuevaFacturaPage() {
   const removeLinea = (id:number) => setLineas(ls => ls.filter(x => x.id !== id));
   const updateLinea = (id:number, f:keyof Omit<Linea,'id'>, v:any) => setLineas(ls => ls.map(x => x.id===id ? { ...x, [f]: v } : x));
 
-  // ===== Ensambla objeto Invoice (para APIs) - se mantiene por si lo necesitas en otras rutas =====
-  async function assembleInvoice(insertedId?: string): Promise<Invoice> {
-    const now = new Date();
-    const issueDate = now.toISOString().slice(0,10);
-    const issueTime = now.toTimeString().slice(0,8);
-
-    // Buyer
-    let buyer: Party = { name:'Cliente', nif:'', address:'', city:'', province:'', zip:'', country:'ESP' };
-    if (clienteId) {
-      const { data: c } = await supabase
-        .from('clientes')
-        .select('id,nombre,nif,direccion,ciudad,provincia,cp,pais')
-        .eq('id', clienteId)
-        .maybeSingle();
-      if (c) buyer = {
-        name: c.nombre || 'Cliente',
-        nif: (c as any).nif || '',
-        address: (c as any).direccion || '',
-        city: (c as any).ciudad || '',
-        province: (c as any).provincia || '',
-        zip: (c as any).cp || '',
-        country: (c as any).pais || 'ESP',
-      };
-    }
-
-    // Seller desde PERFIL
-    const seller = sellerFromPerfil(perfil);
-
-    // Items + taxes
-    const items: InvoiceItem[] = lineas.map(l => ({ description:l.descripcion, quantity:l.cantidad, unitPrice:l.precio, taxRate:l.iva }));
-    const taxMap = new Map<number, { base:number; quota:number }>();
-    lineas.forEach(l => {
-      const base = l.cantidad*l.precio; const quota = base*(l.iva/100);
-      const prev = taxMap.get(l.iva) || { base:0, quota:0 };
-      taxMap.set(l.iva, { base: prev.base + base, quota: prev.quota + quota });
-    });
-    const taxes: TaxLine[] = Array.from(taxMap.entries()).map(([rate,v]) => ({ rate, base:+v.base.toFixed(2), quota:+v.quota.toFixed(2) }));
-
-    return {
-      id: insertedId || `${serie}${numero}`, orgId,
-      number: `${serie}${numero}`, series: serie || undefined,
-      issueDate, issueTime, seller, buyer, items, taxes, currency:'EUR',
-      total: +total.toFixed(2),
-    };
-  }
-
-  // NUEVO: mapeo UI -> tipo para Facturae/Veri*factu (incluye rectificativa)
-  const invoiceTypeForVerifactu = (t: TipoUI): 'completa'|'simplificada'|'rectificativa' =>
-    t === 'simplificada' ? 'simplificada' : (t === 'rectificativa' ? 'rectificativa' : 'completa');
-
-  // ===== Helper: Guardar + obtener XAdES (y serie/número definitivos) =====
+  // ===== Guardar + obtener XAdES (con Bearer + cookies) =====
   const saveForXAdES = async () => {
-    const issueDate = new Date().toISOString().slice(0,10);
+    const issueDate = new Date().toISOString().slice(0, 10);
+
+    // token de sesión
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
     const res = await fetch('/api/facturas', {
       method: 'POST',
-      headers: { 'Content-Type':'application/json' },
+      credentials: 'include', // también manda cookies de Supabase si existen
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({
         issueDate,
-        type: invoiceTypeForVerifactu(tipo), // completa/simplificada/rectificativa
+        type: invoiceTypeForVerifactu(tipo), // 'completa' | 'simplificada' | 'rectificativa'
         totals: { total: +total.toFixed(2) },
-        payment: { method: 'transfer', iban: null, paypalEmail: null, notes: null }, // mapea desde tu UI si ya la tienes
+        // si tienes UI de pago, mapea aquí; esto es un mínimo válido
+        payment: { method: 'transfer', iban: null, paypalEmail: null, notes: null },
       }),
     });
+
     const j = await res.json();
     if (!res.ok) throw new Error(j?.error || 'No se pudo guardar');
 
-    // serie / numero definitivos (reservados atómicamente)
+    // serie/número finales (reservados atómicamente)
     setSerie(String(j.series || ''));
     setNumero(String(j.number || ''));
     setFacturaeBase64(j.facturaeBase64 || null);
 
-    // Preparar payload para QR Veri*factu (se muestra si showQR está activo)
+    // payload RF/QR Veri*factu
     const emisorNif = sellerFromPerfil(perfil).nif || '';
     setVerifactuPayload({
       issuerTaxId: emisorNif,
@@ -189,58 +153,43 @@ export default function NuevaFacturaPage() {
       number: Number(j.number),
     });
 
-    setFlash(`Guardado: ${j.series}-${String(j.number).padStart(6,'0')} ✔️`);
+    setFlash(`Guardado: ${j.series}-${String(j.number).padStart(6, '0')} ✔️`);
   };
 
-  // ===== Guardar: usa el helper (y abre modal QR si procede) =====
+  // ===== Guardar =====
   const handleGuardar = async (e:FormEvent) => {
     e.preventDefault();
-    try {
-      setBusyVF(true);
-      setFlash(null);
-      await saveForXAdES();
-      if (showQR) setQrOpen(true);
-    } catch (err:any) {
-      setFlash('Error al guardar: ' + String(err?.message || err));
-    } finally {
-      setBusyVF(false);
-    }
+    try { setBusySave(true); setFlash(null); await saveForXAdES(); if (showQR) setQrOpen(true); }
+    catch (err:any) { setFlash('Error al guardar: ' + String(err?.message || err)); }
+    finally { setBusySave(false); }
   };
 
-  // ===== Descargar Facturae (si no hay XAdES/serie/nº, guarda antes y luego descarga) =====
+  // ===== Descargar Facturae (guarda si hace falta) =====
   const descargarFacturae = async () => {
     try {
-      setBusyFAC(true);
-
-      if (!facturaeBase64 || !serie || !numero) {
-        await saveForXAdES(); // asegura XAdES y numeración
-      }
-      if (!facturaeBase64) {
-        setFlash('No se pudo obtener el XAdES. Reintenta.');
-        return;
-      }
+      setBusyXades(true);
+      if (!facturaeBase64 || !serie || !numero) await saveForXAdES();
+      if (!facturaeBase64) { setFlash('No se pudo obtener el XAdES. Reintenta.'); return; }
 
       const bytes = Uint8Array.from(atob(facturaeBase64), c => c.charCodeAt(0));
       const blob = new Blob([bytes], { type: 'application/xml' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `${(serie||'S')}${(numero||'000001')}.xsig`; // o .xml si tu firmador devuelve XML firmado
-      a.click();
-      URL.revokeObjectURL(a.href);
-      setFlash(`Facturae firmada descargada (${((bytes.length)/1024).toFixed(1)} KB)`);
+      a.download = `${(serie||'S')}${(numero||'000001')}.xsig`; // o .xml según tu firmador
+      a.click(); URL.revokeObjectURL(a.href);
+
+      setFlash(`Facturae firmada descargada (${(bytes.length/1024).toFixed(1)} KB)`);
     } catch (e:any) {
       setFlash('Error Facturae: ' + String(e?.message || e));
-    } finally {
-      setBusyFAC(false);
-    }
+    } finally { setBusyXades(false); }
   };
 
-  // ===== Exportar PDF en cliente (misma estética) =====
+  // ===== Exportar PDF (cliente) =====
   const exportPDF = async () => {
     const doc = new jsPDF();
     doc.setFontSize(16); doc.text(`Factura ${serie}${numero}`, 14, 20);
 
-    // Bloque “Mi perfil” (emisor)
+    // Emisor
     const s = sellerFromPerfil(perfil);
     doc.setFontSize(10);
     doc.text([
@@ -254,7 +203,6 @@ export default function NuevaFacturaPage() {
       ...(perfil?.web ?     [`Web: ${perfil.web}`]       : []),
     ], 14, 30);
 
-    // Tabla de líneas
     // @ts-ignore
     autoTable(doc, {
       startY: 70,
@@ -277,7 +225,6 @@ export default function NuevaFacturaPage() {
     doc.text(`Total: ${total.toFixed(2)} €`, 140, finalY+24, { align:'right' });
 
     if (showQR && origin) {
-      // Si tienes QR Veri*factu generado, podrías incrustarlo; de momento dejamos un QR de acceso:
       const imgData = await toDataURL(`${origin}/facturas/${serie}${numero}`);
       doc.addImage(imgData, 'PNG', 14, finalY+32, 40, 40);
     }
@@ -292,7 +239,7 @@ export default function NuevaFacturaPage() {
       <Link href="/facturas" className="text-blue-600 mb-4 inline-block">← Volver a Facturas</Link>
       <h1 className="text-2xl font-semibold mb-6">Crear Factura</h1>
 
-      {/* Vista previa: Datos del emisor (Mi perfil) */}
+      {/* Datos emisor */}
       <div className="mb-4 rounded border bg-slate-50 px-4 py-3 text-sm">
         <p className="font-medium mb-1">Datos del emisor (Mi perfil)</p>
         {(() => {
@@ -319,21 +266,20 @@ export default function NuevaFacturaPage() {
       {flash && <div className="mb-4 text-sm rounded border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700">{flash}</div>}
 
       <form onSubmit={handleGuardar} ref={refFactura} className="bg-white p-6 rounded shadow space-y-6" data-invoice-form>
-        {/* Serie y número (se rellenan tras guardar) */}
+        {/* Serie y número */}
         <div className="flex gap-4">
-          <input type="text" placeholder="Serie" value={serie} onChange={e=>setSerie(e.target.value)} className="border rounded p-2 flex-1" />
-          <input type="text" placeholder="Número" value={numero} onChange={e=>setNumero(e.target.value)} className="border rounded p-2 flex-1" />
+          <input className="border rounded p-2 flex-1" placeholder="Serie" value={serie} onChange={e=>setSerie(e.target.value)} />
+          <input className="border rounded p-2 flex-1" placeholder="Número" value={numero} onChange={e=>setNumero(e.target.value)} />
         </div>
 
         {/* Cliente y tipo */}
         <div className="flex gap-4">
-          <select value={clienteId} onChange={e=>setClienteId(e.target.value)} className="border rounded p-2 flex-1">
+          <select className="border rounded p-2 flex-1" value={clienteId} onChange={e=>setClienteId(e.target.value)}>
             <option value="">Selecciona cliente</option>
-            {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            {clientes.map(c=> <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
 
-          {/* NUEVO: + Rectificativa */}
-          <select value={tipo} onChange={e=>setTipo(e.target.value as TipoUI)} className="border rounded p-2 flex-1">
+          <select className="border rounded p-2 flex-1" value={tipo} onChange={e=>setTipo(e.target.value as TipoUI)}>
             <option value="factura">Factura Completa</option>
             <option value="simplificada">Factura Simplificada</option>
             <option value="rectificativa">Factura Rectificativa</option>
@@ -343,15 +289,15 @@ export default function NuevaFacturaPage() {
         {/* Líneas */}
         {lineas.map(l => (
           <div key={l.id} className="grid grid-cols-6 gap-2 items-end">
-            <input type="text" placeholder="Descripción" value={l.descripcion} onChange={e=>updateLinea(l.id,'descripcion',e.target.value)} className="col-span-2 border rounded p-2" />
-            <input type="number" placeholder="Cant." value={l.cantidad} onChange={e=>updateLinea(l.id,'cantidad',Number(e.target.value))} className="border rounded p-2" />
-            <input type="number" placeholder="Precio" value={l.precio} onChange={e=>updateLinea(l.id,'precio',Number(e.target.value))} className="border rounded p-2" />
-            <select value={l.iva} onChange={e=>updateLinea(l.id,'iva',Number(e.target.value))} className="border rounded p-2">
-              {[4,10,21].map(t => <option key={t} value={t}>{t}%</option>)}
+            <input className="col-span-2 border rounded p-2" placeholder="Descripción" value={l.descripcion} onChange={e=>updateLinea(l.id,'descripcion',e.target.value)} />
+            <input type="number" className="border rounded p-2" placeholder="Cant." value={l.cantidad} onChange={e=>updateLinea(l.id,'cantidad',Number(e.target.value))} />
+            <input type="number" className="border rounded p-2" placeholder="Precio" value={l.precio} onChange={e=>updateLinea(l.id,'precio',Number(e.target.value))} />
+            <select className="border rounded p-2" value={l.iva} onChange={e=>updateLinea(l.id,'iva',Number(e.target.value))}>
+              {[4,10,21].map(v=><option key={v} value={v}>{v}%</option>)}
             </select>
-            <select value={l.cuentaId} onChange={e=>updateLinea(l.id,'cuentaId',e.target.value)} className="border rounded p-2">
+            <select className="border rounded p-2" value={l.cuentaId} onChange={e=>updateLinea(l.id,'cuentaId',e.target.value)}>
               <option value="">Cuenta</option>
-              {cuentas.map(c => <option key={c.id} value={c.id}>{c.codigo} – {c.nombre}</option>)}
+              {cuentas.map(c=><option key={c.id} value={c.id}>{c.codigo} – {c.nombre}</option>)}
             </select>
             <button type="button" onClick={()=>removeLinea(l.id)} className="text-red-600">×</button>
           </div>
@@ -363,13 +309,13 @@ export default function NuevaFacturaPage() {
           <label><input type="checkbox" checked={customFields} onChange={e=>setCustomFields(e.target.checked)} /> Campos extra</label>
           <label><input type="checkbox" checked={mensajeFinal} onChange={e=>setMensajeFinal(e.target.checked)} /> Mensaje final</label>
           <label><input type="checkbox" checked={showQR} onChange={e=>setShowQR(e.target.checked)} /> Mostrar QR</label>
-          <select value={catCuenta} onChange={e=>setCatCuenta(e.target.value)} className="border rounded p-2 ml-auto">
+          <select className="border rounded p-2 ml-auto" value={catCuenta} onChange={e=>setCatCuenta(e.target.value)}>
             <option value="">Categoría</option>
             {cuentas.map(c => <option key={c.id} value={c.id}>{c.codigo}</option>)}
           </select>
         </div>
 
-        {mensajeFinal && <textarea placeholder="Texto final..." value={textoFinal} onChange={e=>setTextoFinal(e.target.value)} className="w-full border rounded p-2" />}
+        {mensajeFinal && <textarea className="w-full border rounded p-2" placeholder="Texto final..." value={textoFinal} onChange={e=>setTextoFinal(e.target.value)} />}
 
         {/* Acciones */}
         <div className="flex flex-wrap gap-2 justify-between items-center">
@@ -379,24 +325,21 @@ export default function NuevaFacturaPage() {
             <p className="font-bold">Total: {total.toFixed(2)}€</p>
           </div>
           <div className="flex gap-2">
-            <button type="submit" disabled={busyVF} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">
-              {busyVF ? 'Guardando…' : 'Guardar Factura'}
+            <button type="submit" disabled={busySave} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">
+              {busySave ? 'Guardando…' : 'Guardar Factura'}
             </button>
             <button type="button" onClick={exportPDF} className="px-4 py-2 bg-gray-200 rounded">Exportar PDF</button>
-            <button type="button" onClick={descargarFacturae} disabled={busyFAC} className="px-4 py-2 bg-emerald-600 text-white rounded disabled:opacity-50">
-              {busyFAC ? 'Firmando…' : 'Descargar Facturae'}
+            <button type="button" onClick={descargarFacturae} disabled={busyXades} className="px-4 py-2 bg-emerald-600 text-white rounded disabled:opacity-50">
+              {busyXades ? 'Firmando…' : 'Descargar Facturae'}
             </button>
           </div>
         </div>
       </form>
 
-      {/* Bloque QR Veri*factu (inline) */}
-      <VeriFactuQR
-        enabled={showQR && !!verifactuPayload}
-        payload={verifactuPayload}
-      />
+      {/* QR Veri*factu inline */}
+      <VeriFactuQR enabled={showQR && !!verifactuPayload} payload={verifactuPayload} />
 
-      {/* Modal QR fallback (acceso simple) */}
+      {/* Modal QR fallback */}
       <Transition show={qrOpen} as={Fragment}>
         <Dialog open onClose={()=>setQrOpen(false)} className="fixed inset-0 z-50 flex items-center justify-center">
           <Transition.Child as={Fragment} enter="transition-opacity duration-200" enterFrom="opacity-0" enterTo="opacity-100">
@@ -404,13 +347,8 @@ export default function NuevaFacturaPage() {
           </Transition.Child>
           <Transition.Child as={Fragment} enter="transition-transform duration-200" enterFrom="scale-95" enterTo="scale-100">
             <div className="bg-white p-6 rounded shadow text-center">
-              <Dialog.Title className="text-lg font-semibold mb-4">
-                {verifactuPayload ? 'QR VERI*FACTU' : 'Acceso a tu factura'}
-              </Dialog.Title>
-              {verifactuPayload
-                ? <div className="text-sm text-slate-500">El QR Veri*factu se muestra abajo en la página.</div>
-                : (origin && <ReactQRCode value={`${origin}/facturas/${serie}${numero}`} />)
-              }
+              <Dialog.Title className="text-lg font-semibold mb-4">Acceso a tu factura</Dialog.Title>
+              {origin && <ReactQRCode value={`${origin}/facturas/${serie}${numero}`} />}
               <button onClick={()=>setQrOpen(false)} className="mt-4 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cerrar</button>
             </div>
           </Transition.Child>
@@ -419,4 +357,3 @@ export default function NuevaFacturaPage() {
     </div>
   );
 }
-
