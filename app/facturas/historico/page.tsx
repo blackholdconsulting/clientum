@@ -1,126 +1,89 @@
-// app/facturas/historico/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { format } from "date-fns";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
 type Row = Record<string, any>;
 
-type Normal = {
+type Norm = {
   id: string;
   fecha: string | null;
   cliente: string;
   importe: number;
   estado: string;
+  serie?: string;
+  numero?: number;
 };
 
 export default function HistoricoFacturasPage() {
   const supabase = createClientComponentClient();
   const [rows, setRows] = useState<Row[]>([]);
-  const [norm, setNorm] = useState<Normal[]>([]);
-  const [clientes, setClientes] = useState<string[]>([]);
+  const [list, setList] = useState<Norm[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Filtros
-  const [filtroCliente, setFiltroCliente] = useState("");
+  const [fCli, setFCli] = useState("");
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
-  const [minImporte, setMinImporte] = useState<number | "">("");
-  const [maxImporte, setMaxImporte] = useState<number | "">("");
+  const [impMin, setImpMin] = useState<string>("");
+  const [impMax, setImpMax] = useState<string>("");
 
-  // Columnas reales (autodetección)
-  const [dateCol, setDateCol] = useState<string>("");      // issued_at | fecha | created_at
-  const [clientCol, setClientCol] = useState<string>("");  // cliente | customer_name | client_name
-  const [totalCol, setTotalCol] = useState<string>("");    // importe | total | total_amount
-  const [statusCol, setStatusCol] = useState<string>("");  // estado | status
-  const [userIdCol, setUserIdCol] = useState<string>("");  // user_id si existe
+  // columnas reales (autodetección sencilla)
+  const [colFecha, setColFecha] = useState("issued_at");
+  const [colCliente, setColCliente] = useState("cliente");
+  const [colImporte, setColImporte] = useState("total");
+  const [colEstado, setColEstado] = useState("status");
+  const [colSerie, setColSerie] = useState("serie");
+  const [colNumero, setColNumero] = useState("number");
+  const [colUserId, setColUserId] = useState("user_id");
 
-  // --- util: comprueba si existe una columna en 'facturas'
-  const columnExists = async (col: string) => {
+  async function exists(col: string) {
     const { error } = await supabase.from("facturas").select(col).limit(1);
-    // Error 42703 => undefined column
-    if (error && (error as any).code === "42703") return false;
-    // Si hay otra cosa (p.ej. RLS sin filas), lo consideramos existente
-    return true;
-  };
+    // si code === 42703 => columna no existe
+    return !(error && (error as any).code === "42703");
+  }
+  async function pick(cols: string[], fallback: string) {
+    for (const c of cols) if (await exists(c)) return c;
+    return fallback;
+  }
 
-  // --- elige la primera columna que exista
-  const pickFirstExisting = async (candidates: string[]) => {
-    for (const c of candidates) {
-      if (await columnExists(c)) return c;
-    }
-    return ""; // ninguna
-  };
-
-  // Detecta columnas una vez
   useEffect(() => {
     (async () => {
-      const dc = await pickFirstExisting(["issued_at", "fecha", "created_at"]);
-      const cc = await pickFirstExisting(["cliente", "customer_name", "client_name", "client"]);
-      const tc = await pickFirstExisting(["importe", "total", "total_amount", "amount"]);
-      const sc = await pickFirstExisting(["estado", "status"]);
-      const uc = (await columnExists("user_id")) ? "user_id" : "";
-
-      setDateCol(dc);
-      setClientCol(cc);
-      setTotalCol(tc);
-      setStatusCol(sc);
-      setUserIdCol(uc);
+      setColFecha(await pick(["issued_at", "fecha", "created_at"], "created_at"));
+      setColCliente(await pick(["cliente", "customer_name", "client_name", "client"], "cliente"));
+      setColImporte(await pick(["total", "importe", "total_amount", "amount"], "total"));
+      setColEstado(await pick(["status", "estado"], "status"));
+      setColSerie(await pick(["serie", "series"], "serie"));
+      setColNumero(await pick(["number", "num", "numero"], "number"));
+      setColUserId((await exists("user_id")) ? "user_id" : "");
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Carga clientes únicos para el select
-  useEffect(() => {
-    (async () => {
-      if (!clientCol) return;
-      const base = supabase.from("facturas").select(clientCol);
-      const { data, error } = await base;
-      if (!error && data) {
-        const uniques = Array.from(
-          new Set(
-            data
-              .map((r) => (r as any)[clientCol])
-              .filter(Boolean)
-          )
-        ) as string[];
-        setClientes(uniques);
-      }
-    })();
-  }, [clientCol, supabase]);
-
-  // Carga filas con filtros aplicados
-  const load = async () => {
+  async function load() {
     setLoading(true);
     try {
       let q = supabase.from("facturas").select("*");
 
-      // multiusuario: si hay columna user_id, filtramos por usuario actual
-      if (userIdCol) {
+      // multiusuario por user_id (si existe)
+      if (colUserId) {
         const { data: u } = await supabase.auth.getUser();
         const uid = u?.user?.id;
-        if (uid) q = q.eq(userIdCol, uid);
+        if (uid) q = q.eq(colUserId, uid);
       }
 
-      // filtros
-      if (filtroCliente && clientCol) q = q.eq(clientCol, filtroCliente);
-      if (desde && dateCol) q = q.gte(dateCol, desde);
-      if (hasta && dateCol) q = q.lte(dateCol, hasta);
-      if (minImporte !== "" && totalCol) q = q.gte(totalCol, minImporte);
-      if (maxImporte !== "" && totalCol) q = q.lte(totalCol, maxImporte);
-
-      // orden
-      if (dateCol) {
-        q = q.order(dateCol, { ascending: false });
-      } else if (await columnExists("created_at")) {
-        q = q.order("created_at", { ascending: false });
-      }
+      if (fCli) q = q.eq(colCliente, fCli);
+      if (desde) q = q.gte(colFecha, desde);
+      if (hasta) q = q.lte(colFecha, hasta);
+      if (impMin) q = q.gte(colImporte, Number(impMin));
+      if (impMax) q = q.lte(colImporte, Number(impMax));
+      q = q.order(colFecha, { ascending: false });
 
       const { data, error } = await q;
       if (error) {
-        // muestra algo útil en el cliente para no “quedarte a oscuras”
-        console.error("Error cargando facturas:", error);
+        console.error(error);
         setRows([]);
       } else {
         setRows(data || []);
@@ -128,161 +91,180 @@ export default function HistoricoFacturasPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   useEffect(() => {
-    // carga cuando ya sabemos cómo se llaman las columnas clave
-    if (!totalCol || (!dateCol && !clientCol)) return;
+    if (!colImporte || !colFecha) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateCol, clientCol, totalCol, statusCol, userIdCol, filtroCliente, desde, hasta, minImporte, maxImporte]);
+  }, [colFecha, colCliente, colImporte, colEstado, colSerie, colNumero, colUserId, fCli, desde, hasta, impMin, impMax]);
 
-  // Normaliza filas a un modelo estable para pintar
   useEffect(() => {
-    const n = rows.map((r): Normal => {
-      const fechaRaw =
-        (dateCol && r[dateCol]) ||
-        r["created_at"] ||
-        null;
-
-      const cliente =
-        (clientCol && (r[clientCol] as string)) ||
-        r["cliente"] ||
-        r["customer_name"] ||
-        r["client_name"] ||
-        r["client"] ||
-        "—";
-
-      const importeNum = Number(
-        (totalCol && r[totalCol]) ??
-          r["total"] ??
-          r["importe_total"] ??
-          r["total_amount"] ??
-          r["amount"] ??
-          0
-      );
-
-      const estado =
-        (statusCol && (r[statusCol] as string)) ||
-        r["estado"] ||
-        r["status"] ||
-        "borrador";
-
+    const n = rows.map((r) => {
+      const fecha: string | null = r[colFecha] ? String(r[colFecha]) : null;
+      const cliente: string = r[colCliente] ?? "—";
+      const importe: number = Number(r[colImporte] ?? 0) || 0;
+      const estado: string = r[colEstado] ?? "borrador";
+      const serie: string | undefined = r[colSerie];
+      const numero: number | undefined = r[colNumero];
       return {
-        id: String(r.id ?? `${r.serie ?? ""}-${r.number ?? Math.random()}`),
-        fecha: fechaRaw ? String(fechaRaw) : null,
+        id: String(r.id),
+        fecha,
         cliente,
-        importe: isNaN(importeNum) ? 0 : importeNum,
+        importe,
         estado,
-      };
+        serie,
+        numero,
+      } as Norm;
     });
-    setNorm(n);
-  }, [rows, dateCol, clientCol, totalCol, statusCol]);
+    setList(n);
+  }, [rows, colFecha, colCliente, colImporte, colEstado, colSerie, colNumero]);
 
-  const canFilterByDates = Boolean(dateCol);
+  async function handleDelete(id: string) {
+    if (!confirm("¿Eliminar esta factura? Esta acción no se puede deshacer.")) return;
+    const res = await fetch(`/api/facturas/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert(j?.error ?? "No se pudo eliminar");
+      return;
+    }
+    await load();
+  }
+
+  function openPdf(row: Norm) {
+    // usa tu endpoint existente basado en serie/numero
+    if (!row.serie || row.numero == null) {
+      alert("No hay serie/número en esta factura.");
+      return;
+    }
+    window.open(
+      `/api/facturas/pdf?serie=${encodeURIComponent(row.serie)}&numero=${encodeURIComponent(
+        row.numero
+      )}`,
+      "_blank"
+    );
+  }
+
+  function openFacturae(row: Norm) {
+    if (!row.serie || row.numero == null) {
+      alert("No hay serie/número en esta factura.");
+      return;
+    }
+    window.open(
+      `/api/facturas/xml?serie=${encodeURIComponent(row.serie)}&numero=${encodeURIComponent(
+        row.numero
+      )}`,
+      "_blank"
+    );
+  }
+
+  async function doVerifactu(row: Norm) {
+    const res = await fetch(`/api/facturas/${row.id}/verifactu`, { method: "POST" });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(j?.error ?? "No se pudo registrar en Veri*factu");
+      return;
+    }
+    alert(`Registrada. RF: ${j?.rf ?? ""}`);
+    await load();
+  }
 
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
       <h1 className="text-3xl font-bold mb-6">Histórico de Facturas</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      {/* filtros */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6">
         <div>
-          <label className="block text-sm font-medium mb-1">Cliente</label>
-          <select
-            value={filtroCliente}
-            onChange={(e) => setFiltroCliente(e.target.value)}
+          <label className="text-sm">Cliente</label>
+          <input
+            value={fCli}
+            onChange={(e) => setFCli(e.target.value)}
             className="w-full border rounded px-3 py-2 bg-white"
-          >
-            <option value="">Todos</option>
-            {clientes.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Desde</label>
-          <input
-            type="date"
-            disabled={!canFilterByDates}
-            value={desde}
-            onChange={(e) => setDesde(e.target.value)}
-            className="w-full border rounded px-3 py-2 bg-white disabled:opacity-50"
+            placeholder="Filtrar por cliente"
           />
         </div>
-
         <div>
-          <label className="block text-sm font-medium mb-1">Hasta</label>
+          <label className="text-sm">Desde</label>
+          <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="w-full border rounded px-3 py-2" />
+        </div>
+        <div>
+          <label className="text-sm">Hasta</label>
+          <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="w-full border rounded px-3 py-2" />
+        </div>
+        <div>
+          <label className="text-sm">Imp. Min</label>
           <input
-            type="date"
-            disabled={!canFilterByDates}
-            value={hasta}
-            onChange={(e) => setHasta(e.target.value)}
-            className="w-full border rounded px-3 py-2 bg-white disabled:opacity-50"
+            type="number"
+            value={impMin}
+            onChange={(e) => setImpMin(e.target.value)}
+            className="w-full border rounded px-3 py-2"
           />
         </div>
-
-        <div className="flex space-x-2">
-          <div className="flex-1">
-            <label className="block text-sm font-medium mb-1">Imp. Min</label>
-            <input
-              type="number"
-              min={0}
-              value={minImporte}
-              onChange={(e) =>
-                setMinImporte(e.target.value === "" ? "" : Number(e.target.value))
-              }
-              className="w-full border rounded px-3 py-2 bg-white"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="block text-sm font-medium mb-1">Imp. Max</label>
-            <input
-              type="number"
-              min={0}
-              value={maxImporte}
-              onChange={(e) =>
-                setMaxImporte(e.target.value === "" ? "" : Number(e.target.value))
-              }
-              className="w-full border rounded px-3 py-2 bg-white"
-            />
-          </div>
+        <div>
+          <label className="text-sm">Imp. Max</label>
+          <input
+            type="number"
+            value={impMax}
+            onChange={(e) => setImpMax(e.target.value)}
+            className="w-full border rounded px-3 py-2"
+          />
         </div>
       </div>
 
       <div className="overflow-x-auto bg-white rounded shadow">
         <table className="min-w-full text-left">
-          <thead className="bg-gray-100">
+          <thead className="bg-gray-100 text-sm">
             <tr>
               <th className="px-4 py-2">Fecha</th>
               <th className="px-4 py-2">Cliente</th>
               <th className="px-4 py-2">Importe</th>
               <th className="px-4 py-2">Estado</th>
+              <th className="px-4 py-2 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {norm.map((f) => (
-              <tr key={f.id} className="border-t">
+            {list.map((r) => (
+              <tr key={r.id} className="border-t">
                 <td className="px-4 py-2">
-                  {f.fecha ? format(new Date(f.fecha), "dd/MM/yyyy") : "—"}
+                  <Link className="text-blue-600 hover:underline" href={`/facturas/${r.id}`}>
+                    {r.fecha ? format(new Date(r.fecha), "dd/MM/yyyy") : "—"}
+                  </Link>
                 </td>
-                <td className="px-4 py-2">{f.cliente}</td>
-                <td className="px-4 py-2">€ {f.importe.toFixed(2)}</td>
-                <td className="px-4 py-2 capitalize">{f.estado}</td>
+                <td className="px-4 py-2">{r.cliente || "—"}</td>
+                <td className="px-4 py-2">€ {r.importe.toFixed(2)}</td>
+                <td className="px-4 py-2 capitalize">{r.estado || "borrador"}</td>
+                <td className="px-4 py-2">
+                  <div className="flex justify-end gap-2">
+                    <Link href={`/facturas/${r.id}`} className="px-3 py-1 rounded bg-blue-600 text-white text-sm">
+                      Editar
+                    </Link>
+                    <button onClick={() => openPdf(r)} className="px-3 py-1 rounded bg-gray-700 text-white text-sm">
+                      PDF
+                    </button>
+                    <button onClick={() => openFacturae(r)} className="px-3 py-1 rounded bg-slate-500 text-white text-sm">
+                      Facturae
+                    </button>
+                    <button onClick={() => doVerifactu(r)} className="px-3 py-1 rounded bg-amber-600 text-white text-sm">
+                      VeriFactu
+                    </button>
+                    <button onClick={() => handleDelete(r.id)} className="px-3 py-1 rounded bg-red-600 text-white text-sm">
+                      Eliminar
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
-            {!loading && norm.length === 0 && (
+            {!loading && list.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-500">
-                  No hay facturas que coincidan con los filtros.
+                <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
+                  No hay facturas
                 </td>
               </tr>
             )}
             {loading && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
                   Cargando…
                 </td>
               </tr>
