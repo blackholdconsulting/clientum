@@ -4,106 +4,141 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
-import { buildFacturaeXml, signFacturaeXml } from '@/lib/invoice-signer';
-import { formatPaymentForPdf } from '@/lib/pdf-payment';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { buildFacturaeXml } from '@/lib/invoice-signer'; // asumes que ya lo tienes
+// Si tienes un helper para firmar, puedes importarlo; aquí llamamos al microservicio directamente.
 
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const SRV  = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const SIGNER_BASE_URL = process.env.SIGNER_BASE_URL || '';
+const SIGNER_SIGN_PATH = process.env.SIGNER_SIGN_PATH || '/api/sign/xml';
+const SIGNER_API_KEY   = process.env.SIGNER_API_KEY || '';
 
-type InvoiceType = 'completa' | 'simplificada' | 'rectificativa';
-type Payment = {
-  method: 'transfer' | 'domiciliacion' | 'paypal' | 'tarjeta' | 'efectivo' | 'bizum' | 'otro';
-  iban?: string | null;
-  paypalEmail?: string | null;
-  notes?: string | null;
+type Tipo = 'completa' | 'simplificada' | 'rectificativa';
+
+type Body = {
+  issueDate: string; // YYYY-MM-DD
+  type: Tipo;
+  totals: { total: number; subtotal?: number; iva?: number };
+  clientId?: string | null;
+  lines?: Array<{
+    descripcion: string;
+    cantidad: number;
+    precio: number;
+    iva: number;
+    cuentaId?: string | null;
+  }>;
+  payment?: {
+    method: string;
+    iban?: string | null;
+    paypalEmail?: string | null;
+    notes?: string | null;
+  } | null;
 };
-type InvoiceBody = {
-  issueDate?: string;           // YYYY-MM-DD
-  type?: InvoiceType;           // default: 'completa'
-  customer?: any;
-  items?: any[];
-  totals?: { base?: number; tax?: number; total: number };
-  payment: Payment;
-};
+
+/** Firma el XML en ClientumSign (no lanza si falla; devuelve {b64|null, error|null}) */
+async function trySignXml(xml: string): Promise<{ b64: string | null; error: string | null }> {
+  try {
+    if (!SIGNER_BASE_URL || !SIGNER_API_KEY) {
+      return { b64: null, error: 'Firmador no configurado (SIGNER_BASE_URL/API_KEY)' };
+    }
+    const resp = await fetch(`${SIGNER_BASE_URL.replace(/\/+$/,'')}${SIGNER_SIGN_PATH}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/xml',
+        'X-API-Key': SIGNER_API_KEY,
+      },
+      body: xml,
+    });
+    const text = await resp.text();
+    if (!resp.ok) {
+      const msg = text?.slice(0, 200) || `HTTP ${resp.status}`;
+      return { b64: null, error: `Firma falló: ${msg}` };
+    }
+    // Si tu micro devuelve XML firmado, lo pasamos tal cual en base64
+    const b64 = Buffer.from(text, 'utf8').toString('base64');
+    return { b64, error: null };
+  } catch (e: any) {
+    return { b64: null, error: String(e?.message || e) };
+  }
+}
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as InvoiceBody;
-    const type: InvoiceType = (body.type ?? 'completa');
+    const supabase = createRouteHandlerClient({ cookies });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    // ========= Autenticación robusta (Bearer -> cookies) =========
-    const cookieStore = await cookies();
-
-    const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
-    const tokenFromHeader =
-      authHeader && authHeader.toLowerCase().startsWith('bearer ')
-        ? authHeader.slice(7).trim()
-        : undefined;
-
-    const tokenFromCookie =
-      cookieStore.get('sb-access-token')?.value ??
-      cookieStore.get('sb:token')?.value ??
-      cookieStore.get('supabase-auth-token')?.value ??
-      undefined;
-
-    const accessToken = tokenFromHeader ?? tokenFromCookie;
-
-    const anon = createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { data: u } = await anon.auth.getUser(accessToken);
-    const userId = u?.user?.id;
-    if (!userId) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-
-    const srv = createClient(URL, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
-
-    // ========= Reserva de numeración por tipo (FAC/FACS/FAR) =========
-    const today = (body.issueDate && body.issueDate.slice(0, 10)) || new Date().toISOString().slice(0, 10);
-    const { data: numData, error: numErr } = await srv.rpc('fn_use_next_invoice_number_v2', {
-      p_user: userId,
-      p_date: today,
-      p_type: type, // 'completa' | 'simplificada' | 'rectificativa'
-    });
-    if (numErr) throw numErr;
-
-    const { series, number } = (Array.isArray(numData) ? numData[0] : numData) || {};
-    if (!series || typeof number !== 'number') {
-      return NextResponse.json({ error: 'No se pudo reservar numeración' }, { status: 500 });
+    const body = (await req.json()) as Body;
+    if (!body?.issueDate || !body?.type || !body?.totals?.total) {
+      return NextResponse.json({ error: 'Body incompleto' }, { status: 400 });
     }
 
-    // ========= Forma de pago (para el bloque del PDF) =========
-    const paymentBlock = formatPaymentForPdf(body.payment.method as any, {
-      iban: body.payment.iban ?? null,
-      paypal: body.payment.paypalEmail ?? null,
-      other: body.payment.notes ?? null,
+    // 1) Reserva atómica de numeración por tipo (usa tu función en DB)
+    const { data: seq, error: seqErr } = await supabase.rpc('fn_use_next_invoice_number_v2', {
+      p_user: user.id,
+      p_date: body.issueDate,
+      p_type: body.type,
     });
+    if (seqErr) throw seqErr;
+    const series: string = seq?.series || 'FAC';
+    const number: number = seq?.number || 1;
 
-    // ========= Construcción de XML Facturae =========
-    const facturaePayload = {
-      ...body,
-      serie: series,
-      numero: number,
-      type,                         // si 'rectificativa', tu builder debe añadir <Corrective/>
-      _paymentBlock: paymentBlock,  // opcional para PDF
-    };
-    const xml = await buildFacturaeXml(facturaePayload);
-
-    // ========= Firma XAdES a través del proxy /api/sign/xml =========
-    const signed = await signFacturaeXml(xml);              // Uint8Array o ArrayBuffer
-    const buf = signed instanceof Uint8Array ? signed : new Uint8Array(signed as ArrayBuffer);
-    const facturaeBase64 = Buffer.from(buf).toString('base64');
-
-    // ========= Respuesta =========
-    return NextResponse.json({
-      ok: true,
+    // 2) Inserta en histórico (RLS: user_id = auth.uid())
+    const subtotal = body.totals.subtotal ?? 0;
+    const iva      = body.totals.iva      ?? Math.max(0, body.totals.total - subtotal);
+    const insertPayload = {
+      user_id: user.id,
+      client_id: body.clientId ?? null,
       series,
       number,
-      type,
-      paymentBlock,
-      facturaeBase64,
-      pdfUrl: null, // si generas PDF en server, pon aquí la URL
+      type: body.type,
+      issue_date: body.issueDate,
+      subtotal,
+      iva,
+      total: body.totals.total,
+      lines: body.lines ? JSON.parse(JSON.stringify(body.lines)) : null, // asegurar JSON serializable
+      payment: body.payment ?? null,
+      status: 'borrador' as const,
+    };
+
+    const { data: inserted, error: insErr } = await supabase
+      .from('facturas')
+      .insert(insertPayload)
+      .select('id')
+      .single();
+    if (insErr) throw insErr;
+
+    // 3) Construye XML Facturae con los datos mínimos (ajústalo a tu helper real)
+    const xml = buildFacturaeXml({
+      series,
+      number,
+      issueDate: body.issueDate,
+      seller: { /* si tu helper lo necesita, pásale el perfil desde otra consulta */ },
+      lines: body.lines || [],
+      totals: body.totals,
+      type: body.type,
+      payment: body.payment ?? null,
     });
+
+    // 4) Intenta firmar (pero NO rompemos el guardado si falla)
+    const { b64: signedB64, error: signError } = await trySignXml(xml);
+
+    // Si quieres persistir el firmado para histórico:
+    if (signedB64) {
+      await supabase.from('facturas')
+        .update({ facturae_signed_b64: signedB64, status: 'emitida' })
+        .eq('id', inserted.id)
+        .eq('user_id', user.id);
+    }
+
+    // 5) Respuesta al cliente
+    return NextResponse.json({
+      series,
+      number,
+      facturaeBase64: signedB64 || null,
+      signError: signError || null,
+    }, { status: 201 });
+
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Error creando factura' }, { status: 500 });
+    return NextResponse.json({ error: e?.message || 'Error' }, { status: 500 });
   }
 }
