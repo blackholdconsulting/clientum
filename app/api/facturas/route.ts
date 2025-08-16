@@ -16,13 +16,13 @@ type Tipo = 'completa' | 'simplificada' | 'rectificativa';
 type Body = {
   issueDate: string; // YYYY-MM-DD
   type: Tipo;
-  totals: { total: number; subtotal?: number; iva?: number };
+  totals: { total: number | string; subtotal?: number | string; iva?: number | string };
   clientId?: string | null;
   lines?: Array<{
     descripcion: string;
-    cantidad: number;
-    precio: number;
-    iva: number;
+    cantidad: number | string;
+    precio: number | string;
+    iva: number | string;
     cuentaId?: string | null;
   }>;
   payment?: {
@@ -33,7 +33,20 @@ type Body = {
   } | null;
 };
 
-/** Firma el XML en ClientumSign (no lanza si falla; devuelve {b64|null, error|null}) */
+const money = (x: number | string | null | undefined) => {
+  const n = typeof x === 'string' ? parseFloat(x.replace(',', '.')) : Number(x);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100) / 100;
+};
+const toInt = (x: unknown, fallback = 0) => {
+  // acepta "12.1" -> 12 ; "004" -> 4 ; 7.9 -> 7
+  if (x == null) return fallback;
+  const n = typeof x === 'string' ? parseFloat(x.replace(',', '.')) : Number(x);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.trunc(n);
+};
+
+/** Firma el XML en ClientumSign (no lanza si falla) */
 async function trySignXml(xml: string): Promise<{ b64: string | null; error: string | null }> {
   try {
     if (!SIGNER_BASE_URL || !SIGNER_API_KEY) {
@@ -41,10 +54,7 @@ async function trySignXml(xml: string): Promise<{ b64: string | null; error: str
     }
     const resp = await fetch(`${SIGNER_BASE_URL.replace(/\/+$/, '')}${SIGNER_SIGN_PATH}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/xml',
-        'X-API-Key': SIGNER_API_KEY,
-      },
+      headers: { 'Content-Type': 'application/xml', 'X-API-Key': SIGNER_API_KEY },
       body: xml,
     });
     const text = await resp.text();
@@ -52,8 +62,7 @@ async function trySignXml(xml: string): Promise<{ b64: string | null; error: str
       const msg = text?.slice(0, 200) || `HTTP ${resp.status}`;
       return { b64: null, error: `Firma falló: ${msg}` };
     }
-    const b64 = Buffer.from(text, 'utf8').toString('base64');
-    return { b64, error: null };
+    return { b64: Buffer.from(text, 'utf8').toString('base64'), error: null };
   } catch (e: any) {
     return { b64: null, error: String(e?.message || e) };
   }
@@ -66,61 +75,74 @@ export async function POST(req: Request) {
     if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const body = (await req.json()) as Body;
-    if (!body?.issueDate || !body?.type || !body?.totals?.total) {
+    if (!body?.issueDate || !body?.type || body?.totals?.total == null) {
       return NextResponse.json({ error: 'Body incompleto' }, { status: 400 });
     }
 
-    // 1) Reserva atómica de numeración por tipo (FAC/FACS/FAR con reset anual)
+    // 1) Reserva atómica (puede devolver number como string en algunos drivers → normalizamos)
     const { data: seq, error: seqErr } = await supabase.rpc('fn_use_next_invoice_number_v2', {
       p_user: user.id,
       p_date: body.issueDate,
       p_type: body.type,
     });
     if (seqErr) throw seqErr;
-    const series: string = seq?.series || 'FAC';
-    const number: number = seq?.number || 1;
 
-    // 2) Inserta en histórico
-    const subtotal = body.totals.subtotal ?? 0;
-    const iva = body.totals.iva ?? Math.max(0, body.totals.total - subtotal);
+    const series: string = String(seq?.series ?? 'FAC');
+    const number: number = toInt(seq?.number, 1); // <— ¡si viniese "12.1" lo truncamos a 12!
+
+    // 2) Normaliza importes
+    const total = money(body.totals.total);
+    const subtotal = money(body.totals.subtotal ?? 0);
+    const iva = money(body.totals.iva ?? total - subtotal);
+
+    // 3) Prepara líneas (todo a número seguro)
+    const lines = (body.lines ?? []).map(l => ({
+      descripcion: l.descripcion,
+      cantidad: money(l.cantidad),
+      precio: money(l.precio),
+      iva: toInt(l.iva, 0),
+      cuentaId: l.cuentaId ?? null,
+    }));
+
+    // 4) Inserta en histórico
+    const baseInsert: any = {
+      user_id: user.id,
+      series,
+      number,                       // integer garantizado
+      type: body.type,
+      issue_date: body.issueDate,
+      subtotal,
+      iva,
+      total,
+      lines: lines.length ? lines : null,
+      payment: body.payment ?? null,
+      status: 'borrador',
+    };
+    if (body.clientId) baseInsert.client_id = body.clientId; // solo si viene
 
     const { data: inserted, error: insErr } = await supabase
       .from('facturas')
-      .insert({
-        user_id: user.id,
-        client_id: body.clientId ?? null,
-        series,
-        number,
-        type: body.type,
-        issue_date: body.issueDate,
-        subtotal,
-        iva,
-        total: body.totals.total,
-        lines: body.lines ? JSON.parse(JSON.stringify(body.lines)) : null,
-        payment: body.payment ?? null,
-        status: 'borrador',
-      })
+      .insert(baseInsert)
       .select('id')
       .single();
     if (insErr) throw insErr;
 
-    // 3) Construye XML Facturae (puede devolver Promise<string> o string)
+    // 5) Construye XML (puede ser Promise<string>)
     const xmlStr: string = await Promise.resolve(
       buildFacturaeXml({
         series,
         number,
         issueDate: body.issueDate,
-        seller: {}, // pasa aquí tu emisor real si tu helper lo requiere
-        lines: body.lines || [],
-        totals: body.totals,
+        seller: {},            // completa con tu emisor real si tu helper lo requiere
+        lines,
+        totals: { total, subtotal, iva },
         type: body.type,
         payment: body.payment ?? null,
       })
     );
 
-    // 4) Intenta firmar (no bloquea el guardado si falla)
+    // 6) Intenta firmar (no bloquea guardado)
     const { b64: signedB64, error: signError } = await trySignXml(xmlStr);
-
     if (signedB64) {
       await supabase
         .from('facturas')
@@ -129,14 +151,8 @@ export async function POST(req: Request) {
         .eq('user_id', user.id);
     }
 
-    // 5) Respuesta
     return NextResponse.json(
-      {
-        series,
-        number,
-        facturaeBase64: signedB64 || null,
-        signError: signError || null,
-      },
+      { series, number, facturaeBase64: signedB64 || null, signError: signError || null },
       { status: 201 }
     );
   } catch (e: any) {
