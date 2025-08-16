@@ -16,6 +16,7 @@ type Tipo = 'completa' | 'simplificada' | 'rectificativa';
 type Body = {
   issueDate: string;
   type: Tipo;
+  series?: string; // ← serie elegida en el formulario
   totals: { total: number | string; subtotal?: number | string; iva?: number | string };
   clientId?: string | null;
   lines?: Array<{
@@ -44,6 +45,11 @@ const toInt = (x: unknown, fallback = 0) => {
   if (!Number.isFinite(n)) return fallback;
   return Math.trunc(n);
 };
+const isDuplicate = (err: any) =>
+  (err?.code === '23505') ||
+  /duplicate key value|unique constraint|user_series_number_uniq/i.test(
+    err?.message || err?.details || ''
+  );
 
 async function trySignXml(xml: string): Promise<{ b64: string | null; error: string | null }> {
   try {
@@ -66,9 +72,9 @@ async function trySignXml(xml: string): Promise<{ b64: string | null; error: str
   }
 }
 
-/** Lee el máximo `number` existente para una SERIE del usuario (tipado laxo para el cliente). */
+/** Máximo número actual para una serie del usuario. */
 async function getMaxNumberForSeries(
-  supabase: any, // ← relajamos tipo para evitar choque de genéricos
+  supabase: any,
   userId: string,
   series: string
 ): Promise<number> {
@@ -82,38 +88,35 @@ async function getMaxNumberForSeries(
     .maybeSingle();
 
   if (error) throw error;
-
   const row = data as { number: number } | null;
   return row?.number ?? 0;
 }
 
-/** Ajusta el contador del perfil (por tipo) al máximo+1 real para esa serie. */
-async function fastForwardNextNumber(
-  supabase: any, // ← relajamos tipo aquí también
+/** Serie por defecto desde profiles según el tipo. */
+async function getDefaultSeriesForType(
+  supabase: any,
   userId: string,
-  type: Tipo,
-  series: string
-): Promise<void> {
-  const maxNum = await getMaxNumberForSeries(supabase, userId, series);
-  const next = (toInt(maxNum, 0) || 0) + 1;
-
+  type: Tipo
+): Promise<string> {
   const col =
     type === 'simplificada'
-      ? 'invoice_next_number_simplified'
+      ? 'invoice_series_simplified'
       : type === 'rectificativa'
-      ? 'invoice_next_number_rectificative'
-      : 'invoice_next_number_full';
-
-  const { error } = await supabase
+      ? 'invoice_series_rectificative'
+      : 'invoice_series_full';
+  const { data, error } = await supabase
     .from('profiles')
-    .update({ [col]: next })
-    .eq('id', userId);
+    .select(col)
+    .eq('id', userId)
+    .maybeSingle();
   if (error) throw error;
+  const series = (data?.[col] as string | undefined) || 'FAC';
+  return series.trim() || 'FAC';
 }
 
 export async function POST(req: Request) {
   try {
-    const supabase = createRouteHandlerClient({ cookies }); // TS aquí da un cliente tipado, pero nuestros helpers aceptan any
+    const supabase = createRouteHandlerClient({ cookies });
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -124,6 +127,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Body incompleto' }, { status: 400 });
     }
 
+    // Totales y líneas
     const total = money(body.totals.total);
     const subtotal = money(body.totals.subtotal ?? 0);
     const iva = money(body.totals.iva ?? total - subtotal);
@@ -135,123 +139,64 @@ export async function POST(req: Request) {
       cuentaId: l.cuentaId ?? null,
     }));
 
-    let insertedId: string | null = null;
-    let finalSeries = '';
+    // Serie efectiva: la que venga del form o la de perfil por tipo
+    let series =
+      (body.series?.toString().trim() || '') ||
+      (await getDefaultSeriesForType(supabase, user.id, body.type));
+
+    // Inserción con reserva de número atómica (por retries)
+    const basePayload: any = {
+      user_id: user.id,
+      type: body.type,
+      issue_date: body.issueDate,
+      subtotal,
+      iva,
+      total,
+      lines: lines.length ? lines : null,
+      payment: body.payment ?? null,
+      status: 'borrador',
+    };
+    if (body.clientId) basePayload.client_id = body.clientId;
+
     let finalNumber = 0;
+    let insertedId: string | null = null;
 
-    // Reintentos suaves para colisiones de numeración
-    const SOFT_ATTEMPTS = 5;
-
-    for (let attempt = 1; attempt <= SOFT_ATTEMPTS; attempt++) {
-      const { data: seq, error: seqErr } = await supabase.rpc('fn_use_next_invoice_number_v2', {
-        p_user: user.id,
-        p_date: body.issueDate,
-        p_type: body.type,
-      });
-      if (seqErr) throw seqErr;
-
-      const series: string = String(seq?.series ?? 'FAC');
-      const number: number = toInt(seq?.number, 1);
-
-      const payload: any = {
-        user_id: user.id,
-        series,
-        number,
-        type: body.type,
-        issue_date: body.issueDate,
-        subtotal,
-        iva,
-        total,
-        lines: lines.length ? lines : null,
-        payment: body.payment ?? null,
-        status: 'borrador',
-      };
-      if (body.clientId) payload.client_id = body.clientId;
+    // Intentamos hasta 10 veces por si hay carreras
+    for (let attempt = 1; attempt <= 10; attempt++) {
+      const next = (await getMaxNumberForSeries(supabase, user.id, series)) + 1;
 
       const { data: ins, error: insErr } = await supabase
         .from('facturas')
-        .insert(payload)
+        .insert({ ...basePayload, series, number: next })
         .select('id')
         .single();
 
       if (!insErr && ins) {
         insertedId = ins.id as string;
-        finalSeries = series;
-        finalNumber = number;
+        finalNumber = next;
         break;
       }
-
-      const code = (insErr as any)?.code || '';
-      const msg = (insErr as any)?.message || (insErr as any)?.details || '';
-      const isDup =
-        code === '23505' ||
-        /duplicate key value|unique constraint|user_series_number_uniq/i.test(msg);
-
-      if (!isDup) throw insErr;
-
-      if (attempt === SOFT_ATTEMPTS) {
-        // Fast-forward: ajustamos contador al máximo+1 real y reintentamos una vez
-        await fastForwardNextNumber(supabase, user.id, body.type, series);
-
-        const { data: seq2, error: seqErr2 } = await supabase.rpc('fn_use_next_invoice_number_v2', {
-          p_user: user.id,
-          p_date: body.issueDate,
-          p_type: body.type,
-        });
-        if (seqErr2) throw seqErr2;
-
-        const ffSeries: string = String(seq2?.series ?? series);
-        const ffNumber: number = toInt(seq2?.number, 1);
-
-        const payloadFF: any = {
-          user_id: user.id,
-          series: ffSeries,
-          number: ffNumber,
-          type: body.type,
-          issue_date: body.issueDate,
-          subtotal,
-          iva,
-          total,
-          lines: lines.length ? lines : null,
-          payment: body.payment ?? null,
-          status: 'borrador',
-        };
-        if (body.clientId) payloadFF.client_id = body.clientId;
-
-        const { data: ins2, error: insErr2 } = await supabase
-          .from('facturas')
-          .insert(payloadFF)
-          .select('id')
-          .single();
-
-        if (insErr2) {
-          const code2 = (insErr2 as any)?.code || '';
-          const msg2 = (insErr2 as any)?.message || (insErr2 as any)?.details || '';
-          const isDup2 =
-            code2 === '23505' ||
-            /duplicate key value|unique constraint|user_series_number_uniq/i.test(msg2);
-          if (isDup2) throw new Error('No se pudo reservar numeración única tras varios intentos.');
-          throw insErr2;
-        }
-
-        insertedId = ins2!.id as string;
-        finalSeries = ffSeries;
-        finalNumber = ffNumber;
-        break;
+      if (isDuplicate(insErr)) {
+        // otra sesión se adelantó; volvemos a calcular y reintentamos
+        continue;
       }
+      throw insErr;
     }
 
     if (!insertedId) {
-      return NextResponse.json({ error: 'No se pudo insertar la factura' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'No se pudo reservar numeración única tras varios intentos.' },
+        { status: 409 }
+      );
     }
 
-    // Construye y firma (la firma no bloquea el guardado)
+    // Construcción y firma (no bloqueante)
     const xmlStr: string = await Promise.resolve(
       buildFacturaeXml({
-        series: finalSeries,
+        series,
         number: finalNumber,
         issueDate: body.issueDate,
-        seller: {}, // completa si tu helper lo requiere
+        seller: {}, // completa según tu helper si lo requiere
         lines,
         totals: { total, subtotal, iva },
         type: body.type,
@@ -270,7 +215,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json(
       {
-        series: finalSeries,
+        id: insertedId,
+        series,
         number: finalNumber,
         facturaeBase64: signedB64 || null,
         signError: signError || null,
