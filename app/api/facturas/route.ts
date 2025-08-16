@@ -14,7 +14,7 @@ const SIGNER_API_KEY = process.env.SIGNER_API_KEY || '';
 type Tipo = 'completa' | 'simplificada' | 'rectificativa';
 
 type Body = {
-  issueDate: string; // YYYY-MM-DD
+  issueDate: string;
   type: Tipo;
   totals: { total: number | string; subtotal?: number | string; iva?: number | string };
   clientId?: string | null;
@@ -66,6 +66,47 @@ async function trySignXml(xml: string): Promise<{ b64: string | null; error: str
   }
 }
 
+// --- helpers para fast-forward del contador ---
+async function getMaxNumberForSeries(
+  supabase: ReturnType<typeof createRouteHandlerClient>,
+  userId: string,
+  series: string
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('facturas')
+    .select('number')
+    .eq('user_id', userId)
+    .eq('series', series)
+    .order('number', { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  return data?.[0]?.number ?? 0;
+}
+
+async function fastForwardNextNumber(
+  supabase: ReturnType<typeof createRouteHandlerClient>,
+  userId: string,
+  type: Tipo,
+  series: string
+): Promise<void> {
+  const maxNum = await getMaxNumberForSeries(supabase, userId, series);
+  const next = (toInt(maxNum, 0) || 0) + 1;
+
+  const col =
+    type === 'simplificada'
+      ? 'invoice_next_number_simplified'
+      : type === 'rectificativa'
+      ? 'invoice_next_number_rectificative'
+      : 'invoice_next_number_full';
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ [col]: next })
+    .eq('id', userId);
+  if (error) throw error;
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = createRouteHandlerClient({ cookies });
@@ -77,7 +118,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Body incompleto' }, { status: 400 });
     }
 
-    // Normaliza importes y líneas
     const total = money(body.totals.total);
     const subtotal = money(body.totals.subtotal ?? 0);
     const iva = money(body.totals.iva ?? total - subtotal);
@@ -89,14 +129,14 @@ export async function POST(req: Request) {
       cuentaId: l.cuentaId ?? null,
     }));
 
-    // --- Inserción con reintento ante duplicado (23505) ---
     let insertedId: string | null = null;
     let finalSeries = '';
     let finalNumber = 0;
-    const MAX_ATTEMPTS = 5;
 
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      // 1) Reserva atómica por tipo
+    // 1ª fase: reintentos secuenciales (por si sólo hay 1-2 colisiones)
+    const SOFT_ATTEMPTS = 5;
+
+    for (let attempt = 1; attempt <= SOFT_ATTEMPTS; attempt++) {
       const { data: seq, error: seqErr } = await supabase.rpc('fn_use_next_invoice_number_v2', {
         p_user: user.id,
         p_date: body.issueDate,
@@ -107,7 +147,6 @@ export async function POST(req: Request) {
       const series: string = String(seq?.series ?? 'FAC');
       const number: number = toInt(seq?.number, 1);
 
-      // 2) Insert
       const payload: any = {
         user_id: user.id,
         series,
@@ -142,13 +181,62 @@ export async function POST(req: Request) {
         code === '23505' ||
         /duplicate key value|unique constraint|user_series_number_uniq/i.test(msg);
 
-      if (!isDup) {
-        // Otro error → no reintentamos
-        throw insErr;
-      }
-      // Si hay duplicado, volvemos al bucle a reservar otro número
-      if (attempt === MAX_ATTEMPTS) {
-        throw new Error('No se pudo reservar numeración única tras varios intentos.');
+      if (!isDup) throw insErr;
+      // si es duplicado → seguimos bucle para pedir otro número
+      if (attempt === SOFT_ATTEMPTS) {
+        // 2ª fase: fast-forward (ajustar el contador al máximo+1 real) y un intento final
+        const lastSeq = seq!;
+        const seriesForFF: string = String(lastSeq?.series ?? 'FAC');
+
+        await fastForwardNextNumber(supabase, user.id, body.type, seriesForFF);
+
+        // reserva otra vez tras fast-forward
+        const { data: seq2, error: seqErr2 } = await supabase.rpc('fn_use_next_invoice_number_v2', {
+          p_user: user.id,
+          p_date: body.issueDate,
+          p_type: body.type,
+        });
+        if (seqErr2) throw seqErr2;
+
+        const ffSeries: string = String(seq2?.series ?? seriesForFF);
+        const ffNumber: number = toInt(seq2?.number, 1);
+
+        const payloadFF: any = {
+          user_id: user.id,
+          series: ffSeries,
+          number: ffNumber,
+          type: body.type,
+          issue_date: body.issueDate,
+          subtotal,
+          iva,
+          total,
+          lines: lines.length ? lines : null,
+          payment: body.payment ?? null,
+          status: 'borrador',
+        };
+        if (body.clientId) payloadFF.client_id = body.clientId;
+
+        const { data: ins2, error: insErr2 } = await supabase
+          .from('facturas')
+          .insert(payloadFF)
+          .select('id')
+          .single();
+
+        if (insErr2) {
+          const code2 = (insErr2 as any)?.code || '';
+          const msg2 = (insErr2 as any)?.message || (insErr2 as any)?.details || '';
+          const isDup2 =
+            code2 === '23505' || /duplicate key value|unique constraint|user_series_number_uniq/i.test(msg2);
+          if (isDup2) {
+            throw new Error('No se pudo reservar numeración única tras varios intentos.');
+          }
+          throw insErr2;
+        }
+
+        insertedId = ins2!.id as string;
+        finalSeries = ffSeries;
+        finalNumber = ffNumber;
+        break;
       }
     }
 
@@ -156,7 +244,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No se pudo insertar la factura' }, { status: 500 });
     }
 
-    // 3) Construye y firma (no bloquea el guardado si falla)
+    // Construye y firma (no bloquea guardado si falla)
     const xmlStr: string = await Promise.resolve(
       buildFacturaeXml({
         series: finalSeries,
