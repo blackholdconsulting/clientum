@@ -1,207 +1,227 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import ExportarPDFButton from "@/components/ExportarPDFButton";
+import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
-export default function DetalleFacturaPage() {
-  const params = useParams();
+type Row = Record<string, any>;
+
+export default function FacturaDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const supabase = createClientComponentClient();
   const router = useRouter();
-  const { id } = params;
-  const [factura, setFactura] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [mensaje, setMensaje] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  const [row, setRow] = useState<Row | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  // names de columnas
+  const [colSerie, setColSerie] = useState("serie");
+  const [colNumero, setColNumero] = useState("number");
+  const [colNotas, setColNotas] = useState("notas");
+  const [colEstado, setColEstado] = useState("status");
+  const [colRf, setColRf] = useState("rf");
+  const [colQr, setColQr] = useState("verifactu_qr_data_url");
+
+  async function exists(col: string) {
+    const { error } = await supabase.from("facturas").select(col).eq("id", id).limit(1);
+    return !(error && (error as any).code === "42703");
+  }
+  async function pick(cols: string[], fallback: string) {
+    for (const c of cols) if (await exists(c)) return c;
+    return fallback;
+  }
 
   useEffect(() => {
-    if (!id) return;
-    fetchFactura();
+    (async () => {
+      setColSerie(await pick(["serie", "series"], "serie"));
+      setColNumero(await pick(["number", "num", "numero"], "number"));
+      setColNotas((await exists("notas")) ? "notas" : (await exists("notes")) ? "notes" : "notes");
+      setColEstado((await exists("status")) ? "status" : (await exists("estado")) ? "estado" : "status");
+      setColRf((await exists("rf")) ? "rf" : "rf");
+      setColQr((await exists("verifactu_qr_data_url")) ? "verifactu_qr_data_url" : "verifactu_qr_data_url");
+      await load();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const fetchFactura = async () => {
+  async function load() {
+    const { data, error } = await supabase.from("facturas").select("*").eq("id", id).single();
+    if (error) {
+      alert(error.message);
+      router.push("/facturas/historico");
+      return;
+    }
+    setRow(data);
+  }
+
+  function setField(k: string, v: any) {
+    if (!row) return;
+    setRow({ ...row, [k]: v });
+  }
+
+  async function save() {
+    if (!row) return;
+    setBusy("save");
     try {
-      const res = await fetch(`/api/facturas/${id}`);
-      const data = await res.json();
-      if (data.success) {
-        setFactura(data.factura);
+      const payload: any = {
+        [colSerie]: row[colSerie],
+        [colNumero]: row[colNumero],
+        [colNotas]: row[colNotas] ?? "",
+      };
+      const res = await fetch(`/api/facturas/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(j?.error ?? "No se pudo guardar");
       } else {
-        setMensaje({ text: data.message, type: "error" });
+        setRow(j.data);
       }
-    } catch (error) {
-      setMensaje({ text: "Error al cargar factura", type: "error" });
     } finally {
-      setLoading(false);
+      setBusy(null);
     }
-  };
+  }
 
-  const mostrarMensaje = (text: string, type: "success" | "error") => {
-    setMensaje({ text, type });
-    setTimeout(() => setMensaje(null), 4000);
-  };
-
-  const getEstadoBadge = (estado: string) => {
-    switch (estado) {
-      case "pagada":
-        return <span className="bg-green-100 text-green-700 px-2 py-1 rounded">Pagada</span>;
-      case "enviada":
-        return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">Enviada</span>;
-      default:
-        return <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded">Borrador</span>;
+  async function del() {
+    if (!confirm("¿Eliminar esta factura?")) return;
+    setBusy("del");
+    try {
+      const res = await fetch(`/api/facturas/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(j?.error ?? "No se pudo eliminar");
+        return;
+      }
+      router.push("/facturas/historico");
+    } finally {
+      setBusy(null);
     }
-  };
+  }
 
-  const actualizarEstadoFactura = async (nuevoEstado: string) => {
-    const res = await fetch(`/api/facturas/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ estado: nuevoEstado }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      setFactura((prev: any) => ({ ...prev, estado: nuevoEstado }));
+  function openPdf() {
+    if (!row) return;
+    const serie = row[colSerie];
+    const numero = row[colNumero];
+    if (!serie || numero == null) return alert("Faltan serie/número");
+    window.open(`/api/facturas/pdf?serie=${encodeURIComponent(serie)}&numero=${encodeURIComponent(numero)}`, "_blank");
+  }
+
+  function openFacturae() {
+    if (!row) return;
+    const serie = row[colSerie];
+    const numero = row[colNumero];
+    if (!serie || numero == null) return alert("Faltan serie/número");
+    window.open(`/api/facturas/xml?serie=${encodeURIComponent(serie)}&numero=${encodeURIComponent(numero)}`, "_blank");
+  }
+
+  async function doVerifactu() {
+    setBusy("vf");
+    try {
+      const res = await fetch(`/api/facturas/${id}/verifactu`, { method: "POST" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(j?.error ?? "No se pudo registrar en Veri*factu");
+      } else {
+        await load();
+        alert(`Registrada en Veri*factu. RF: ${j?.rf ?? ""}`);
+      }
+    } finally {
+      setBusy(null);
     }
-  };
+  }
 
-  const handleEnviarFacturae = async () => {
-    const res = await fetch(`/api/sii/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ facturaId: factura.id }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      mostrarMensaje("Factura enviada correctamente a Facturae", "success");
-      actualizarEstadoFactura("enviada");
-    } else {
-      mostrarMensaje("Error al enviar Facturae: " + data.message, "error");
-    }
-  };
-
-  const handleEnviarVerifactu = async () => {
-    const res = await fetch(`/api/sii/verifactu`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ facturaId: factura.id }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      mostrarMensaje("Factura enviada correctamente a Verifactu", "success");
-      actualizarEstadoFactura("enviada");
-    } else {
-      mostrarMensaje("Error al enviar Verifactu: " + data.message, "error");
-    }
-  };
-
-  if (loading) return <p className="p-6">Cargando factura...</p>;
-  if (!factura) return <p className="p-6">Factura no encontrada.</p>;
+  if (!row) return <div className="p-8">Cargando…</div>;
 
   return (
-    <div className="max-w-5xl mx-auto p-6 bg-white shadow rounded-xl relative">
-      {mensaje && (
-        <div
-          className={`absolute top-4 right-4 px-4 py-2 rounded shadow-lg text-white ${
-            mensaje.type === "success" ? "bg-green-500" : "bg-red-500"
-          }`}
-        >
-          {mensaje.text}
+    <div className="p-8 space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">
+          Factura {row[colSerie]}-{row[colNumero]}
+        </h1>
+        <Link href="/facturas/historico" className="text-blue-600 hover:underline">
+          ← Volver
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label className="text-sm">Serie</label>
+          <input
+            className="w-full border rounded px-3 py-2"
+            value={row[colSerie] ?? ""}
+            onChange={(e) => setField(colSerie, e.target.value)}
+          />
         </div>
+        <div>
+          <label className="text-sm">Número</label>
+          <input
+            type="number"
+            className="w-full border rounded px-3 py-2"
+            value={row[colNumero] ?? ""}
+            onChange={(e) => setField(colNumero, Number(e.target.value))}
+          />
+        </div>
+        <div>
+          <label className="text-sm">Estado</label>
+          <input className="w-full border rounded px-3 py-2" value={row[colEstado] ?? ""} disabled />
+        </div>
+        <div className="md:col-span-3">
+          <label className="text-sm">Notas</label>
+          <textarea
+            className="w-full border rounded px-3 py-2"
+            rows={3}
+            value={row[colNotas] ?? ""}
+            onChange={(e) => setField(colNotas, e.target.value)}
+          />
+        </div>
+      </div>
+
+      {row[colQr] ? (
+        <div className="flex items-start gap-4">
+          <div>
+            <div className="text-sm mb-1">QR Veri*factu</div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={row[colQr]} alt="QR Veri*factu" className="border rounded p-2 bg-white" />
+          </div>
+          <div className="text-sm">
+            RF: <b>{row[colRf] || "—"}</b>
+          </div>
+        </div>
+      ) : (
+        <div className="text-sm text-gray-500">Aún no registrado en Veri*factu.</div>
       )}
 
-      {/* Cabecera */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Factura #{factura.numero}</h1>
-        {getEstadoBadge(factura.estado)}
-      </div>
-
-      {/* Botones de acción */}
-      <div className="flex space-x-3 mb-6">
-        <ExportarPDFButton factura={factura} />
+      <div className="flex flex-wrap gap-3">
         <button
-          onClick={handleEnviarFacturae}
-          className="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800"
+          onClick={save}
+          disabled={busy === "save"}
+          className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-60"
         >
-          Enviar Facturae
+          {busy === "save" ? "Guardando…" : "Guardar cambios"}
+        </button>
+        <button onClick={openPdf} className="px-4 py-2 rounded bg-gray-700 text-white">
+          PDF
+        </button>
+        <button onClick={openFacturae} className="px-4 py-2 rounded bg-slate-600 text-white">
+          Facturae
         </button>
         <button
-          onClick={handleEnviarVerifactu}
-          className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+          onClick={doVerifactu}
+          disabled={busy === "vf"}
+          className="px-4 py-2 rounded bg-amber-600 text-white disabled:opacity-60"
         >
-          Enviar Verifactu
+          {busy === "vf" ? "Registrando…" : "VeriFactu"}
         </button>
         <button
-          onClick={() => router.push("/facturas")}
-          className="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400"
+          onClick={del}
+          disabled={busy === "del"}
+          className="px-4 py-2 rounded bg-red-600 text-white disabled:opacity-60 ml-auto"
         >
-          ← Volver
+          {busy === "del" ? "Eliminando…" : "Eliminar"}
         </button>
-      </div>
-
-      {/* Datos principales */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-gray-50 p-4 rounded shadow-sm">
-          <p><strong>Fecha emisión:</strong> {factura.fecha_emisor}</p>
-          <p><strong>Fecha vencimiento:</strong> {factura.fecha_vencim}</p>
-          <p><strong>Cliente:</strong> {factura.receptor || factura.cliente_id}</p>
-        </div>
-        <div className="bg-gray-50 p-4 rounded shadow-sm">
-          <p><strong>Emisor:</strong> {factura.emisor}</p>
-          <p><strong>Estado:</strong> {factura.estado}</p>
-          <p><strong>Servicio:</strong> {factura.servicio || "No especificado"}</p>
-        </div>
-      </div>
-
-      {/* Conceptos */}
-      <div className="bg-gray-50 p-4 rounded shadow-sm">
-        <h2 className="text-xl font-bold mb-3">Conceptos</h2>
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="p-2 text-left">Descripción</th>
-              <th className="p-2 text-right">Unidades</th>
-              <th className="p-2 text-right">Precio</th>
-              <th className="p-2 text-right">IVA %</th>
-              <th className="p-2 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {factura.json_factura?.conceptos ? (
-              factura.json_factura.conceptos.map((c: any, i: number) => (
-                <tr key={i} className="border-t">
-                  <td className="p-2">{c.descripcion}</td>
-                  <td className="p-2 text-right">{c.cantidad}</td>
-                  <td className="p-2 text-right">{c.precio.toFixed(2)} €</td>
-                  <td className="p-2 text-right">{c.iva}%</td>
-                  <td className="p-2 text-right">
-                    {(c.cantidad * c.precio * (1 + c.iva / 100)).toFixed(2)} €
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td className="p-2">{factura.concepto}</td>
-                <td className="p-2 text-right">1</td>
-                <td className="p-2 text-right">{factura.base_imponib} €</td>
-                <td className="p-2 text-right">{factura.iva_percent}%</td>
-                <td className="p-2 text-right">{factura.total} €</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Totales */}
-      <div className="mt-6 bg-gray-100 p-4 rounded shadow-sm">
-        <div className="flex justify-between">
-          <span className="font-bold">Base imponible:</span>
-          <span>{factura.base_imponib} €</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="font-bold">IVA total:</span>
-          <span>{factura.iva_total} €</span>
-        </div>
-        <div className="flex justify-between text-xl font-bold mt-3">
-          <span>Total:</span>
-          <span>{factura.total} €</span>
-        </div>
       </div>
     </div>
   );
