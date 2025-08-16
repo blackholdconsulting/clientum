@@ -66,9 +66,9 @@ async function trySignXml(xml: string): Promise<{ b64: string | null; error: str
   }
 }
 
-/** Lee el máximo `number` existente para una SERIE del usuario (tipado seguro). */
+/** Lee el máximo `number` existente para una SERIE del usuario (tipado laxo para el cliente). */
 async function getMaxNumberForSeries(
-  supabase: ReturnType<typeof createRouteHandlerClient>,
+  supabase: any, // ← relajamos tipo para evitar choque de genéricos
   userId: string,
   series: string
 ): Promise<number> {
@@ -79,7 +79,7 @@ async function getMaxNumberForSeries(
     .eq('series', series)
     .order('number', { ascending: false })
     .limit(1)
-    .maybeSingle(); // -> una fila o null
+    .maybeSingle();
 
   if (error) throw error;
 
@@ -89,7 +89,7 @@ async function getMaxNumberForSeries(
 
 /** Ajusta el contador del perfil (por tipo) al máximo+1 real para esa serie. */
 async function fastForwardNextNumber(
-  supabase: ReturnType<typeof createRouteHandlerClient>,
+  supabase: any, // ← relajamos tipo aquí también
   userId: string,
   type: Tipo,
   series: string
@@ -113,8 +113,10 @@ async function fastForwardNextNumber(
 
 export async function POST(req: Request) {
   try {
-    const supabase = createRouteHandlerClient({ cookies });
-    const { data: { user } } = await supabase.auth.getUser();
+    const supabase = createRouteHandlerClient({ cookies }); // TS aquí da un cliente tipado, pero nuestros helpers aceptan any
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
     const body = (await req.json()) as Body;
@@ -125,7 +127,7 @@ export async function POST(req: Request) {
     const total = money(body.totals.total);
     const subtotal = money(body.totals.subtotal ?? 0);
     const iva = money(body.totals.iva ?? total - subtotal);
-    const lines = (body.lines ?? []).map(l => ({
+    const lines = (body.lines ?? []).map((l) => ({
       descripcion: l.descripcion,
       cantidad: money(l.cantidad),
       precio: money(l.precio),
@@ -137,7 +139,7 @@ export async function POST(req: Request) {
     let finalSeries = '';
     let finalNumber = 0;
 
-    // 1ª fase: reintentos suaves
+    // Reintentos suaves para colisiones de numeración
     const SOFT_ATTEMPTS = 5;
 
     for (let attempt = 1; attempt <= SOFT_ATTEMPTS; attempt++) {
@@ -188,7 +190,7 @@ export async function POST(req: Request) {
       if (!isDup) throw insErr;
 
       if (attempt === SOFT_ATTEMPTS) {
-        // 2ª fase: fast-forward del contador al máximo+1 real y un intento final
+        // Fast-forward: ajustamos contador al máximo+1 real y reintentamos una vez
         await fastForwardNextNumber(supabase, user.id, body.type, series);
 
         const { data: seq2, error: seqErr2 } = await supabase.rpc('fn_use_next_invoice_number_v2', {
@@ -226,10 +228,9 @@ export async function POST(req: Request) {
           const code2 = (insErr2 as any)?.code || '';
           const msg2 = (insErr2 as any)?.message || (insErr2 as any)?.details || '';
           const isDup2 =
-            code2 === '23505' || /duplicate key value|unique constraint|user_series_number_uniq/i.test(msg2);
-          if (isDup2) {
-            throw new Error('No se pudo reservar numeración única tras varios intentos.');
-          }
+            code2 === '23505' ||
+            /duplicate key value|unique constraint|user_series_number_uniq/i.test(msg2);
+          if (isDup2) throw new Error('No se pudo reservar numeración única tras varios intentos.');
           throw insErr2;
         }
 
@@ -244,13 +245,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No se pudo insertar la factura' }, { status: 500 });
     }
 
-    // Construye y firma (no bloquea el guardado si falla)
+    // Construye y firma (la firma no bloquea el guardado)
     const xmlStr: string = await Promise.resolve(
       buildFacturaeXml({
         series: finalSeries,
         number: finalNumber,
         issueDate: body.issueDate,
-        seller: {}, // completa según tu helper si lo requiere
+        seller: {}, // completa si tu helper lo requiere
         lines,
         totals: { total, subtotal, iva },
         type: body.type,
