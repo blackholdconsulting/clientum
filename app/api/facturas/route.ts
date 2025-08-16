@@ -66,7 +66,7 @@ async function trySignXml(xml: string): Promise<{ b64: string | null; error: str
   }
 }
 
-// --- helpers para fast-forward del contador ---
+/** Lee el máximo `number` existente para una SERIE del usuario (tipado seguro). */
 async function getMaxNumberForSeries(
   supabase: ReturnType<typeof createRouteHandlerClient>,
   userId: string,
@@ -78,12 +78,16 @@ async function getMaxNumberForSeries(
     .eq('user_id', userId)
     .eq('series', series)
     .order('number', { ascending: false })
-    .limit(1);
+    .limit(1)
+    .maybeSingle(); // -> una fila o null
 
   if (error) throw error;
-  return data?.[0]?.number ?? 0;
+
+  const row = data as { number: number } | null;
+  return row?.number ?? 0;
 }
 
+/** Ajusta el contador del perfil (por tipo) al máximo+1 real para esa serie. */
 async function fastForwardNextNumber(
   supabase: ReturnType<typeof createRouteHandlerClient>,
   userId: string,
@@ -133,7 +137,7 @@ export async function POST(req: Request) {
     let finalSeries = '';
     let finalNumber = 0;
 
-    // 1ª fase: reintentos secuenciales (por si sólo hay 1-2 colisiones)
+    // 1ª fase: reintentos suaves
     const SOFT_ATTEMPTS = 5;
 
     for (let attempt = 1; attempt <= SOFT_ATTEMPTS; attempt++) {
@@ -182,15 +186,11 @@ export async function POST(req: Request) {
         /duplicate key value|unique constraint|user_series_number_uniq/i.test(msg);
 
       if (!isDup) throw insErr;
-      // si es duplicado → seguimos bucle para pedir otro número
+
       if (attempt === SOFT_ATTEMPTS) {
-        // 2ª fase: fast-forward (ajustar el contador al máximo+1 real) y un intento final
-        const lastSeq = seq!;
-        const seriesForFF: string = String(lastSeq?.series ?? 'FAC');
+        // 2ª fase: fast-forward del contador al máximo+1 real y un intento final
+        await fastForwardNextNumber(supabase, user.id, body.type, series);
 
-        await fastForwardNextNumber(supabase, user.id, body.type, seriesForFF);
-
-        // reserva otra vez tras fast-forward
         const { data: seq2, error: seqErr2 } = await supabase.rpc('fn_use_next_invoice_number_v2', {
           p_user: user.id,
           p_date: body.issueDate,
@@ -198,7 +198,7 @@ export async function POST(req: Request) {
         });
         if (seqErr2) throw seqErr2;
 
-        const ffSeries: string = String(seq2?.series ?? seriesForFF);
+        const ffSeries: string = String(seq2?.series ?? series);
         const ffNumber: number = toInt(seq2?.number, 1);
 
         const payloadFF: any = {
@@ -244,7 +244,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No se pudo insertar la factura' }, { status: 500 });
     }
 
-    // Construye y firma (no bloquea guardado si falla)
+    // Construye y firma (no bloquea el guardado si falla)
     const xmlStr: string = await Promise.resolve(
       buildFacturaeXml({
         series: finalSeries,
