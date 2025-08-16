@@ -58,6 +58,7 @@ export default function NuevaFacturaPage() {
   const [verifactuPayload, setVerifactuPayload] = useState<VeriFactuPayload | null>(null);
   const [busySave, setBusySave] = useState(false);
   const [busyXades, setBusyXades] = useState(false);
+  const [busyVF, setBusyVF] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const [facturaeBase64, setFacturaeBase64] = useState<string | null>(null);
 
@@ -88,9 +89,7 @@ export default function NuevaFacturaPage() {
 
       const typeParam = invoiceTypeForVerifactu(t); // 'completa' | 'simplificada' | 'rectificativa'
       const res = await fetch(`/api/facturas/numero?type=${typeParam}`, {
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         credentials: 'include',
       });
 
@@ -125,7 +124,6 @@ export default function NuevaFacturaPage() {
       setCuentas(cuentasData || []);
 
       setLoading(false);
-      // Prefija serie+número según el tipo actual
       prefillSeriesAndNumber(tipo);
     })();
   }, [supabase]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -151,7 +149,7 @@ export default function NuevaFacturaPage() {
 
     const res = await fetch('/api/facturas', {
       method: 'POST',
-      credentials: 'include', // también manda cookies de Supabase si existen
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -173,7 +171,7 @@ export default function NuevaFacturaPage() {
     setNumero(String(j.number || ''));
     setFacturaeBase64(j.facturaeBase64 || null);
 
-    // payload RF/QR Veri*factu
+    // payload base para QR (sin RF)
     const emisorNif = sellerFromPerfil(perfil).nif || '';
     setVerifactuPayload({
       issuerTaxId: emisorNif,
@@ -214,6 +212,47 @@ export default function NuevaFacturaPage() {
     } catch (e:any) {
       setFlash('Error Facturae: ' + String(e?.message || e));
     } finally { setBusyXades(false); }
+  };
+
+  // ===== Registrar en Veri*factu (botón aparte) =====
+  const registrarVerifactu = async () => {
+    try {
+      setBusyVF(true);
+      setFlash(null);
+
+      // Asegura que la factura esté guardada con número final
+      if (!serie || !numero) await saveForXAdES();
+
+      // Construye el payload base desde estado actual (ya reservado serie/número)
+      const issueDate = new Date().toISOString().slice(0, 10);
+      const emisorNif = sellerFromPerfil(perfil).nif || '';
+      const base = {
+        issuerTaxId: emisorNif,
+        issueDate,
+        invoiceType: invoiceTypeForVerifactu(tipo),
+        total: +total.toFixed(2),
+        software: 'Clientum Signer v0.0.1',
+        series: String(serie),
+        number: Number(numero),
+      } as const;
+
+      const alta = await fetch('/api/verifactu/alta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(base),
+      });
+      const aj = await alta.json();
+      if (!alta.ok) throw new Error(aj?.error || 'Alta Veri*factu fallida');
+
+      setVerifactuPayload({ ...base, rf: String(aj.rf) });
+      setFlash(`Registrada en Veri*factu · RF: ${aj.rf}`);
+      if (showQR) setQrOpen(true);
+    } catch (e:any) {
+      setFlash('Error Veri*factu: ' + String(e?.message || e));
+    } finally {
+      setBusyVF(false);
+    }
   };
 
   // ===== Exportar PDF (cliente) =====
@@ -311,7 +350,7 @@ export default function NuevaFacturaPage() {
             {clientes.map(c=> <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
 
-        <select className="border rounded p-2 flex-1" value={tipo} onChange={e=>setTipo(e.target.value as TipoUI)}>
+          <select className="border rounded p-2 flex-1" value={tipo} onChange={e=>setTipo(e.target.value as TipoUI)}>
             <option value="factura">Factura Completa</option>
             <option value="simplificada">Factura Simplificada</option>
             <option value="rectificativa">Factura Rectificativa</option>
@@ -363,6 +402,9 @@ export default function NuevaFacturaPage() {
             <button type="button" onClick={exportPDF} className="px-4 py-2 bg-gray-200 rounded">Exportar PDF</button>
             <button type="button" onClick={descargarFacturae} disabled={busyXades} className="px-4 py-2 bg-emerald-600 text-white rounded disabled:opacity-50">
               {busyXades ? 'Firmando…' : 'Descargar Facturae'}
+            </button>
+            <button type="button" onClick={registrarVerifactu} disabled={busyVF} className="px-4 py-2 bg-amber-500 text-white rounded disabled:opacity-50">
+              {busyVF ? 'Verifactu…' : 'Verifactu'}
             </button>
           </div>
         </div>
