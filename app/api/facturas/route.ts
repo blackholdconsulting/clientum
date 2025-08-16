@@ -10,13 +10,14 @@ import { buildFacturaeXml } from '@/lib/invoice-signer';
 const SIGNER_BASE_URL = process.env.SIGNER_BASE_URL || '';
 const SIGNER_SIGN_PATH = process.env.SIGNER_SIGN_PATH || '/api/sign/xml';
 const SIGNER_API_KEY = process.env.SIGNER_API_KEY || '';
+const SIGNER_TIMEOUT_MS = Number(process.env.SIGNER_TIMEOUT_MS || '8000'); // ← Timeout duro
 
 type Tipo = 'completa' | 'simplificada' | 'rectificativa';
 
 type Body = {
   issueDate: string;
   type: Tipo;
-  series?: string; // ← serie elegida en el formulario
+  series?: string;
   totals: { total: number | string; subtotal?: number | string; iva?: number | string };
   clientId?: string | null;
   lines?: Array<{
@@ -51,33 +52,12 @@ const isDuplicate = (err: any) =>
     err?.message || err?.details || ''
   );
 
-async function trySignXml(xml: string): Promise<{ b64: string | null; error: string | null }> {
-  try {
-    if (!SIGNER_BASE_URL || !SIGNER_API_KEY) {
-      return { b64: null, error: 'Firmador no configurado (SIGNER_BASE_URL/API_KEY)' };
-    }
-    const resp = await fetch(`${SIGNER_BASE_URL.replace(/\/+$/, '')}${SIGNER_SIGN_PATH}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/xml', 'X-API-Key': SIGNER_API_KEY },
-      body: xml,
-    });
-    const text = await resp.text();
-    if (!resp.ok) {
-      const msg = text?.slice(0, 200) || `HTTP ${resp.status}`;
-      return { b64: null, error: `Firma falló: ${msg}` };
-    }
-    return { b64: Buffer.from(text, 'utf8').toString('base64'), error: null };
-  } catch (e: any) {
-    return { b64: null, error: String(e?.message || e) };
-  }
+function timeout<T>(ms: number, label = 'timeout'): Promise<T> {
+  return new Promise((_, reject) => setTimeout(() => reject(new Error(label)), ms));
 }
 
 /** Máximo número actual para una serie del usuario. */
-async function getMaxNumberForSeries(
-  supabase: any,
-  userId: string,
-  series: string
-): Promise<number> {
+async function getMaxNumberForSeries(supabase: any, userId: string, series: string): Promise<number> {
   const { data, error } = await supabase
     .from('facturas')
     .select('number')
@@ -93,25 +73,57 @@ async function getMaxNumberForSeries(
 }
 
 /** Serie por defecto desde profiles según el tipo. */
-async function getDefaultSeriesForType(
-  supabase: any,
-  userId: string,
-  type: Tipo
-): Promise<string> {
+async function getDefaultSeriesForType(supabase: any, userId: string, type: Tipo): Promise<string> {
   const col =
     type === 'simplificada'
       ? 'invoice_series_simplified'
       : type === 'rectificativa'
       ? 'invoice_series_rectificative'
       : 'invoice_series_full';
+
   const { data, error } = await supabase
     .from('profiles')
     .select(col)
     .eq('id', userId)
     .maybeSingle();
+
   if (error) throw error;
   const series = (data?.[col] as string | undefined) || 'FAC';
   return series.trim() || 'FAC';
+}
+
+/** Firma con timeout duro para no bloquear el endpoint. */
+async function signWithTimeout(xml: string): Promise<{ b64: string | null; error: string | null }> {
+  if (!SIGNER_BASE_URL || !SIGNER_API_KEY) {
+    return { b64: null, error: 'Firmador no configurado (SIGNER_BASE_URL/API_KEY)' };
+  }
+
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), SIGNER_TIMEOUT_MS);
+
+  try {
+    const resp = await fetch(
+      `${SIGNER_BASE_URL.replace(/\/+$/, '')}${SIGNER_SIGN_PATH}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/xml', 'X-API-Key': SIGNER_API_KEY },
+        body: xml,
+        signal: controller.signal,
+      }
+    );
+
+    const text = await resp.text();
+    if (!resp.ok) {
+      const msg = text?.slice(0, 200) || `HTTP ${resp.status}`;
+      return { b64: null, error: `Firma falló: ${msg}` };
+    }
+    return { b64: Buffer.from(text, 'utf8').toString('base64'), error: null };
+  } catch (e: any) {
+    const msg = e?.name === 'AbortError' ? 'timeout' : (e?.message || String(e));
+    return { b64: null, error: msg };
+  } finally {
+    clearTimeout(id);
+  }
 }
 
 export async function POST(req: Request) {
@@ -139,12 +151,12 @@ export async function POST(req: Request) {
       cuentaId: l.cuentaId ?? null,
     }));
 
-    // Serie efectiva: la que venga del form o la de perfil por tipo
+    // Serie efectiva
     let series =
       (body.series?.toString().trim() || '') ||
       (await getDefaultSeriesForType(supabase, user.id, body.type));
 
-    // Inserción con reserva de número atómica (por retries)
+    // Inserción con reserva de número (reintentos en colisión)
     const basePayload: any = {
       user_id: user.id,
       type: body.type,
@@ -161,7 +173,6 @@ export async function POST(req: Request) {
     let finalNumber = 0;
     let insertedId: string | null = null;
 
-    // Intentamos hasta 10 veces por si hay carreras
     for (let attempt = 1; attempt <= 10; attempt++) {
       const next = (await getMaxNumberForSeries(supabase, user.id, series)) + 1;
 
@@ -176,10 +187,7 @@ export async function POST(req: Request) {
         finalNumber = next;
         break;
       }
-      if (isDuplicate(insErr)) {
-        // otra sesión se adelantó; volvemos a calcular y reintentamos
-        continue;
-      }
+      if (isDuplicate(insErr)) continue;
       throw insErr;
     }
 
@@ -190,13 +198,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // Construcción y firma (no bloqueante)
+    // Construcción del XML (rápido)
     const xmlStr: string = await Promise.resolve(
       buildFacturaeXml({
         series,
         number: finalNumber,
         issueDate: body.issueDate,
-        seller: {}, // completa según tu helper si lo requiere
+        seller: {}, // completa si tu helper lo requiere
         lines,
         totals: { total, subtotal, iva },
         type: body.type,
@@ -204,22 +212,33 @@ export async function POST(req: Request) {
       })
     );
 
-    const { b64: signedB64, error: signError } = await trySignXml(xmlStr);
-    if (signedB64) {
-      await supabase
-        .from('facturas')
-        .update({ facturae_signed_b64: signedB64, status: 'emitida' })
-        .eq('id', insertedId)
-        .eq('user_id', user.id);
+    // Firma con timeout: no bloqueamos el guardado
+    let signError: string | null = null;
+    let signedB64: string | null = null;
+    try {
+      const res = await signWithTimeout(xmlStr); // ← máximo SIGNER_TIMEOUT_MS
+      signedB64 = res.b64;
+      signError = res.error;
+
+      if (signedB64) {
+        await supabase
+          .from('facturas')
+          .update({ facturae_signed_b64: signedB64, status: 'emitida' })
+          .eq('id', insertedId)
+          .eq('user_id', user.id);
+      }
+    } catch (e: any) {
+      signError = e?.message || 'firma_desconocida';
     }
 
+    // Respondemos SIEMPRE: el UI ya no se quedará colgado
     return NextResponse.json(
       {
         id: insertedId,
         series,
         number: finalNumber,
-        facturaeBase64: signedB64 || null,
-        signError: signError || null,
+        facturaeBase64: signedB64,  // puede ser null
+        signError,                  // "timeout" u otro texto si falló
       },
       { status: 201 }
     );
